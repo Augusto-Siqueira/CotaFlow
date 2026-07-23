@@ -18,6 +18,7 @@ const NAV_LINKS = [
   { href: "/clients", label: "Clientes" },
   { href: "/vehicles", label: "Veículos" },
   { href: "/antt-coefficients", label: "ANTT" },
+  { href: "/addresses", label: "Endereços" },
 ];
 
 export default function RootLayout({

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { computeIcmsValue } from "@/lib/quoteCalculations";
+import { getCityCoordinates } from "@/lib/geocoding";
+import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 
 interface QuoteDetail {
   id: string;
@@ -75,6 +77,21 @@ export default async function QuoteDetailPage({
     quote.toll_cost,
     quote.insurance_value
   );
+
+  const routeCityNames = [
+    quote.base_origin,
+    quote.origin,
+    quote.destination,
+    quote.final_destination,
+  ].filter((name): name is string => Boolean(name?.trim()));
+
+  const routeWaypoints: RouteMapWaypoint[] = [];
+  for (const name of routeCityNames) {
+    const coordinates = await getCityCoordinates(name);
+    if (coordinates) {
+      routeWaypoints.push({ ...coordinates, label: name });
+    }
+  }
 
   const { data: deliveries } = await supabase
     .from("quote_deliveries")
@@ -244,6 +261,15 @@ export default async function QuoteDetailPage({
               </dd>
             </div>
           </dl>
+        </div>
+
+        <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm sm:col-span-2">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-navy-500">
+            Mapa da rota
+          </h2>
+          <div className="mt-3">
+            <RouteMap waypoints={routeWaypoints} showDistance />
+          </div>
         </div>
 
         <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm sm:col-span-2">

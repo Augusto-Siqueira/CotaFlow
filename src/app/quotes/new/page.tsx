@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/format";
@@ -10,6 +10,7 @@ import {
   computeInsuranceValue,
   computeNetFreight,
 } from "@/lib/quoteCalculations";
+import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 
 interface ClientOption {
   id: string;
@@ -27,6 +28,11 @@ interface AnttCoefficientOption {
   cargo_type: string;
   ccd: number;
   cc: number;
+}
+
+interface AddressOption {
+  id: string;
+  name: string;
 }
 
 interface DuplicateSourceQuote {
@@ -112,6 +118,112 @@ function isValidNumber(value: string): boolean {
   return !Number.isNaN(Number(value.replace(",", ".")));
 }
 
+// Campo de texto livre (nunca bloqueado por um seletor) com sugestões
+// próprias em vez de <datalist> nativo: clicar na setinha mostra só os
+// endereços cadastrados (lista curta e útil); digitar filtra cidades (e
+// endereços) que começam com o que foi digitado, em vez de despejar a
+// lista inteira de cidades já usadas.
+function AddressField({
+  value,
+  onValueChange,
+  placeholder,
+  error,
+  cities,
+  addresses,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  error?: string;
+  cities: string[];
+  addresses: AddressOption[];
+}) {
+  const [openMode, setOpenMode] = useState<"closed" | "addresses" | "search">(
+    "closed"
+  );
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openMode === "closed") return;
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpenMode("closed");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMode]);
+
+  const suggestions =
+    openMode === "addresses"
+      ? addresses.map((a) => a.name)
+      : openMode === "search"
+      ? Array.from(new Set([...cities, ...addresses.map((a) => a.name)]))
+          .filter((name) =>
+            name.toLowerCase().startsWith(value.trim().toLowerCase())
+          )
+          .sort()
+      : [];
+
+  function selectSuggestion(name: string) {
+    onValueChange(name);
+    setOpenMode("closed");
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            onValueChange(e.target.value);
+            setOpenMode(e.target.value.trim() ? "search" : "addresses");
+          }}
+          onFocus={() =>
+            setOpenMode(value.trim() ? "search" : "addresses")
+          }
+          onBlur={() => setTimeout(() => setOpenMode("closed"), 100)}
+          className="w-full rounded-lg border border-navy-300 px-3 py-2 pr-8 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          placeholder={placeholder}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() =>
+            setOpenMode((prev) => (prev === "addresses" ? "closed" : "addresses"))
+          }
+          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-navy-400 hover:text-navy-600"
+          aria-label="Ver endereços cadastrados"
+        >
+          ▾
+        </button>
+      </div>
+      {openMode !== "closed" && suggestions.length > 0 && (
+        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-navy-200 bg-white py-1 shadow-lg">
+          {suggestions.map((s) => (
+            <li key={s}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectSuggestion(s)}
+                className="block w-full px-3 py-1.5 text-left text-sm text-navy-700 hover:bg-navy-50"
+              >
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 export default function NewQuotePage({
   searchParams,
 }: {
@@ -123,6 +235,7 @@ export default function NewQuotePage({
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [anttCoefficients, setAnttCoefficients] = useState<AnttCoefficientOption[]>([]);
   const [cities, setCities] = useState<string[]>([]);
+  const [addresses, setAddresses] = useState<AddressOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsError, setOptionsError] = useState<string | null>(null);
 
@@ -132,6 +245,10 @@ export default function NewQuotePage({
 
   const [fractioned, setFractioned] = useState(false);
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>(emptyDeliveries);
+
+  const [routeWaypoints, setRouteWaypoints] = useState<RouteMapWaypoint[]>([]);
+  const [geocodingRoute, setGeocodingRoute] = useState(false);
+  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
 
   const [duplicateSource, setDuplicateSource] =
     useState<DuplicateSourceQuote | null>(null);
@@ -145,7 +262,7 @@ export default function NewQuotePage({
       setLoadingOptions(true);
       setOptionsError(null);
 
-      const [clientsRes, vehiclesRes, anttRes, citiesRes, duplicateRes] = await Promise.all([
+      const [clientsRes, vehiclesRes, anttRes, citiesRes, addressesRes, duplicateRes] = await Promise.all([
         supabase.from("clients").select("id, name").order("name"),
         supabase.from("vehicles").select("id, type, axles").order("type"),
         supabase
@@ -153,6 +270,7 @@ export default function NewQuotePage({
           .select("axles, cargo_type, ccd, cc")
           .order("cargo_type"),
         supabase.from("cities").select("name").order("name"),
+        supabase.from("company_bases").select("id, name").order("name"),
         duplicateId
           ? supabase
               .from("quotes")
@@ -173,6 +291,7 @@ export default function NewQuotePage({
         setVehicles(vehiclesRes.data ?? []);
         setAnttCoefficients(anttRes.data ?? []);
         setCities((citiesRes.data ?? []).map((c) => c.name));
+        setAddresses(addressesRes.data ?? []);
       }
 
       if (duplicateId && duplicateRes.data) {
@@ -223,6 +342,60 @@ export default function NewQuotePage({
     }
     loadOptions();
   }, [duplicateId]);
+
+  useEffect(() => {
+    const cityNames = [
+      form.base_origin,
+      form.origin,
+      form.destination,
+      form.final_destination,
+    ]
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    if (cityNames.length < 2) {
+      setRouteWaypoints([]);
+      setRouteDistanceKm(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setGeocodingRoute(true);
+      try {
+        const response = await fetch("/api/quotes/geocode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cities: cityNames }),
+        });
+        const { results } = (await response.json()) as {
+          results: { name: string; lat: number; lng: number }[];
+        };
+        const byName = new Map(results.map((r) => [r.name, r]));
+        const resolved = cityNames
+          .map((name) => {
+            const match = byName.get(name);
+            return match
+              ? { lat: match.lat, lng: match.lng, label: name }
+              : null;
+          })
+          .filter((w): w is RouteMapWaypoint => w !== null);
+        setRouteDistanceKm(null);
+        setRouteWaypoints(resolved);
+      } catch {
+        setRouteWaypoints([]);
+        setRouteDistanceKm(null);
+      } finally {
+        setGeocodingRoute(false);
+      }
+    }, 600);
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    form.base_origin,
+    form.origin,
+    form.destination,
+    form.final_destination,
+  ]);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -535,11 +708,15 @@ export default function NewQuotePage({
     );
   }
 
+  const locationOptions = Array.from(
+    new Set([...cities, ...addresses.map((a) => a.name)])
+  ).sort();
+
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
       <datalist id="city-options">
-        {cities.map((city) => (
-          <option key={city} value={city} />
+        {locationOptions.map((location) => (
+          <option key={location} value={location} />
         ))}
       </datalist>
       <div className="mb-8">
@@ -625,13 +802,12 @@ export default function NewQuotePage({
                 <label className="mb-1 block text-sm font-medium text-navy-700">
                   Origem
                 </label>
-                <input
-                  type="text"
-                  list="city-options"
+                <AddressField
                   value={form.base_origin}
-                  onChange={(e) => updateField("base_origin", e.target.value)}
-                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  onValueChange={(v) => updateField("base_origin", v)}
                   placeholder="Ex: Palhoça/SC (garagem)"
+                  cities={cities}
+                  addresses={addresses}
                 />
                 <p className="mt-1 text-xs text-navy-500">
                   Ponto de partida do veículo, antes da coleta.
@@ -654,15 +830,12 @@ export default function NewQuotePage({
                     </button>
                   )}
                 </div>
-                <input
-                  type="text"
-                  list="city-options"
+                <AddressField
                   value={form.final_destination}
-                  onChange={(e) =>
-                    updateField("final_destination", e.target.value)
-                  }
-                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  onValueChange={(v) => updateField("final_destination", v)}
                   placeholder="Ex: Palhoça/SC (retorno vazio)"
+                  cities={cities}
+                  addresses={addresses}
                 />
               </div>
             </div>
@@ -672,35 +845,27 @@ export default function NewQuotePage({
                 <label className="mb-1 block text-sm font-medium text-navy-700">
                   Coleta <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  list="city-options"
+                <AddressField
                   value={form.origin}
-                  onChange={(e) => updateField("origin", e.target.value)}
-                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  onValueChange={(v) => updateField("origin", v)}
                   placeholder="Ex: São Paulo/SP"
+                  error={stepErrors.origin}
+                  cities={cities}
+                  addresses={addresses}
                 />
-                {stepErrors.origin && (
-                  <p className="mt-1 text-xs text-red-600">{stepErrors.origin}</p>
-                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-navy-700">
                   Entrega <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  list="city-options"
+                <AddressField
                   value={form.destination}
-                  onChange={(e) => updateField("destination", e.target.value)}
-                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  onValueChange={(v) => updateField("destination", v)}
                   placeholder="Ex: Curitiba/PR"
+                  error={stepErrors.destination}
+                  cities={cities}
+                  addresses={addresses}
                 />
-                {stepErrors.destination && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {stepErrors.destination}
-                  </p>
-                )}
               </div>
             </div>
 
@@ -725,6 +890,36 @@ export default function NewQuotePage({
                 Considere o trecho total (Origem → Coleta → Entrega → Destino
                 final), incluindo o deslocamento vazio.
               </p>
+              {routeDistanceKm !== null && (
+                <p className="mt-1 text-xs text-navy-600">
+                  Distância calculada pela rota:{" "}
+                  <span className="font-medium">{routeDistanceKm} km</span>{" "}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateField("distance_km", String(routeDistanceKm))
+                    }
+                    className="text-brand-700 underline hover:text-brand-800"
+                  >
+                    Usar esse valor
+                  </button>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Mapa da rota
+              </label>
+              {geocodingRoute && (
+                <p className="mb-2 text-xs text-navy-500">
+                  Localizando cidades no mapa...
+                </p>
+              )}
+              <RouteMap
+                waypoints={routeWaypoints}
+                onRouteFound={setRouteDistanceKm}
+              />
             </div>
           </div>
         )}
