@@ -25,6 +25,9 @@ interface QuoteDetail {
   transit_time_hours: number | null;
   free_time_hours: number | null;
   over_time_cost: number | null;
+  waypoints_origin_coleta: string | null;
+  waypoints_coleta_entrega: string | null;
+  waypoints_entrega_destino: string | null;
   status: string;
   created_at: string;
   version: number;
@@ -60,7 +63,7 @@ export default async function QuoteDetailPage({
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, free_time_hours, over_time_cost, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
+      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, free_time_hours, over_time_cost, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
     )
     .eq("id", id)
     .single();
@@ -78,10 +81,24 @@ export default async function QuoteDetailPage({
     quote.insurance_value
   );
 
+  function splitWaypoints(value: string | null): string[] {
+    return (value ?? "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  const waypointsOriginColeta = splitWaypoints(quote.waypoints_origin_coleta);
+  const waypointsColetaEntrega = splitWaypoints(quote.waypoints_coleta_entrega);
+  const waypointsEntregaDestino = splitWaypoints(quote.waypoints_entrega_destino);
+
   const routeCityNames = [
     quote.base_origin,
+    ...waypointsOriginColeta,
     quote.origin,
+    ...waypointsColetaEntrega,
     quote.destination,
+    ...waypointsEntregaDestino,
     quote.final_destination,
   ].filter((name): name is string => Boolean(name?.trim()));
 
@@ -231,6 +248,20 @@ export default async function QuoteDetailPage({
                 <dt className="text-navy-500">Destino final</dt>
                 <dd className="font-medium text-navy-900">
                   {quote.final_destination}
+                </dd>
+              </div>
+            )}
+            {(waypointsOriginColeta.length > 0 ||
+              waypointsColetaEntrega.length > 0 ||
+              waypointsEntregaDestino.length > 0) && (
+              <div className="sm:col-span-3">
+                <dt className="text-navy-500">Pontos de passagem</dt>
+                <dd className="font-medium text-navy-900">
+                  {[
+                    ...waypointsOriginColeta,
+                    ...waypointsColetaEntrega,
+                    ...waypointsEntregaDestino,
+                  ].join(" → ")}
                 </dd>
               </div>
             )}

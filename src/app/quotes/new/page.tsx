@@ -52,6 +52,9 @@ interface DuplicateSourceQuote {
   icms_pct: number | null;
   transit_time_hours: number | null;
   version: number;
+  waypoints_origin_coleta: string | null;
+  waypoints_coleta_entrega: string | null;
+  waypoints_entrega_destino: string | null;
 }
 
 interface FormState {
@@ -113,9 +116,40 @@ function toNumber(value: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+function splitWaypoints(value: string | null): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function joinWaypoints(values: string[]): string | null {
+  const joined = values.map((v) => v.trim()).filter(Boolean).join(", ");
+  return joined || null;
+}
+
 function isValidNumber(value: string): boolean {
   if (!value.trim()) return true;
   return !Number.isNaN(Number(value.replace(",", ".")));
+}
+
+// O Supabase limita cada consulta a 1000 linhas no servidor (não dá pra
+// contornar com .limit() no cliente) — com os ~5.570 municípios
+// cadastrados em `cities`, precisa paginar pra trazer a lista inteira.
+async function fetchAllCityNames(): Promise<string[]> {
+  const pageSize = 1000;
+  const names: string[] = [];
+  for (let page = 0; ; page++) {
+    const { data, error } = await supabase
+      .from("cities")
+      .select("name")
+      .order("name")
+      .range(page * pageSize, page * pageSize + pageSize - 1);
+    if (error || !data) break;
+    names.push(...data.map((c) => c.name));
+    if (data.length < pageSize) break;
+  }
+  return names;
 }
 
 // Campo de texto livre (nunca bloqueado por um seletor) com sugestões
@@ -224,6 +258,70 @@ function AddressField({
   );
 }
 
+// Lista de cidades extras que a rota é forçada a visitar entre dois pontos
+// consecutivos (ex: entre Coleta e Entrega), na ordem em que aparecem.
+function WaypointList({
+  label,
+  values,
+  onChange,
+  cities,
+  addresses,
+}: {
+  label: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  cities: string[];
+  addresses: AddressOption[];
+}) {
+  function updateAt(index: number, value: string) {
+    onChange(values.map((v, i) => (i === index ? value : v)));
+  }
+
+  function removeAt(index: number) {
+    onChange(values.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-navy-600">{label}</span>
+        <button
+          type="button"
+          onClick={() => onChange([...values, ""])}
+          className="text-xs text-brand-700 underline hover:text-brand-800"
+        >
+          + Adicionar ponto
+        </button>
+      </div>
+      {values.length > 0 && (
+        <div className="mt-2 flex flex-col gap-2">
+          {values.map((value, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div className="flex-1">
+                <AddressField
+                  value={value}
+                  onValueChange={(v) => updateAt(index, v)}
+                  placeholder="Ex: Ponta Grossa/PR"
+                  cities={cities}
+                  addresses={addresses}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAt(index)}
+                className="text-navy-400 hover:text-red-600"
+                aria-label="Remover ponto de passagem"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NewQuotePage({
   searchParams,
 }: {
@@ -246,6 +344,10 @@ export default function NewQuotePage({
   const [fractioned, setFractioned] = useState(false);
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>(emptyDeliveries);
 
+  const [waypointsOriginColeta, setWaypointsOriginColeta] = useState<string[]>([]);
+  const [waypointsColetaEntrega, setWaypointsColetaEntrega] = useState<string[]>([]);
+  const [waypointsEntregaDestino, setWaypointsEntregaDestino] = useState<string[]>([]);
+
   const [routeWaypoints, setRouteWaypoints] = useState<RouteMapWaypoint[]>([]);
   const [geocodingRoute, setGeocodingRoute] = useState(false);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
@@ -262,20 +364,20 @@ export default function NewQuotePage({
       setLoadingOptions(true);
       setOptionsError(null);
 
-      const [clientsRes, vehiclesRes, anttRes, citiesRes, addressesRes, duplicateRes] = await Promise.all([
+      const [clientsRes, vehiclesRes, anttRes, cityNames, addressesRes, duplicateRes] = await Promise.all([
         supabase.from("clients").select("id, name").order("name"),
         supabase.from("vehicles").select("id, type, axles").order("type"),
         supabase
           .from("antt_coefficients")
           .select("axles, cargo_type, ccd, cc")
           .order("cargo_type"),
-        supabase.from("cities").select("name").order("name"),
+        fetchAllCityNames(),
         supabase.from("company_bases").select("id, name").order("name"),
         duplicateId
           ? supabase
               .from("quotes")
               .select(
-                "id, client_id, base_origin, origin, destination, final_destination, distance_km, vehicle_id, product, nf_value, gross_freight, toll_cost, insurance_pct, icms_pct, transit_time_hours, version"
+                "id, client_id, base_origin, origin, destination, final_destination, distance_km, vehicle_id, product, nf_value, gross_freight, toll_cost, insurance_pct, icms_pct, transit_time_hours, version, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino"
               )
               .eq("id", duplicateId)
               .single()
@@ -290,12 +392,15 @@ export default function NewQuotePage({
         setClients(clientsRes.data ?? []);
         setVehicles(vehiclesRes.data ?? []);
         setAnttCoefficients(anttRes.data ?? []);
-        setCities((citiesRes.data ?? []).map((c) => c.name));
+        setCities(cityNames);
         setAddresses(addressesRes.data ?? []);
       }
 
       if (duplicateId && duplicateRes.data) {
         const source = duplicateRes.data as unknown as DuplicateSourceQuote;
+        setWaypointsOriginColeta(splitWaypoints(source.waypoints_origin_coleta));
+        setWaypointsColetaEntrega(splitWaypoints(source.waypoints_coleta_entrega));
+        setWaypointsEntregaDestino(splitWaypoints(source.waypoints_entrega_destino));
 
         setForm((prev) => ({
           ...prev,
@@ -346,8 +451,11 @@ export default function NewQuotePage({
   useEffect(() => {
     const cityNames = [
       form.base_origin,
+      ...waypointsOriginColeta,
       form.origin,
+      ...waypointsColetaEntrega,
       form.destination,
+      ...waypointsEntregaDestino,
       form.final_destination,
     ]
       .map((c) => c.trim())
@@ -395,6 +503,9 @@ export default function NewQuotePage({
     form.origin,
     form.destination,
     form.final_destination,
+    waypointsOriginColeta,
+    waypointsColetaEntrega,
+    waypointsEntregaDestino,
   ]);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
@@ -564,6 +675,9 @@ export default function NewQuotePage({
         net_freight: netFreight,
         full_freight: fullFreight,
         transit_time_hours: toNumber(form.transit_time_hours),
+        waypoints_origin_coleta: joinWaypoints(waypointsOriginColeta),
+        waypoints_coleta_entrega: joinWaypoints(waypointsColetaEntrega),
+        waypoints_entrega_destino: joinWaypoints(waypointsEntregaDestino),
         duplicated_from_id: duplicateSource?.id ?? null,
         version: duplicateSource ? duplicateSource.version + 1 : 1,
       })
@@ -606,6 +720,9 @@ export default function NewQuotePage({
           form.origin,
           form.destination,
           form.final_destination,
+          ...waypointsOriginColeta,
+          ...waypointsColetaEntrega,
+          ...waypointsEntregaDestino,
           ...deliveriesWithShare.map((d) => d.destination),
         ]
           .map((c) => c.trim())
@@ -863,6 +980,39 @@ export default function NewQuotePage({
                   onValueChange={(v) => updateField("destination", v)}
                   placeholder="Ex: Curitiba/PR"
                   error={stepErrors.destination}
+                  cities={cities}
+                  addresses={addresses}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-navy-200 p-4">
+              <h3 className="text-sm font-medium text-navy-700">
+                Pontos de passagem (opcional)
+              </h3>
+              <p className="mt-1 text-xs text-navy-500">
+                Force a rota a passar por cidades específicas entre os
+                pontos principais.
+              </p>
+              <div className="mt-3 flex flex-col gap-4">
+                <WaypointList
+                  label="Entre Origem e Coleta"
+                  values={waypointsOriginColeta}
+                  onChange={setWaypointsOriginColeta}
+                  cities={cities}
+                  addresses={addresses}
+                />
+                <WaypointList
+                  label="Entre Coleta e Entrega"
+                  values={waypointsColetaEntrega}
+                  onChange={setWaypointsColetaEntrega}
+                  cities={cities}
+                  addresses={addresses}
+                />
+                <WaypointList
+                  label="Entre Entrega e Destino final"
+                  values={waypointsEntregaDestino}
+                  onChange={setWaypointsEntregaDestino}
                   cities={cities}
                   addresses={addresses}
                 />
