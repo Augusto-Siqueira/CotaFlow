@@ -4,6 +4,25 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
+import {
+  ListFilters,
+  emptyListFilter,
+  endOfDayIso,
+  hasActiveFilter,
+  startOfDayIso,
+  type ClientFilterOption,
+  type ListFilterValue,
+} from "@/components/ListFilters";
+import {
+  CardActions,
+  CardBadge,
+  CardFields,
+  CardField,
+  CardHeader,
+  CardHighlight,
+  MobileCard,
+  MobileCardList,
+} from "@/components/MobileCard";
 
 interface Quote {
   id: string;
@@ -20,19 +39,41 @@ interface Quote {
 
 export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [clients, setClients] = useState<ClientFilterOption[]>([]);
+  const [filter, setFilter] = useState<ListFilterValue>(emptyListFilter);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadClients() {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name")
+        .order("name");
+      setClients(data ?? []);
+    }
+    loadClients();
+  }, []);
 
   useEffect(() => {
     async function loadQuotes() {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
+
+      let query = supabase
         .from("quotes")
         .select(
           "id, origin, destination, gross_freight, net_freight, full_freight, status, created_at, clients(name), vehicles(type)"
         )
         .order("created_at", { ascending: false });
+
+      if (filter.clientId) query = query.eq("client_id", filter.clientId);
+      const from = startOfDayIso(filter.from);
+      if (from) query = query.gte("created_at", from);
+      const to = endOfDayIso(filter.to);
+      if (to) query = query.lte("created_at", to);
+
+      const { data, error } = await query;
 
       if (error) {
         setError(error.message);
@@ -42,7 +83,7 @@ export default function QuotesPage() {
       setLoading(false);
     }
     loadQuotes();
-  }, []);
+  }, [filter]);
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -55,13 +96,29 @@ export default function QuotesPage() {
             Histórico de cotações geradas.
           </p>
         </div>
-        <Link
-          href="/quotes/new"
-          className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Nova cotação
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/quotes/batches/new"
+            className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+          >
+            Cotação em lote
+          </Link>
+          <Link
+            href="/quotes/new"
+            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            Nova cotação
+          </Link>
+        </div>
       </div>
+
+      <ListFilters
+        clients={clients}
+        value={filter}
+        onChange={setFilter}
+        resultCount={quotes.length}
+        resultNoun={["cotação encontrada", "cotações encontradas"]}
+      />
 
       <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
         {loading ? (
@@ -74,10 +131,73 @@ export default function QuotesPage() {
           </div>
         ) : quotes.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-navy-500">
-            Nenhuma cotação cadastrada ainda.
+            {hasActiveFilter(filter)
+              ? "Nenhuma cotação encontrada com esses filtros."
+              : "Nenhuma cotação cadastrada ainda."}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <MobileCardList>
+              {quotes.map((quote) => (
+                <MobileCard key={quote.id}>
+                  <CardHeader
+                    title={
+                      <>
+                        {quote.origin ?? "—"}{" "}
+                        <span className="text-navy-400">→</span>{" "}
+                        {quote.destination ?? "—"}
+                      </>
+                    }
+                    subtitle={
+                      <>
+                        {quote.clients?.name ?? "—"}
+                        {quote.vehicles?.type && ` · ${quote.vehicles.type}`}
+                      </>
+                    }
+                    badge={<CardBadge>{quote.status}</CardBadge>}
+                  />
+
+                  <CardHighlight
+                    label="Frete Full"
+                    value={formatCurrency(quote.full_freight)}
+                  />
+
+                  <CardFields>
+                    <CardField
+                      label="Net"
+                      value={formatCurrency(quote.net_freight)}
+                    />
+                    <CardField
+                      label="Gross"
+                      value={formatCurrency(quote.gross_freight)}
+                    />
+                    <CardField
+                      label="Data"
+                      value={formatDate(quote.created_at)}
+                    />
+                  </CardFields>
+
+                  <CardActions>
+                    <Link
+                      href={`/quotes/${quote.id}`}
+                      className="text-brand-700 underline hover:text-brand-800"
+                    >
+                      Detalhes
+                    </Link>
+                    <a
+                      href={`/api/quotes/${quote.id}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-700 underline hover:text-brand-800"
+                    >
+                      PDF
+                    </a>
+                  </CardActions>
+                </MobileCard>
+              ))}
+            </MobileCardList>
+
+            <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
                 <tr>
@@ -143,7 +263,8 @@ export default function QuotesPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>

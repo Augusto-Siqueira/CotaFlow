@@ -100,7 +100,7 @@ export default function AddressesPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+        <div className="min-w-0 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
               Novo endereço
@@ -163,7 +163,7 @@ export default function AddressesPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">

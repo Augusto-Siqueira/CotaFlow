@@ -867,9 +867,13 @@ export default function NewQuotePage({
               >
                 {i + 1}
               </span>
+              {/* Em telas estreitas os 5 rótulos não cabem numa linha e
+                  empurravam a página; fica só o do passo atual. */}
               <span
                 className={`text-sm ${
-                  i === step ? "font-medium text-navy-900" : "text-navy-500"
+                  i === step
+                    ? "font-medium text-navy-900"
+                    : "hidden text-navy-500 sm:inline"
                 }`}
               >
                 {label}

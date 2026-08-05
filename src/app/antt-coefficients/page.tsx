@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatCurrency } from "@/lib/format";
+import {
+  CardBadge,
+  CardFields,
+  CardField,
+  CardHeader,
+  CardHighlight,
+  MobileCard,
+  MobileCardList,
+} from "@/components/MobileCard";
 
 interface AnttCoefficient {
   id: string;
@@ -118,7 +128,7 @@ export default function AnttCoefficientsPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+        <div className="min-w-0 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
               Novo coeficiente
@@ -234,7 +244,7 @@ export default function AnttCoefficientsPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">
@@ -258,42 +268,66 @@ export default function AnttCoefficientsPage() {
                 Nenhum coeficiente cadastrado ainda.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                    <tr>
-                      <th className="px-6 py-3 font-medium">Eixos</th>
-                      <th className="px-6 py-3 font-medium">Tipo de carga</th>
-                      <th className="px-6 py-3 font-medium">CCD (R$/km)</th>
-                      <th className="px-6 py-3 font-medium">CC (R$)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-navy-100">
-                    {coefficients.map((c) => (
-                      <tr key={c.id} className="hover:bg-navy-50">
-                        <td className="px-6 py-3 font-medium text-navy-900">
-                          {c.axles}
-                        </td>
-                        <td className="px-6 py-3 text-navy-600">
-                          {c.cargo_type}
-                        </td>
-                        <td className="px-6 py-3 text-navy-600">
-                          {c.ccd.toLocaleString("pt-BR", {
-                            style: "currency",
-                            currency: "BRL",
-                          })}
-                        </td>
-                        <td className="px-6 py-3 text-navy-600">
-                          {c.cc.toLocaleString("pt-BR", {
-                            style: "currency",
-                            currency: "BRL",
-                          })}
-                        </td>
+              <>
+                <MobileCardList>
+                  {coefficients.map((c) => (
+                    <MobileCard key={c.id}>
+                      <CardHeader
+                        title={c.cargo_type}
+                        badge={
+                          <CardBadge>
+                            {c.axles} {c.axles === 1 ? "eixo" : "eixos"}
+                          </CardBadge>
+                        }
+                      />
+
+                      <CardHighlight
+                        label="CCD (R$/km)"
+                        value={formatCurrency(c.ccd)}
+                      />
+
+                      <CardFields>
+                        <CardField
+                          label="CC (R$)"
+                          value={formatCurrency(c.cc)}
+                          wide
+                        />
+                      </CardFields>
+                    </MobileCard>
+                  ))}
+                </MobileCardList>
+
+                <div className="hidden overflow-x-auto sm:block">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
+                      <tr>
+                        <th className="px-6 py-3 font-medium">Eixos</th>
+                        <th className="px-6 py-3 font-medium">Tipo de carga</th>
+                        <th className="px-6 py-3 font-medium">CCD (R$/km)</th>
+                        <th className="px-6 py-3 font-medium">CC (R$)</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-navy-100">
+                      {coefficients.map((c) => (
+                        <tr key={c.id} className="hover:bg-navy-50">
+                          <td className="px-6 py-3 font-medium text-navy-900">
+                            {c.axles}
+                          </td>
+                          <td className="px-6 py-3 text-navy-600">
+                            {c.cargo_type}
+                          </td>
+                          <td className="px-6 py-3 text-navy-600">
+                            {formatCurrency(c.ccd)}
+                          </td>
+                          <td className="px-6 py-3 text-navy-600">
+                            {formatCurrency(c.cc)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>

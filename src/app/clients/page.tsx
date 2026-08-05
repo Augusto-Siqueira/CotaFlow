@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import {
+  CardActions,
+  CardFields,
+  CardField,
+  CardHeader,
+  CardHighlight,
+  MobileCard,
+  MobileCardList,
+} from "@/components/MobileCard";
 
 interface Client {
   id: string;
@@ -120,7 +129,7 @@ export default function ClientsPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+        <div className="min-w-0 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
               Novo cliente
@@ -234,7 +243,7 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">
@@ -259,47 +268,86 @@ export default function ClientsPage() {
                 Nenhum cliente cadastrado ainda.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                    <tr>
-                      <th className="px-6 py-3 font-medium">Nome</th>
-                      <th className="px-6 py-3 font-medium">Documento</th>
-                      <th className="px-6 py-3 font-medium">Segmento</th>
-                      <th className="px-6 py-3 font-medium">Seguro padrão</th>
-                      <th className="px-6 py-3 font-medium">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-navy-100">
-                    {clients.map((client) => (
-                      <tr key={client.id} className="hover:bg-navy-50">
-                        <td className="px-6 py-3 font-medium text-navy-900">
-                          {client.name}
-                        </td>
-                        <td className="px-6 py-3 text-navy-600">
-                          {client.document}
-                        </td>
-                        <td className="px-6 py-3 text-navy-600">
-                          {client.segment || "—"}
-                        </td>
-                        <td className="px-6 py-3 text-navy-600">
-                          {client.default_insurance_pct !== null
+              <>
+                <MobileCardList>
+                  {clients.map((client) => (
+                    <MobileCard key={client.id}>
+                      <CardHeader
+                        title={client.name}
+                        subtitle={client.document}
+                      />
+
+                      <CardHighlight
+                        label="Seguro padrão"
+                        value={
+                          client.default_insurance_pct !== null
                             ? `${client.default_insurance_pct}%`
-                            : "—"}
-                        </td>
-                        <td className="px-6 py-3">
-                          <Link
-                            href={`/clients/${client.id}/comparativo`}
-                            className="font-medium text-brand-700 underline hover:text-brand-800"
-                          >
-                            Comparativo
-                          </Link>
-                        </td>
+                            : "—"
+                        }
+                      />
+
+                      <CardFields>
+                        <CardField
+                          label="Segmento"
+                          value={client.segment || "—"}
+                          wide
+                        />
+                      </CardFields>
+
+                      <CardActions>
+                        <Link
+                          href={`/clients/${client.id}/comparativo`}
+                          className="text-brand-700 underline hover:text-brand-800"
+                        >
+                          Comparativo
+                        </Link>
+                      </CardActions>
+                    </MobileCard>
+                  ))}
+                </MobileCardList>
+
+                <div className="hidden overflow-x-auto sm:block">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
+                      <tr>
+                        <th className="px-6 py-3 font-medium">Nome</th>
+                        <th className="px-6 py-3 font-medium">Documento</th>
+                        <th className="px-6 py-3 font-medium">Segmento</th>
+                        <th className="px-6 py-3 font-medium">Seguro padrão</th>
+                        <th className="px-6 py-3 font-medium">Ações</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-navy-100">
+                      {clients.map((client) => (
+                        <tr key={client.id} className="hover:bg-navy-50">
+                          <td className="px-6 py-3 font-medium text-navy-900">
+                            {client.name}
+                          </td>
+                          <td className="px-6 py-3 text-navy-600">
+                            {client.document}
+                          </td>
+                          <td className="px-6 py-3 text-navy-600">
+                            {client.segment || "—"}
+                          </td>
+                          <td className="px-6 py-3 text-navy-600">
+                            {client.default_insurance_pct !== null
+                              ? `${client.default_insurance_pct}%`
+                              : "—"}
+                          </td>
+                          <td className="px-6 py-3">
+                            <Link
+                              href={`/clients/${client.id}/comparativo`}
+                              className="font-medium text-brand-700 underline hover:text-brand-800"
+                            >
+                              Comparativo
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>
