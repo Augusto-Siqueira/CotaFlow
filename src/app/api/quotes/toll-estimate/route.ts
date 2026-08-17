@@ -37,7 +37,9 @@ export async function POST(request: Request) {
 
   const { data: plazas, error: plazasError } = await supabase
     .from("toll_plazas")
-    .select("id, name, concessionaria, rodovia, latitude, longitude")
+    .select(
+      "id, name, concessionaria, rodovia, latitude, longitude, coordinate_precision_m"
+    )
     .eq("active", true)
     .not("latitude", "is", null)
     .not("longitude", "is", null);
@@ -46,7 +48,27 @@ export async function POST(request: Request) {
     return Response.json({ error: plazasError.message }, { status: 500 });
   }
 
-  const matches = matchPlazasToRoute(route, plazas as PlazaForMatching[]);
+  const plazasForMatching: PlazaForMatching[] = (
+    plazas as unknown as Array<{
+      id: string;
+      name: string;
+      concessionaria: string;
+      rodovia: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      coordinate_precision_m: number | null;
+    }>
+  ).map((p) => ({
+    id: p.id,
+    name: p.name,
+    concessionaria: p.concessionaria,
+    rodovia: p.rodovia,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    coordinatePrecisionMeters: p.coordinate_precision_m,
+  }));
+
+  const matches = matchPlazasToRoute(route, plazasForMatching);
   if (matches.length === 0) {
     return Response.json({
       items: [],

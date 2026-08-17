@@ -18,6 +18,12 @@ export interface PlazaForMatching {
   rodovia: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Precisão real da coordenada em metros, quando conhecida na origem
+   * (ex: praça de SP geocodificada por cidade — ver 0018). Tem prioridade
+   * sobre a estimativa por casas decimais: um centro de cidade do
+   * Nominatim sai com 6 casas decimais mas não é preciso, então contar
+   * dígito enganaria a confiança nesse caso. */
+  coordinatePrecisionMeters?: number | null;
 }
 
 export type MatchConfidence = "high" | "medium" | "low";
@@ -188,10 +194,9 @@ export function matchPlazasToRoute(
     }
     if (best === null || best.distanceMeters > radius) continue;
 
-    const precision = estimateCoordinatePrecisionMeters(
-      plaza.latitude,
-      plaza.longitude
-    );
+    const precision =
+      plaza.coordinatePrecisionMeters ??
+      estimateCoordinatePrecisionMeters(plaza.latitude, plaza.longitude);
     matches.push({
       plaza,
       distanceToRouteMeters: Math.round(best.distanceMeters),
