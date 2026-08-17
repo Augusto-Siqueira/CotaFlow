@@ -35,6 +35,19 @@ interface AddressOption {
   name: string;
 }
 
+interface TollEstimateItem {
+  plaza: { name: string; concessionaria: string };
+  distanceAlongRouteKm: number;
+  confidence: "high" | "medium" | "low";
+  amount: number | null;
+}
+
+interface TollEstimate {
+  items: TollEstimateItem[];
+  total: number;
+  matchedPlazaCount: number;
+}
+
 interface DuplicateSourceQuote {
   id: string;
   client_id: string | null;
@@ -351,6 +364,12 @@ export default function NewQuotePage({
   const [routeWaypoints, setRouteWaypoints] = useState<RouteMapWaypoint[]>([]);
   const [geocodingRoute, setGeocodingRoute] = useState(false);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const [routeGeometry, setRouteGeometry] = useState<
+    { lat: number; lng: number }[] | null
+  >(null);
+  const [tollEstimate, setTollEstimate] = useState<TollEstimate | null>(null);
+  const [tollEstimateLoading, setTollEstimateLoading] = useState(false);
+  const [showTollPlazas, setShowTollPlazas] = useState(false);
 
   const [duplicateSource, setDuplicateSource] =
     useState<DuplicateSourceQuote | null>(null);
@@ -464,6 +483,7 @@ export default function NewQuotePage({
     if (cityNames.length < 2) {
       setRouteWaypoints([]);
       setRouteDistanceKm(null);
+      setRouteGeometry(null);
       return;
     }
 
@@ -488,10 +508,12 @@ export default function NewQuotePage({
           })
           .filter((w): w is RouteMapWaypoint => w !== null);
         setRouteDistanceKm(null);
+        setRouteGeometry(null);
         setRouteWaypoints(resolved);
       } catch {
         setRouteWaypoints([]);
         setRouteDistanceKm(null);
+        setRouteGeometry(null);
       } finally {
         setGeocodingRoute(false);
       }
@@ -507,6 +529,42 @@ export default function NewQuotePage({
     waypointsColetaEntrega,
     waypointsEntregaDestino,
   ]);
+
+  // Só dá pra estimar pedágio com rota (passo 1) E veículo (passo 3), que
+  // ficam em etapas diferentes do wizard — por isso esse efeito reage aos
+  // dois em vez de rodar só quando o usuário chega no passo de tributos.
+  useEffect(() => {
+    const vehicle = vehicles.find((v) => v.id === form.vehicle_id);
+    if (!routeGeometry || routeGeometry.length < 2 || !vehicle?.axles) {
+      setTollEstimate(null);
+      return;
+    }
+
+    let cancelled = false;
+    setTollEstimateLoading(true);
+    fetch("/api/quotes/toll-estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routeCoordinates: routeGeometry,
+        vehicleAxles: vehicle.axles,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: TollEstimate | null) => {
+        if (!cancelled) setTollEstimate(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTollEstimate(null);
+      })
+      .finally(() => {
+        if (!cancelled) setTollEstimateLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeGeometry, form.vehicle_id, vehicles]);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -1073,6 +1131,7 @@ export default function NewQuotePage({
               <RouteMap
                 waypoints={routeWaypoints}
                 onRouteFound={setRouteDistanceKm}
+                onRouteGeometry={setRouteGeometry}
               />
             </div>
           </div>
@@ -1255,8 +1314,95 @@ export default function NewQuotePage({
                     {stepErrors.toll_cost}
                   </p>
                 )}
+                {tollEstimateLoading && (
+                  <p className="mt-1 text-xs text-navy-500">
+                    Calculando pedágio pela rota...
+                  </p>
+                )}
+                {!tollEstimateLoading &&
+                  tollEstimate &&
+                  tollEstimate.matchedPlazaCount > 0 && (
+                    <p className="mt-1 text-xs text-navy-600">
+                      Pedágio automático:{" "}
+                      <span className="font-medium">
+                        {formatCurrency(tollEstimate.total)}
+                      </span>{" "}
+                      ({tollEstimate.matchedPlazaCount} praça
+                      {tollEstimate.matchedPlazaCount > 1 ? "s" : ""}){" "}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateField("toll_cost", String(tollEstimate.total))
+                        }
+                        className="text-brand-700 underline hover:text-brand-800"
+                      >
+                        Usar esse valor
+                      </button>
+                      {" · "}
+                      <button
+                        type="button"
+                        onClick={() => setShowTollPlazas((s) => !s)}
+                        className="text-brand-700 underline hover:text-brand-800"
+                      >
+                        {showTollPlazas ? "Ocultar praças" : "Ver praças"}
+                      </button>
+                    </p>
+                  )}
+                {!tollEstimateLoading &&
+                  tollEstimate &&
+                  tollEstimate.matchedPlazaCount === 0 &&
+                  routeGeometry && (
+                    <p className="mt-1 text-xs text-navy-500">
+                      Nenhuma praça encontrada automaticamente nessa rota
+                      (cobertura hoje é só malha federal — pedágio estadual
+                      de SP ainda não entra no cálculo automático).
+                    </p>
+                  )}
               </div>
             </div>
+
+            {showTollPlazas && tollEstimate && tollEstimate.items.length > 0 && (
+              <div className="rounded-lg border border-navy-200 p-3">
+                <div className="mb-2 text-xs font-medium text-navy-700">
+                  Praças encontradas na rota
+                </div>
+                <ul className="flex flex-col gap-1.5">
+                  {tollEstimate.items.map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-2 text-xs"
+                    >
+                      <span className="text-navy-700">
+                        km {item.distanceAlongRouteKm} — {item.plaza.concessionaria}{" "}
+                        <span className="text-navy-500">
+                          ({item.plaza.name})
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span
+                          className={
+                            item.confidence === "low"
+                              ? "text-amber-600"
+                              : "text-navy-600"
+                          }
+                        >
+                          {item.confidence === "high"
+                            ? "confiança alta"
+                            : item.confidence === "medium"
+                            ? "confiança média"
+                            : "confiança baixa"}
+                        </span>
+                        <span className="font-medium text-navy-900">
+                          {item.amount !== null
+                            ? formatCurrency(item.amount)
+                            : "sem tarifa"}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">

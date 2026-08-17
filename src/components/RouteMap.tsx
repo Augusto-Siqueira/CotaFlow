@@ -21,10 +21,12 @@ const RouteMapClient = dynamic(() => import("./RouteMapClient"), {
 export default function RouteMap({
   waypoints,
   onRouteFound,
+  onRouteGeometry,
   showDistance = false,
 }: {
   waypoints: RouteMapWaypoint[];
   onRouteFound?: (distanceKm: number) => void;
+  onRouteGeometry?: (coordinates: { lat: number; lng: number }[]) => void;
   showDistance?: boolean;
 }) {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
@@ -40,7 +42,11 @@ export default function RouteMap({
 
   return (
     <div>
-      <RouteMapClient waypoints={waypoints} onRouteFound={handleRouteFound} />
+      <RouteMapClient
+        waypoints={waypoints}
+        onRouteFound={handleRouteFound}
+        onRouteGeometry={onRouteGeometry}
+      />
       {showDistance && distanceKm !== null && (
         <p className="mt-2 text-xs text-navy-500">
           Distância calculada pela rota:{" "}

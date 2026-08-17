@@ -27,18 +27,22 @@ L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl });
 export default function RouteMapClient({
   waypoints,
   onRouteFound,
+  onRouteGeometry,
 }: {
   waypoints: RouteMapWaypoint[];
   onRouteFound?: (distanceKm: number) => void;
+  onRouteGeometry?: (coordinates: { lat: number; lng: number }[]) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const routingRef = useRef<L.Routing.Control | null>(null);
   const labelsRef = useRef<string[]>([]);
   const onRouteFoundRef = useRef(onRouteFound);
+  const onRouteGeometryRef = useRef(onRouteGeometry);
 
   useEffect(() => {
     onRouteFoundRef.current = onRouteFound;
-  }, [onRouteFound]);
+    onRouteGeometryRef.current = onRouteGeometry;
+  }, [onRouteFound, onRouteGeometry]);
 
   // O mapa e o controle de rotas são criados uma única vez. Waypoints são
   // atualizados via setWaypoints() no efeito abaixo — destruir/recriar o mapa
@@ -71,12 +75,26 @@ export default function RouteMapClient({
       show: false,
     }).addTo(map);
 
-    routingRef.current.on("routesfound", (event: { routes: { summary: { totalDistance: number } }[] }) => {
-      const meters = event.routes[0]?.summary?.totalDistance;
-      if (typeof meters === "number") {
-        onRouteFoundRef.current?.(Math.round(meters / 1000));
+    routingRef.current.on(
+      "routesfound",
+      (event: {
+        routes: {
+          summary: { totalDistance: number };
+          coordinates?: { lat: number; lng: number }[];
+        }[];
+      }) => {
+        const route = event.routes[0];
+        const meters = route?.summary?.totalDistance;
+        if (typeof meters === "number") {
+          onRouteFoundRef.current?.(Math.round(meters / 1000));
+        }
+        if (route?.coordinates) {
+          onRouteGeometryRef.current?.(
+            route.coordinates.map((c) => ({ lat: c.lat, lng: c.lng }))
+          );
+        }
       }
-    });
+    );
 
     return () => {
       routingRef.current = null;
