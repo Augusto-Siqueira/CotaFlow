@@ -370,6 +370,11 @@ export default function NewQuotePage({
   const [tollEstimate, setTollEstimate] = useState<TollEstimate | null>(null);
   const [tollEstimateLoading, setTollEstimateLoading] = useState(false);
   const [showTollPlazas, setShowTollPlazas] = useState(false);
+  // true depois que o usuário clica em "Usar esse valor" — enquanto isso,
+  // toda vez que a rota mudar (passo 1) o pedágio recalcula e o campo
+  // acompanha sozinho. Digitar manualmente no campo desliga o modo
+  // automático, pra não sobrescrever um valor que o usuário quis fixar.
+  const [tollCostIsAuto, setTollCostIsAuto] = useState(false);
 
   const [duplicateSource, setDuplicateSource] =
     useState<DuplicateSourceQuote | null>(null);
@@ -565,6 +570,15 @@ export default function NewQuotePage({
       cancelled = true;
     };
   }, [routeGeometry, form.vehicle_id, vehicles]);
+
+  // Mantém o campo de pedágio acompanhando o cálculo automático depois que
+  // o usuário optou por ele — sem isso, voltar ao passo 1 e mudar a rota
+  // recalculava só o indicador "Pedágio automático", mas o valor que
+  // realmente vai pra cotação ficava travado no número antigo.
+  useEffect(() => {
+    if (!tollCostIsAuto || !tollEstimate) return;
+    setForm((prev) => ({ ...prev, toll_cost: String(tollEstimate.total) }));
+  }, [tollCostIsAuto, tollEstimate]);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -1305,7 +1319,10 @@ export default function NewQuotePage({
                   type="text"
                   inputMode="decimal"
                   value={form.toll_cost}
-                  onChange={(e) => updateField("toll_cost", e.target.value)}
+                  onChange={(e) => {
+                    setTollCostIsAuto(false);
+                    updateField("toll_cost", e.target.value);
+                  }}
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                   placeholder="Ex: 180"
                 />
@@ -1331,13 +1348,17 @@ export default function NewQuotePage({
                       {tollEstimate.matchedPlazaCount > 1 ? "s" : ""}){" "}
                       <button
                         type="button"
-                        onClick={() =>
-                          updateField("toll_cost", String(tollEstimate.total))
-                        }
+                        onClick={() => {
+                          setTollCostIsAuto(true);
+                          updateField("toll_cost", String(tollEstimate.total));
+                        }}
                         className="text-brand-700 underline hover:text-brand-800"
                       >
                         Usar esse valor
                       </button>
+                      {tollCostIsAuto && (
+                        <span className="text-navy-400"> (acompanhando a rota)</span>
+                      )}
                       {" · "}
                       <button
                         type="button"

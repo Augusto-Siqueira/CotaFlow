@@ -24,6 +24,14 @@ export interface PlazaForMatching {
    * Nominatim sai com 6 casas decimais mas não é preciso, então contar
    * dígito enganaria a confiança nesse caso. */
   coordinatePrecisionMeters?: number | null;
+  /** Rumo (graus, 0-360, sentido horário a partir do norte) do sentido em
+   * que a praça cobra, para praças de mão única (ex: Coxilha/EGR, que só
+   * cobra de Passo Fundo para Erechim). Nulo = cobra nos dois sentidos
+   * (comportamento padrão, preservado pra toda praça que não tiver isso
+   * preenchido). Comparado contra o rumo real de deslocamento da rota no
+   * ponto da travessia — mais de 90° de diferença é "sentido contrário",
+   * não cobra. */
+  chargeDirectionBearingDeg?: number | null;
 }
 
 export type MatchConfidence = "high" | "medium" | "low";
@@ -51,6 +59,26 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Rumo de a para b, em graus (0 = norte, 90 = leste, sentido horário).
+export function bearingDegrees(a: LatLng, b: LatLng): number {
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  const deg = (Math.atan2(y, x) * 180) / Math.PI;
+  return (deg + 360) % 360;
+}
+
+// Menor diferença angular entre dois rumos (0-180°) — 0 é mesmo sentido,
+// 180 é sentido oposto.
+function angularDifferenceDeg(a: number, b: number): number {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
 }
 
 // Projeta o ponto no segmento a-b usando um plano local equirretangular
@@ -119,6 +147,16 @@ export interface MatchOptions {
 
 const DEFAULT_SEARCH_RADIUS_M = 3000;
 
+// Gap (em km, ao longo da rota) que separa duas travessias distintas da
+// mesma praça. Maior que o comprimento típico de um segmento do OSRM e de
+// um trevo/rotatória de acesso à praça (testando com rota real, vimos o
+// mesmo cruzamento físico sair em duas janelas ~2-3km separadas por causa
+// da alça de acesso — sem essa folga, contaria pedágio em dobro numa
+// travessia só), e bem menor que a distância de ida-e-volta de uma rota
+// com retorno — é isso que permite diferenciar uma praça cruzada duas
+// vezes de verdade (ida e volta) de uma única passagem por um trevo.
+const CROSSING_GAP_KM = 5;
+
 // Praça de alta confiança: perto da rota E a fonte tem coordenada precisa.
 // Sem isso, uma praça a 2,9km com coordenada de 11km de erro pareceria tão
 // confiável quanto uma a 50m com coordenada exata — o que não é verdade.
@@ -177,33 +215,81 @@ export function matchPlazasToRoute(
     if (plaza.latitude === null || plaza.longitude === null) continue;
     const point: LatLng = { lat: plaza.latitude, lng: plaza.longitude };
 
-    let best: { distanceMeters: number; alongKm: number } | null = null;
+    // Coleta TODOS os pontos da rota dentro do raio, não só o mais próximo
+    // global — uma rota com retorno (ida e volta pela mesma praça) passa
+    // perto dela duas vezes, em posições bem distintas ao longo da rota.
+    // Guarda o índice do segmento pra poder calcular o rumo de deslocamento
+    // depois (praça de mão única precisa saber em que sentido a rota
+    // passou por ali, não só que passou perto).
+    const withinRadius: {
+      distanceMeters: number;
+      alongKm: number;
+      segmentIndex: number;
+    }[] = [];
     for (let i = 1; i < route.length; i++) {
       const { distanceMeters, t } = distanceToSegmentMeters(
         point,
         route[i - 1],
         route[i]
       );
-      if (best === null || distanceMeters < best.distanceMeters) {
+      if (distanceMeters <= radius) {
         const segLenKm = cumulativeKm[i] - cumulativeKm[i - 1];
-        best = {
+        withinRadius.push({
           distanceMeters,
           alongKm: cumulativeKm[i - 1] + t * segLenKm,
-        };
+          segmentIndex: i,
+        });
       }
     }
-    if (best === null || best.distanceMeters > radius) continue;
+    if (withinRadius.length === 0) continue;
+
+    // Agrupa em travessias distintas: pontos próximos entre si (mesmo
+    // trecho da rota) formam uma travessia só; um salto grande no km
+    // acumulado indica que a rota se afastou e voltou a se aproximar —
+    // uma segunda passagem física pela mesma praça.
+    withinRadius.sort((a, b) => a.alongKm - b.alongKm);
+    const crossings: (typeof withinRadius)[] = [];
+    let current: typeof withinRadius = [withinRadius[0]];
+    for (let i = 1; i < withinRadius.length; i++) {
+      const gap = withinRadius[i].alongKm - withinRadius[i - 1].alongKm;
+      if (gap <= CROSSING_GAP_KM) {
+        current.push(withinRadius[i]);
+      } else {
+        crossings.push(current);
+        current = [withinRadius[i]];
+      }
+    }
+    crossings.push(current);
 
     const precision =
       plaza.coordinatePrecisionMeters ??
       estimateCoordinatePrecisionMeters(plaza.latitude, plaza.longitude);
-    matches.push({
-      plaza,
-      distanceToRouteMeters: Math.round(best.distanceMeters),
-      distanceAlongRouteKm: Math.round(best.alongKm * 10) / 10,
-      coordinatePrecisionMeters: Math.round(precision),
-      confidence: confidenceFor(best.distanceMeters, precision),
-    });
+
+    for (const crossing of crossings) {
+      const best = crossing.reduce((a, b) =>
+        b.distanceMeters < a.distanceMeters ? b : a
+      );
+
+      if (plaza.chargeDirectionBearingDeg != null) {
+        const travelBearing = bearingDegrees(
+          route[best.segmentIndex - 1],
+          route[best.segmentIndex]
+        );
+        const diff = angularDifferenceDeg(
+          travelBearing,
+          plaza.chargeDirectionBearingDeg
+        );
+        if (diff > 90) continue; // rota passou no sentido que essa praça não cobra
+      }
+
+      matches.push({
+        plaza,
+        distanceToRouteMeters: Math.round(best.distanceMeters),
+        distanceAlongRouteKm: Math.round(best.alongKm * 10) / 10,
+        coordinatePrecisionMeters: Math.round(precision),
+        confidence: confidenceFor(best.distanceMeters, precision),
+      });
+    }
   }
 
   return dedupeNearbyMatches(
