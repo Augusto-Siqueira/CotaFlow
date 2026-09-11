@@ -29,6 +29,17 @@ interface RouteForm {
   icms_pct: string;
 }
 
+// Letras A, B, C... pra identificar cada parada (estilo Qualp).
+function stopLetter(index: number): string {
+  let n = index;
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return label;
+}
+
 function toNumber(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -90,12 +101,17 @@ export default function EditBatchRoutePage({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Presença de linhas em quote_stops = rota no formato novo (lista livre de
+  // paradas, ver 0030). Sem elas = rota antiga congelada, mantém o
+  // formulário simples de origin/destination de sempre.
+  const [stops, setStops] = useState<string[] | null>(null);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
       setLoadError(null);
 
-      const [quoteRes, vehiclesRes, cityNames] = await Promise.all([
+      const [quoteRes, vehiclesRes, cityNames, stopsRes] = await Promise.all([
         supabase
           .from("quotes")
           .select(
@@ -108,6 +124,11 @@ export default function EditBatchRoutePage({
           .select("id, type, axles, over_time_rate")
           .order("type"),
         fetchAllCityNames(),
+        supabase
+          .from("quote_stops")
+          .select("address")
+          .eq("quote_id", routeId)
+          .order("position"),
       ]);
 
       if (quoteRes.error || !quoteRes.data) {
@@ -137,6 +158,9 @@ export default function EditBatchRoutePage({
         transit_time_hours: numberToInput(quote.transit_time_hours),
         icms_pct: numberToInput(quote.icms_pct),
       });
+      if (stopsRes.data && stopsRes.data.length > 0) {
+        setStops(stopsRes.data.map((s) => s.address));
+      }
       setParanaRule(batchRef?.parana_rule ?? false);
       setVehicles(vehiclesRes.data ?? []);
       setCities(cityNames);
@@ -147,6 +171,20 @@ export default function EditBatchRoutePage({
 
   function updateField<K extends keyof RouteForm>(key: K, value: RouteForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateStop(stopIndex: number, value: string) {
+    setStops((prev) =>
+      (prev ?? []).map((s, i) => (i === stopIndex ? value : s))
+    );
+  }
+
+  function addStop() {
+    setStops((prev) => [...(prev ?? []), ""]);
+  }
+
+  function removeStop(stopIndex: number) {
+    setStops((prev) => (prev ?? []).filter((_, i) => i !== stopIndex));
   }
 
   const grossFreight = toNumber(form.gross_freight);
@@ -166,9 +204,17 @@ export default function EditBatchRoutePage({
 
   function validate(): boolean {
     const nextErrors: Record<string, string> = {};
-    if (!form.origin.trim()) nextErrors.origin = "Informe a origem.";
-    if (!form.destination.trim())
-      nextErrors.destination = "Informe o destino.";
+    if (stops) {
+      if (!stops[0]?.trim() || !stops[stops.length - 1]?.trim()) {
+        nextErrors.stops = "Informe ao menos origem e destino.";
+      } else if (stops.some((s) => !s.trim())) {
+        nextErrors.stops = "Preencha ou remova as paradas vazias.";
+      }
+    } else {
+      if (!form.origin.trim()) nextErrors.origin = "Informe a origem.";
+      if (!form.destination.trim())
+        nextErrors.destination = "Informe o destino.";
+    }
     if (!form.vehicle_id) nextErrors.vehicle_id = "Selecione o veículo.";
     if (grossFreight === null) nextErrors.gross_freight = "Informe o frete Gross.";
     if (!isValidNumber(form.min_load_ton))
@@ -190,8 +236,10 @@ export default function EditBatchRoutePage({
     const { error } = await supabase
       .from("quotes")
       .update({
-        origin: form.origin.trim(),
-        destination: form.destination.trim(),
+        origin: stops ? stops[0].trim() : form.origin.trim(),
+        destination: stops
+          ? stops[stops.length - 1].trim()
+          : form.destination.trim(),
         final_destination: form.final_destination.trim() || null,
         vehicle_id: form.vehicle_id,
         min_load_ton: toNumber(form.min_load_ton),
@@ -209,6 +257,25 @@ export default function EditBatchRoutePage({
       setSubmitting(false);
       setSubmitError(error.message);
       return;
+    }
+
+    if (stops) {
+      // Reordenar/adicionar/remover parada é mais simples apagando e
+      // reinserindo do zero do que fazer upsert por posição.
+      await supabase.from("quote_stops").delete().eq("quote_id", routeId);
+      const { error: stopsError } = await supabase.from("quote_stops").insert(
+        stops
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((address, position) => ({ quote_id: routeId, position, address }))
+      );
+      if (stopsError) {
+        setSubmitting(false);
+        setSubmitError(
+          `Rota salva, mas não foi possível atualizar as paradas (${stopsError.message}).`
+        );
+        return;
+      }
     }
 
     router.push(`/quotes/batches/${batchId}`);
@@ -246,34 +313,89 @@ export default function EditBatchRoutePage({
 
       <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="text-xs font-medium text-navy-600">Origem</label>
-            <input
-              type="text"
-              list="edit-route-cities"
-              value={form.origin}
-              onChange={(e) => updateField("origin", e.target.value)}
-              className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-            />
-            {errors.origin && (
-              <p className="mt-1 text-xs text-red-600">{errors.origin}</p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-medium text-navy-600">
-              Destino (entrega)
-            </label>
-            <input
-              type="text"
-              list="edit-route-cities"
-              value={form.destination}
-              onChange={(e) => updateField("destination", e.target.value)}
-              className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-            />
-            {errors.destination && (
-              <p className="mt-1 text-xs text-red-600">{errors.destination}</p>
-            )}
-          </div>
+          {stops ? (
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-navy-600">
+                  Paradas (origem → ... → entrega)
+                </label>
+                <button
+                  type="button"
+                  onClick={addStop}
+                  className="text-xs text-brand-700 underline hover:text-brand-800"
+                >
+                  + parada
+                </button>
+              </div>
+              <div className="mt-1 flex flex-col gap-2">
+                {stops.map((stop, si) => (
+                  <div key={si} className="flex items-center gap-2">
+                    <span className="w-4 shrink-0 text-xs text-navy-400">
+                      {stopLetter(si)}
+                    </span>
+                    <input
+                      type="text"
+                      list="edit-route-cities"
+                      value={stop}
+                      onChange={(e) => updateStop(si, e.target.value)}
+                      placeholder={
+                        si === 0
+                          ? "Origem"
+                          : si === stops.length - 1
+                          ? "Entrega"
+                          : "Parada"
+                      }
+                      className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                    />
+                    {stops.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => removeStop(si)}
+                        className="shrink-0 text-navy-400 hover:text-red-600"
+                        aria-label="Remover parada"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {errors.stops && (
+                <p className="mt-1 text-xs text-red-600">{errors.stops}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-medium text-navy-600">Origem</label>
+                <input
+                  type="text"
+                  list="edit-route-cities"
+                  value={form.origin}
+                  onChange={(e) => updateField("origin", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                />
+                {errors.origin && (
+                  <p className="mt-1 text-xs text-red-600">{errors.origin}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-navy-600">
+                  Destino (entrega)
+                </label>
+                <input
+                  type="text"
+                  list="edit-route-cities"
+                  value={form.destination}
+                  onChange={(e) => updateField("destination", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                />
+                {errors.destination && (
+                  <p className="mt-1 text-xs text-red-600">{errors.destination}</p>
+                )}
+              </div>
+            </>
+          )}
           <div className="sm:col-span-2">
             <label className="text-xs font-medium text-navy-600">
               Destino (fim de viagem)

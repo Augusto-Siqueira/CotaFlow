@@ -208,16 +208,18 @@ export function QuoteProposalDocument({
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Resumo da rota</Text>
-          <View style={styles.row}>
-            <View style={styles.col}>
-              <Text style={styles.label}>Coleta</Text>
-              <Text style={styles.value}>{quote.origin ?? "—"}</Text>
+          {(quote.origin || quote.destination) && (
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>Coleta</Text>
+                <Text style={styles.value}>{quote.origin ?? "—"}</Text>
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>Entrega</Text>
+                <Text style={styles.value}>{quote.destination ?? "—"}</Text>
+              </View>
             </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Entrega</Text>
-              <Text style={styles.value}>{quote.destination ?? "—"}</Text>
-            </View>
-          </View>
+          )}
           <View style={[styles.row, { marginTop: 8 }]}>
             <View style={styles.col}>
               <Text style={styles.label}>Distância</Text>

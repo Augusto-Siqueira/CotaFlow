@@ -35,19 +35,6 @@ interface AddressOption {
   name: string;
 }
 
-interface TollEstimateItem {
-  plaza: { name: string; concessionaria: string };
-  distanceAlongRouteKm: number;
-  confidence: "high" | "medium" | "low";
-  amount: number | null;
-}
-
-interface TollEstimate {
-  items: TollEstimateItem[];
-  total: number;
-  matchedPlazaCount: number;
-}
-
 interface DuplicateSourceQuote {
   id: string;
   client_id: string | null;
@@ -110,15 +97,19 @@ const emptyForm: FormState = {
   antt_floor_acknowledged: false,
 };
 
-interface DeliveryRow {
-  destination: string;
+// Uma parada da rota — lista livre entre Origem e Destino final, no estilo
+// Qualp: substitui os antigos "Coleta"/"Entrega" obrigatórios + 3 grupos de
+// pontos de passagem por uma única lista ordenada. `weight_kg` é opcional;
+// quando 2+ paradas o preenchem, a NF é rateada entre elas proporcionalmente
+// (mesma lógica que antes só existia via "Entrega fracionada").
+interface StopRow {
+  address: string;
   weight_kg: string;
 }
 
-const emptyDeliveries: DeliveryRow[] = [
-  { destination: "", weight_kg: "" },
-  { destination: "", weight_kg: "" },
-];
+function emptyStop(): StopRow {
+  return { address: "", weight_kg: "" };
+}
 
 const STEPS = ["Rota", "Carga", "Veículo", "Tributos", "Resumo"] as const;
 
@@ -129,16 +120,14 @@ function toNumber(value: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+// Só usado hoje pra reconstruir a lista de paradas ao duplicar uma cotação
+// no formato antigo (congelada, sem linhas em `quote_stops`) — ver o
+// carregamento de `duplicateId` mais abaixo.
 function splitWaypoints(value: string | null): string[] {
   return (value ?? "")
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-}
-
-function joinWaypoints(values: string[]): string | null {
-  const joined = values.map((v) => v.trim()).filter(Boolean).join(", ");
-  return joined || null;
 }
 
 function isValidNumber(value: string): boolean {
@@ -271,66 +260,130 @@ function AddressField({
   );
 }
 
-// Lista de cidades extras que a rota é forçada a visitar entre dois pontos
-// consecutivos (ex: entre Coleta e Entrega), na ordem em que aparecem.
-function WaypointList({
-  label,
-  values,
+// Letras A, B, C... pra identificar cada parada (estilo Qualp), sem limite
+// de 26 na prática (depois de Z reaproveita AA, AB... mas uma rota chegar
+// nisso é bem improvável).
+function stopLetter(index: number): string {
+  let n = index;
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return label;
+}
+
+// Lista livre e reordenável de paradas entre Origem e Destino final —
+// substitui os antigos "Coleta"/"Entrega" obrigatórios + 3 grupos fixos de
+// pontos de passagem. Cada parada pode opcionalmente levar um peso (kg);
+// quando 2+ paradas tiverem peso, a NF é rateada proporcionalmente entre
+// elas (ver `stopsWithShare` no componente da página).
+function StopsList({
+  stops,
   onChange,
   cities,
   addresses,
+  error,
 }: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
+  stops: StopRow[];
+  onChange: (stops: StopRow[]) => void;
   cities: string[];
   addresses: AddressOption[];
+  error?: string;
 }) {
-  function updateAt(index: number, value: string) {
-    onChange(values.map((v, i) => (i === index ? value : v)));
+  function updateAt(index: number, patch: Partial<StopRow>) {
+    onChange(stops.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   }
 
   function removeAt(index: number) {
-    onChange(values.filter((_, i) => i !== index));
+    onChange(stops.filter((_, i) => i !== index));
+  }
+
+  function moveAt(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= stops.length) return;
+    const next = [...stops];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
   }
 
   return (
     <div>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-navy-600">{label}</span>
+        <label className="text-sm font-medium text-navy-700">
+          Paradas <span className="text-red-500">*</span>
+        </label>
         <button
           type="button"
-          onClick={() => onChange([...values, ""])}
+          onClick={() => onChange([...stops, emptyStop()])}
           className="text-xs text-brand-700 underline hover:text-brand-800"
         >
-          + Adicionar ponto
+          + Adicionar parada
         </button>
       </div>
-      {values.length > 0 && (
-        <div className="mt-2 flex flex-col gap-2">
-          {values.map((value, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <div className="flex-1">
-                <AddressField
-                  value={value}
-                  onValueChange={(v) => updateAt(index, v)}
-                  placeholder="Ex: Ponta Grossa/PR"
-                  cities={cities}
-                  addresses={addresses}
-                />
-              </div>
+      <p className="mt-1 text-xs text-navy-500">
+        Ordem em que o veículo visita cada ponto. Preencha o peso (kg) só nas
+        paradas que recebem parte da carga — com 2 ou mais paradas
+        preenchidas, a NF é rateada entre elas.
+      </p>
+      <div className="mt-2 flex flex-col gap-2">
+        {stops.map((stop, index) => (
+          <div key={index} className="flex items-start gap-2">
+            <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-navy-100 text-xs font-semibold text-navy-600">
+              {stopLetter(index)}
+            </span>
+            <div className="flex-1">
+              <AddressField
+                value={stop.address}
+                onValueChange={(v) => updateAt(index, { address: v })}
+                placeholder="Ex: Ponta Grossa/PR"
+                cities={cities}
+                addresses={addresses}
+              />
+            </div>
+            <div className="w-32">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={stop.weight_kg}
+                onChange={(e) => updateAt(index, { weight_kg: e.target.value })}
+                className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                placeholder="Peso (kg)"
+              />
+            </div>
+            <div className="mt-1 flex shrink-0 gap-1">
+              <button
+                type="button"
+                onClick={() => moveAt(index, -1)}
+                disabled={index === 0}
+                className="rounded border border-navy-300 px-1.5 py-1 text-navy-500 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Mover parada pra cima"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => moveAt(index, 1)}
+                disabled={index === stops.length - 1}
+                className="rounded border border-navy-300 px-1.5 py-1 text-navy-500 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Mover parada pra baixo"
+              >
+                ↓
+              </button>
               <button
                 type="button"
                 onClick={() => removeAt(index)}
-                className="text-navy-400 hover:text-red-600"
-                aria-label="Remover ponto de passagem"
+                disabled={stops.length <= 1}
+                className="rounded border border-navy-300 px-2 py-1 text-navy-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Remover parada"
               >
                 ×
               </button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -354,27 +407,11 @@ export default function NewQuotePage({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
 
-  const [fractioned, setFractioned] = useState(false);
-  const [deliveries, setDeliveries] = useState<DeliveryRow[]>(emptyDeliveries);
-
-  const [waypointsOriginColeta, setWaypointsOriginColeta] = useState<string[]>([]);
-  const [waypointsColetaEntrega, setWaypointsColetaEntrega] = useState<string[]>([]);
-  const [waypointsEntregaDestino, setWaypointsEntregaDestino] = useState<string[]>([]);
+  const [stops, setStops] = useState<StopRow[]>([emptyStop(), emptyStop()]);
 
   const [routeWaypoints, setRouteWaypoints] = useState<RouteMapWaypoint[]>([]);
   const [geocodingRoute, setGeocodingRoute] = useState(false);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
-  const [routeGeometry, setRouteGeometry] = useState<
-    { lat: number; lng: number }[] | null
-  >(null);
-  const [tollEstimate, setTollEstimate] = useState<TollEstimate | null>(null);
-  const [tollEstimateLoading, setTollEstimateLoading] = useState(false);
-  const [showTollPlazas, setShowTollPlazas] = useState(false);
-  // true depois que o usuário clica em "Usar esse valor" — enquanto isso,
-  // toda vez que a rota mudar (passo 1) o pedágio recalcula e o campo
-  // acompanha sozinho. Digitar manualmente no campo desliga o modo
-  // automático, pra não sobrescrever um valor que o usuário quis fixar.
-  const [tollCostIsAuto, setTollCostIsAuto] = useState(false);
 
   const [duplicateSource, setDuplicateSource] =
     useState<DuplicateSourceQuote | null>(null);
@@ -388,7 +425,7 @@ export default function NewQuotePage({
       setLoadingOptions(true);
       setOptionsError(null);
 
-      const [clientsRes, vehiclesRes, anttRes, cityNames, addressesRes, duplicateRes] = await Promise.all([
+      const [clientsRes, vehiclesRes, anttRes, cityNames, addressesRes, duplicateRes, stopsRes] = await Promise.all([
         supabase.from("clients").select("id, name").order("name"),
         supabase.from("vehicles").select("id, type, axles").order("type"),
         supabase
@@ -406,6 +443,13 @@ export default function NewQuotePage({
               .eq("id", duplicateId)
               .single()
           : Promise.resolve({ data: null, error: null }),
+        duplicateId
+          ? supabase
+              .from("quote_stops")
+              .select("address, weight_kg")
+              .eq("quote_id", duplicateId)
+              .order("position")
+          : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (clientsRes.error) {
@@ -422,9 +466,6 @@ export default function NewQuotePage({
 
       if (duplicateId && duplicateRes.data) {
         const source = duplicateRes.data as unknown as DuplicateSourceQuote;
-        setWaypointsOriginColeta(splitWaypoints(source.waypoints_origin_coleta));
-        setWaypointsColetaEntrega(splitWaypoints(source.waypoints_coleta_entrega));
-        setWaypointsEntregaDestino(splitWaypoints(source.waypoints_entrega_destino));
 
         setForm((prev) => ({
           ...prev,
@@ -451,19 +492,48 @@ export default function NewQuotePage({
         }));
         setDuplicateSource(source);
 
-        const { data: sourceDeliveries } = await supabase
-          .from("quote_deliveries")
-          .select("destination, weight_kg")
-          .eq("quote_id", duplicateId);
-
-        if (sourceDeliveries && sourceDeliveries.length > 0) {
-          setFractioned(true);
-          setDeliveries(
-            sourceDeliveries.map((d) => ({
-              destination: d.destination,
-              weight_kg: String(d.weight_kg),
+        if (stopsRes.data && stopsRes.data.length > 0) {
+          // Formato novo: a cotação de origem já tem lista de paradas, só copia.
+          setStops(
+            stopsRes.data.map((s) => ({
+              address: s.address,
+              weight_kg: s.weight_kg !== null ? String(s.weight_kg) : "",
             }))
           );
+        } else {
+          // Formato antigo (cotação congelada): reconstrói a lista de
+          // paradas a partir dos 3 grupos de waypoints + coleta/entrega +
+          // entregas fracionadas, pra continuar editável no modelo novo.
+          const oldStops: StopRow[] = [
+            ...splitWaypoints(source.waypoints_origin_coleta).map((address) => ({
+              address,
+              weight_kg: "",
+            })),
+            ...(source.origin ? [{ address: source.origin, weight_kg: "" }] : []),
+            ...splitWaypoints(source.waypoints_coleta_entrega).map((address) => ({
+              address,
+              weight_kg: "",
+            })),
+            ...(source.destination
+              ? [{ address: source.destination, weight_kg: "" }]
+              : []),
+            ...splitWaypoints(source.waypoints_entrega_destino).map((address) => ({
+              address,
+              weight_kg: "",
+            })),
+          ];
+
+          const { data: sourceDeliveries } = await supabase
+            .from("quote_deliveries")
+            .select("destination, weight_kg")
+            .eq("quote_id", duplicateId);
+          if (sourceDeliveries) {
+            for (const d of sourceDeliveries) {
+              oldStops.push({ address: d.destination, weight_kg: String(d.weight_kg) });
+            }
+          }
+
+          setStops(oldStops.length > 0 ? oldStops : [emptyStop(), emptyStop()]);
         }
       }
 
@@ -475,11 +545,7 @@ export default function NewQuotePage({
   useEffect(() => {
     const cityNames = [
       form.base_origin,
-      ...waypointsOriginColeta,
-      form.origin,
-      ...waypointsColetaEntrega,
-      form.destination,
-      ...waypointsEntregaDestino,
+      ...stops.map((s) => s.address),
       form.final_destination,
     ]
       .map((c) => c.trim())
@@ -488,7 +554,6 @@ export default function NewQuotePage({
     if (cityNames.length < 2) {
       setRouteWaypoints([]);
       setRouteDistanceKm(null);
-      setRouteGeometry(null);
       return;
     }
 
@@ -513,89 +578,20 @@ export default function NewQuotePage({
           })
           .filter((w): w is RouteMapWaypoint => w !== null);
         setRouteDistanceKm(null);
-        setRouteGeometry(null);
         setRouteWaypoints(resolved);
       } catch {
         setRouteWaypoints([]);
         setRouteDistanceKm(null);
-        setRouteGeometry(null);
       } finally {
         setGeocodingRoute(false);
       }
     }, 600);
 
     return () => clearTimeout(timeoutId);
-  }, [
-    form.base_origin,
-    form.origin,
-    form.destination,
-    form.final_destination,
-    waypointsOriginColeta,
-    waypointsColetaEntrega,
-    waypointsEntregaDestino,
-  ]);
-
-  // Só dá pra estimar pedágio com rota (passo 1) E veículo (passo 3), que
-  // ficam em etapas diferentes do wizard — por isso esse efeito reage aos
-  // dois em vez de rodar só quando o usuário chega no passo de tributos.
-  useEffect(() => {
-    const vehicle = vehicles.find((v) => v.id === form.vehicle_id);
-    if (!routeGeometry || routeGeometry.length < 2 || !vehicle?.axles) {
-      setTollEstimate(null);
-      return;
-    }
-
-    let cancelled = false;
-    setTollEstimateLoading(true);
-    fetch("/api/quotes/toll-estimate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        routeCoordinates: routeGeometry,
-        vehicleAxles: vehicle.axles,
-      }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: TollEstimate | null) => {
-        if (!cancelled) setTollEstimate(data);
-      })
-      .catch(() => {
-        if (!cancelled) setTollEstimate(null);
-      })
-      .finally(() => {
-        if (!cancelled) setTollEstimateLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [routeGeometry, form.vehicle_id, vehicles]);
-
-  // Mantém o campo de pedágio acompanhando o cálculo automático depois que
-  // o usuário optou por ele — sem isso, voltar ao passo 1 e mudar a rota
-  // recalculava só o indicador "Pedágio automático", mas o valor que
-  // realmente vai pra cotação ficava travado no número antigo.
-  useEffect(() => {
-    if (!tollCostIsAuto || !tollEstimate) return;
-    setForm((prev) => ({ ...prev, toll_cost: String(tollEstimate.total) }));
-  }, [tollCostIsAuto, tollEstimate]);
+  }, [form.base_origin, form.final_destination, stops]);
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
-  }
-
-  function updateDelivery(index: number, field: keyof DeliveryRow, value: string) {
-    setDeliveries((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    );
-  }
-
-  function addDelivery() {
-    setDeliveries((prev) => [...prev, { destination: "", weight_kg: "" }]);
-  }
-
-  function removeDelivery(index: number) {
-    setDeliveries((prev) => prev.filter((_, i) => i !== index));
   }
 
   function validateStep(currentStep: number): boolean {
@@ -603,8 +599,16 @@ export default function NewQuotePage({
 
     if (currentStep === 0) {
       if (!form.client_id) errors.client_id = "Selecione o cliente.";
-      if (!form.origin.trim()) errors.origin = "Informe a origem.";
-      if (!form.destination.trim()) errors.destination = "Informe o destino.";
+      if (!stops.some((s) => s.address.trim())) {
+        errors.stops = "Informe ao menos uma parada.";
+      } else {
+        const invalidWeight = stops.some(
+          (s) => s.weight_kg.trim() && !isValidNumber(s.weight_kg)
+        );
+        if (invalidWeight) {
+          errors.stops = "O peso de cada parada precisa ser um número válido.";
+        }
+      }
       if (!isValidNumber(form.distance_km)) {
         errors.distance_km = "Informe um número válido.";
       }
@@ -614,24 +618,6 @@ export default function NewQuotePage({
       if (!form.product.trim()) errors.product = "Informe o produto.";
       if (!form.nf_value.trim() || !isValidNumber(form.nf_value)) {
         errors.nf_value = "Informe o valor da NF.";
-      }
-
-      if (fractioned) {
-        if (deliveries.length < 2) {
-          errors.deliveries = "Informe ao menos 2 entregas para fracionar.";
-        } else {
-          const invalid = deliveries.some(
-            (d) =>
-              !d.destination.trim() ||
-              !d.weight_kg.trim() ||
-              !isValidNumber(d.weight_kg) ||
-              Number(d.weight_kg.replace(",", ".")) <= 0
-          );
-          if (invalid) {
-            errors.deliveries =
-              "Preencha destino e peso (> 0) em todas as entregas.";
-          }
-        }
       }
     }
 
@@ -707,18 +693,26 @@ export default function NewQuotePage({
   const belowAnttFloor =
     anttFloor !== null && grossFreight !== null && grossFreight < anttFloor;
 
-  const parsedDeliveries = deliveries.map((d) => ({
-    destination: d.destination.trim(),
-    weight_kg: toNumber(d.weight_kg) ?? 0,
-  }));
-  const totalWeight = parsedDeliveries.reduce((sum, d) => sum + d.weight_kg, 0);
-  const deliveriesWithShare = parsedDeliveries.map((d) => {
-    const sharePct = totalWeight > 0 ? (d.weight_kg / totalWeight) * 100 : 0;
+  // Paradas com peso preenchido rateiam a NF entre si — o mesmo que a antiga
+  // "Entrega fracionada" fazia, só que agora é uma propriedade opcional de
+  // cada parada em vez de uma tela separada. Alinhado por índice com as
+  // paradas não-vazias, pra servir tanto o salvamento (quote_stops) quanto
+  // o resumo da etapa final.
+  const nonEmptyStops = stops.filter((s) => s.address.trim());
+  const totalStopsWeight = nonEmptyStops.reduce((sum, s) => {
+    const w = toNumber(s.weight_kg);
+    return sum + (w !== null && w > 0 ? w : 0);
+  }, 0);
+  const stopsWithShare = nonEmptyStops.map((s) => {
+    const weight = toNumber(s.weight_kg);
+    const hasWeight = weight !== null && weight > 0;
+    const sharePct =
+      hasWeight && totalStopsWeight > 0 ? (weight / totalStopsWeight) * 100 : null;
     const freightValue =
-      fullFreight !== null && totalWeight > 0
-        ? fullFreight * (d.weight_kg / totalWeight)
+      hasWeight && fullFreight !== null && totalStopsWeight > 0
+        ? fullFreight * (weight / totalStopsWeight)
         : null;
-    return { ...d, sharePct, freightValue };
+    return { address: s.address.trim(), weight_kg: weight, sharePct, freightValue };
   });
 
   async function handleSave() {
@@ -732,8 +726,8 @@ export default function NewQuotePage({
       .insert({
         client_id: form.client_id,
         base_origin: form.base_origin.trim() || null,
-        origin: form.origin.trim(),
-        destination: form.destination.trim(),
+        origin: form.origin.trim() || null,
+        destination: form.destination.trim() || null,
         final_destination: form.final_destination.trim() || null,
         distance_km: toNumber(form.distance_km),
         vehicle_id: form.vehicle_id,
@@ -747,9 +741,6 @@ export default function NewQuotePage({
         net_freight: netFreight,
         full_freight: fullFreight,
         transit_time_hours: toNumber(form.transit_time_hours),
-        waypoints_origin_coleta: joinWaypoints(waypointsOriginColeta),
-        waypoints_coleta_entrega: joinWaypoints(waypointsColetaEntrega),
-        waypoints_entrega_destino: joinWaypoints(waypointsEntregaDestino),
         duplicated_from_id: duplicateSource?.id ?? null,
         version: duplicateSource ? duplicateSource.version + 1 : 1,
       })
@@ -762,40 +753,31 @@ export default function NewQuotePage({
       return;
     }
 
-    if (fractioned) {
-      const { error: deliveriesError } = await supabase
-        .from("quote_deliveries")
-        .insert(
-          deliveriesWithShare.map((d) => ({
-            quote_id: data.id,
-            destination: d.destination,
-            weight_kg: d.weight_kg,
-            freight_share_pct: d.sharePct,
-            freight_value: d.freightValue,
-          }))
-        );
+    const { error: stopsError } = await supabase.from("quote_stops").insert(
+      stopsWithShare.map((s, i) => ({
+        quote_id: data.id,
+        position: i,
+        address: s.address,
+        weight_kg: s.weight_kg,
+        nf_share_pct: s.sharePct,
+      }))
+    );
 
-      if (deliveriesError) {
-        await supabase.from("quotes").delete().eq("id", data.id);
-        setSubmitting(false);
-        setSubmitError(
-          `Não foi possível salvar as entregas fracionadas (${deliveriesError.message}). A cotação não foi salva — corrija e tente novamente.`
-        );
-        return;
-      }
+    if (stopsError) {
+      await supabase.from("quotes").delete().eq("id", data.id);
+      setSubmitting(false);
+      setSubmitError(
+        `Não foi possível salvar as paradas da rota (${stopsError.message}). A cotação não foi salva — corrija e tente novamente.`
+      );
+      return;
     }
 
     const newCityNames = Array.from(
       new Set(
         [
           form.base_origin,
-          form.origin,
-          form.destination,
           form.final_destination,
-          ...waypointsOriginColeta,
-          ...waypointsColetaEntrega,
-          ...waypointsEntregaDestino,
-          ...deliveriesWithShare.map((d) => d.destination),
+          ...stopsWithShare.map((s) => s.address),
         ]
           .map((c) => c.trim())
           .filter(Boolean)
@@ -819,8 +801,7 @@ export default function NewQuotePage({
 
   function handleNewQuote() {
     setForm(emptyForm);
-    setFractioned(false);
-    setDeliveries(emptyDeliveries);
+    setStops([emptyStop(), emptyStop()]);
     setStep(0);
     setStepErrors({});
     setSubmitError(null);
@@ -1033,66 +1014,46 @@ export default function NewQuotePage({
               </div>
             </div>
 
+            <div className="rounded-lg border border-navy-200 p-4">
+              <StopsList
+                stops={stops}
+                onChange={setStops}
+                cities={cities}
+                addresses={addresses}
+                error={stepErrors.stops}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Coleta <span className="text-red-500">*</span>
+                  Coleta
                 </label>
                 <AddressField
                   value={form.origin}
                   onValueChange={(v) => updateField("origin", v)}
                   placeholder="Ex: São Paulo/SP"
-                  error={stepErrors.origin}
                   cities={cities}
                   addresses={addresses}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Entrega <span className="text-red-500">*</span>
+                  Entrega
                 </label>
                 <AddressField
                   value={form.destination}
                   onValueChange={(v) => updateField("destination", v)}
                   placeholder="Ex: Curitiba/PR"
-                  error={stepErrors.destination}
                   cities={cities}
                   addresses={addresses}
                 />
               </div>
-            </div>
-
-            <div className="rounded-lg border border-navy-200 p-4">
-              <h3 className="text-sm font-medium text-navy-700">
-                Pontos de passagem (opcional)
-              </h3>
-              <p className="mt-1 text-xs text-navy-500">
-                Force a rota a passar por cidades específicas entre os
-                pontos principais.
+              <p className="col-span-2 -mt-2 text-xs text-navy-500">
+                Opcional — rótulos que só aparecem na proposta em PDF pro
+                cliente. Não afetam a rota, distância ou pedágio (isso usa as
+                paradas acima).
               </p>
-              <div className="mt-3 flex flex-col gap-4">
-                <WaypointList
-                  label="Entre Origem e Coleta"
-                  values={waypointsOriginColeta}
-                  onChange={setWaypointsOriginColeta}
-                  cities={cities}
-                  addresses={addresses}
-                />
-                <WaypointList
-                  label="Entre Coleta e Entrega"
-                  values={waypointsColetaEntrega}
-                  onChange={setWaypointsColetaEntrega}
-                  cities={cities}
-                  addresses={addresses}
-                />
-                <WaypointList
-                  label="Entre Entrega e Destino final"
-                  values={waypointsEntregaDestino}
-                  onChange={setWaypointsEntregaDestino}
-                  cities={cities}
-                  addresses={addresses}
-                />
-              </div>
             </div>
 
             <div>
@@ -1113,8 +1074,8 @@ export default function NewQuotePage({
                 </p>
               )}
               <p className="mt-1 text-xs text-navy-500">
-                Considere o trecho total (Origem → Coleta → Entrega → Destino
-                final), incluindo o deslocamento vazio.
+                Considere o trecho total (Origem → paradas → Destino final),
+                incluindo o deslocamento vazio.
               </p>
               {routeDistanceKm !== null && (
                 <p className="mt-1 text-xs text-navy-600">
@@ -1134,6 +1095,28 @@ export default function NewQuotePage({
             </div>
 
             <div>
+              {/* Cálculo automático de pedágio (WikiRota) congelado por
+                  enquanto — ver src/lib/wikirota.ts. Preenchimento manual
+                  até definirmos a próxima fonte de pedágio automático. */}
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Pedágio (R$)
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.toll_cost}
+                onChange={(e) => updateField("toll_cost", e.target.value)}
+                className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                placeholder="Ex: 180"
+              />
+              {stepErrors.toll_cost && (
+                <p className="mt-1 text-xs text-red-600">
+                  {stepErrors.toll_cost}
+                </p>
+              )}
+            </div>
+
+            <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Mapa da rota
               </label>
@@ -1145,7 +1128,6 @@ export default function NewQuotePage({
               <RouteMap
                 waypoints={routeWaypoints}
                 onRouteFound={setRouteDistanceKm}
-                onRouteGeometry={setRouteGeometry}
               />
             </div>
           </div>
@@ -1185,71 +1167,11 @@ export default function NewQuotePage({
               )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-navy-700">
-              <input
-                type="checkbox"
-                checked={fractioned}
-                onChange={(e) => setFractioned(e.target.checked)}
-                className="h-4 w-4 rounded border-navy-300 text-brand-600 focus:ring-brand-500"
-              />
-              Entrega fracionada (múltiplas entregas)
-            </label>
-
-            {fractioned && (
-              <div className="flex flex-col gap-3 rounded-lg border border-navy-200 p-4">
-                {deliveries.map((row, i) => (
-                  <div key={i} className="flex items-end gap-3">
-                    <div className="flex-1">
-                      <label className="mb-1 block text-xs font-medium text-navy-700">
-                        Destino {i + 1}
-                      </label>
-                      <input
-                        type="text"
-                        list="city-options"
-                        value={row.destination}
-                        onChange={(e) =>
-                          updateDelivery(i, "destination", e.target.value)
-                        }
-                        className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                        placeholder="Ex: Maringá/PR"
-                      />
-                    </div>
-                    <div className="w-36">
-                      <label className="mb-1 block text-xs font-medium text-navy-700">
-                        Peso (kg)
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={row.weight_kg}
-                        onChange={(e) =>
-                          updateDelivery(i, "weight_kg", e.target.value)
-                        }
-                        className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                        placeholder="Ex: 8000"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeDelivery(i)}
-                      disabled={deliveries.length <= 2}
-                      className="mb-0.5 rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-500 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addDelivery}
-                  className="self-start rounded-lg border border-navy-300 px-3 py-1.5 text-sm text-navy-700 hover:bg-navy-100"
-                >
-                  + Adicionar entrega
-                </button>
-                {stepErrors.deliveries && (
-                  <p className="text-xs text-red-600">{stepErrors.deliveries}</p>
-                )}
-              </div>
+            {nonEmptyStops.length > 1 && totalStopsWeight > 0 && (
+              <p className="text-xs text-navy-500">
+                O peso preenchido nas paradas da etapa Rota rateia a NF entre
+                elas — confira em Resumo.
+              </p>
             )}
           </div>
         )}
@@ -1292,138 +1214,30 @@ export default function NewQuotePage({
 
         {step === 3 && (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Frete Gross (R$) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.gross_freight}
-                  onChange={(e) => updateField("gross_freight", e.target.value)}
-                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  placeholder="Ex: 4500"
-                />
-                {stepErrors.gross_freight && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {stepErrors.gross_freight}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Pedágio (R$)
-                </label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.toll_cost}
-                  onChange={(e) => {
-                    setTollCostIsAuto(false);
-                    updateField("toll_cost", e.target.value);
-                  }}
-                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  placeholder="Ex: 180"
-                />
-                {stepErrors.toll_cost && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {stepErrors.toll_cost}
-                  </p>
-                )}
-                {tollEstimateLoading && (
-                  <p className="mt-1 text-xs text-navy-500">
-                    Calculando pedágio pela rota...
-                  </p>
-                )}
-                {!tollEstimateLoading &&
-                  tollEstimate &&
-                  tollEstimate.matchedPlazaCount > 0 && (
-                    <p className="mt-1 text-xs text-navy-600">
-                      Pedágio automático:{" "}
-                      <span className="font-medium">
-                        {formatCurrency(tollEstimate.total)}
-                      </span>{" "}
-                      ({tollEstimate.matchedPlazaCount} praça
-                      {tollEstimate.matchedPlazaCount > 1 ? "s" : ""}){" "}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTollCostIsAuto(true);
-                          updateField("toll_cost", String(tollEstimate.total));
-                        }}
-                        className="text-brand-700 underline hover:text-brand-800"
-                      >
-                        Usar esse valor
-                      </button>
-                      {tollCostIsAuto && (
-                        <span className="text-navy-400"> (acompanhando a rota)</span>
-                      )}
-                      {" · "}
-                      <button
-                        type="button"
-                        onClick={() => setShowTollPlazas((s) => !s)}
-                        className="text-brand-700 underline hover:text-brand-800"
-                      >
-                        {showTollPlazas ? "Ocultar praças" : "Ver praças"}
-                      </button>
-                    </p>
-                  )}
-                {!tollEstimateLoading &&
-                  tollEstimate &&
-                  tollEstimate.matchedPlazaCount === 0 &&
-                  routeGeometry && (
-                    <p className="mt-1 text-xs text-navy-500">
-                      Nenhuma praça encontrada automaticamente nessa rota
-                      (cobertura hoje é só malha federal — pedágio estadual
-                      de SP ainda não entra no cálculo automático).
-                    </p>
-                  )}
-              </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Frete Gross (R$) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.gross_freight}
+                onChange={(e) => updateField("gross_freight", e.target.value)}
+                className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                placeholder="Ex: 4500"
+              />
+              {stepErrors.gross_freight && (
+                <p className="mt-1 text-xs text-red-600">
+                  {stepErrors.gross_freight}
+                </p>
+              )}
+              {isValidNumber(form.toll_cost) && form.toll_cost.trim() && (
+                <p className="mt-1 text-xs text-navy-500">
+                  Pedágio: {formatCurrency(toNumber(form.toll_cost))} — ajuste
+                  na etapa Rota, logo após a distância.
+                </p>
+              )}
             </div>
-
-            {showTollPlazas && tollEstimate && tollEstimate.items.length > 0 && (
-              <div className="rounded-lg border border-navy-200 p-3">
-                <div className="mb-2 text-xs font-medium text-navy-700">
-                  Praças encontradas na rota
-                </div>
-                <ul className="flex flex-col gap-1.5">
-                  {tollEstimate.items.map((item, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center justify-between gap-2 text-xs"
-                    >
-                      <span className="text-navy-700">
-                        km {item.distanceAlongRouteKm} — {item.plaza.concessionaria}{" "}
-                        <span className="text-navy-500">
-                          ({item.plaza.name})
-                        </span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span
-                          className={
-                            item.confidence === "low"
-                              ? "text-amber-600"
-                              : "text-navy-600"
-                          }
-                        >
-                          {item.confidence === "high"
-                            ? "confiança alta"
-                            : item.confidence === "medium"
-                            ? "confiança média"
-                            : "confiança baixa"}
-                        </span>
-                        <span className="font-medium text-navy-900">
-                          {item.amount !== null
-                            ? formatCurrency(item.amount)
-                            : "sem tarifa"}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
@@ -1589,16 +1403,21 @@ export default function NewQuotePage({
               <div className="text-navy-900">
                 {clients.find((c) => c.id === form.client_id)?.name ?? "—"}
               </div>
-              <div className="text-navy-500">Rota (coleta → entrega)</div>
+              <div className="text-navy-500">Rota</div>
               <div className="text-navy-900">
-                {form.origin} → {form.destination}
+                {[
+                  form.base_origin,
+                  ...nonEmptyStops.map((s) => s.address),
+                  form.final_destination,
+                ]
+                  .filter(Boolean)
+                  .join(" → ") || "—"}
               </div>
-              {(form.base_origin || form.final_destination) && (
+              {(form.origin.trim() || form.destination.trim()) && (
                 <>
-                  <div className="text-navy-500">Deslocamento vazio</div>
+                  <div className="text-navy-500">Coleta / Entrega (PDF)</div>
                   <div className="text-navy-900">
-                    {form.base_origin || "—"} → (coleta/entrega) →{" "}
-                    {form.final_destination || "—"}
+                    {form.origin.trim() || "—"} → {form.destination.trim() || "—"}
                   </div>
                 </>
               )}
@@ -1666,37 +1485,39 @@ export default function NewQuotePage({
               </div>
             )}
 
-            {fractioned && (
+            {stopsWithShare.some((s) => s.sharePct !== null) && (
               <div>
                 <div className="mb-2 text-sm font-medium text-navy-900">
-                  Rateio por entrega
+                  Rateio por parada
                 </div>
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs uppercase tracking-wide text-navy-500">
                     <tr>
-                      <th className="py-1 pr-3 font-medium">Destino</th>
+                      <th className="py-1 pr-3 font-medium">Parada</th>
                       <th className="py-1 pr-3 font-medium">Peso</th>
                       <th className="py-1 pr-3 font-medium">%</th>
                       <th className="py-1 font-medium">Valor</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-navy-100">
-                    {deliveriesWithShare.map((d, i) => (
-                      <tr key={i}>
-                        <td className="py-1.5 pr-3 text-navy-900">
-                          {d.destination || "—"}
-                        </td>
-                        <td className="py-1.5 pr-3 text-navy-600">
-                          {d.weight_kg.toLocaleString("pt-BR")} kg
-                        </td>
-                        <td className="py-1.5 pr-3 text-navy-600">
-                          {d.sharePct.toFixed(1)}%
-                        </td>
-                        <td className="py-1.5 text-navy-900">
-                          {formatCurrency(d.freightValue)}
-                        </td>
-                      </tr>
-                    ))}
+                    {stopsWithShare
+                      .filter((s) => s.sharePct !== null)
+                      .map((s, i) => (
+                        <tr key={i}>
+                          <td className="py-1.5 pr-3 text-navy-900">
+                            {s.address || "—"}
+                          </td>
+                          <td className="py-1.5 pr-3 text-navy-600">
+                            {s.weight_kg?.toLocaleString("pt-BR")} kg
+                          </td>
+                          <td className="py-1.5 pr-3 text-navy-600">
+                            {s.sharePct?.toFixed(1)}%
+                          </td>
+                          <td className="py-1.5 text-navy-900">
+                            {formatCurrency(s.freightValue)}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>

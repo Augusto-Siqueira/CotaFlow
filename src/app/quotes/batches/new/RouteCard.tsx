@@ -14,8 +14,7 @@ export interface RouteCardVehicle {
 }
 
 export interface RouteCardValues {
-  origin: string;
-  destination: string;
+  stops: string[];
   final_destination: string;
   vehicle_id: string;
   min_load_ton: string;
@@ -23,6 +22,17 @@ export interface RouteCardValues {
   gross_freight: string;
   transit_time_hours: string;
   icms_pct: string;
+}
+
+// Letras A, B, C... pra identificar cada parada (estilo Qualp).
+function stopLetter(index: number): string {
+  let n = index;
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return label;
 }
 
 export interface RouteCardComputed {
@@ -53,6 +63,9 @@ export function RouteCard({
   errors,
   citiesListId,
   onChange,
+  onStopChange,
+  onAddStop,
+  onRemoveStop,
   onFocus,
   onRemove,
   canRemove,
@@ -64,6 +77,9 @@ export function RouteCard({
   errors: Record<string, string>;
   citiesListId: string;
   onChange: (key: keyof RouteCardValues, value: string) => void;
+  onStopChange: (stopIndex: number, value: string) => void;
+  onAddStop: () => void;
+  onRemoveStop: (stopIndex: number) => void;
   onFocus: () => void;
   onRemove: () => void;
   canRemove: boolean;
@@ -87,27 +103,50 @@ export function RouteCard({
 
       <div className="mt-3 flex flex-col gap-3">
         <div>
-          <label className={labelCls}>Origem</label>
-          <input
-            type="text"
-            list={citiesListId}
-            value={values.origin}
-            onChange={(e) => onChange("origin", e.target.value)}
-            className={inputNormal}
-          />
-          <FieldError message={errors[`origin_${i}`]} />
-        </div>
-
-        <div>
-          <label className={labelCls}>Destino (entrega)</label>
-          <input
-            type="text"
-            list={citiesListId}
-            value={values.destination}
-            onChange={(e) => onChange("destination", e.target.value)}
-            className={inputNormal}
-          />
-          <FieldError message={errors[`destination_${i}`]} />
+          <div className="flex items-center justify-between">
+            <label className={labelCls}>Paradas (origem → ... → entrega)</label>
+            <button
+              type="button"
+              onClick={onAddStop}
+              className="text-xs text-brand-700 underline hover:text-brand-800"
+            >
+              + parada
+            </button>
+          </div>
+          <div className="mt-1 flex flex-col gap-2">
+            {values.stops.map((stop, si) => (
+              <div key={si} className="flex items-center gap-2">
+                <span className="w-4 shrink-0 text-xs text-navy-400">
+                  {stopLetter(si)}
+                </span>
+                <input
+                  type="text"
+                  list={citiesListId}
+                  value={stop}
+                  onChange={(e) => onStopChange(si, e.target.value)}
+                  placeholder={
+                    si === 0
+                      ? "Origem"
+                      : si === values.stops.length - 1
+                      ? "Entrega"
+                      : "Parada"
+                  }
+                  className={inputNormal + " mt-0"}
+                />
+                {values.stops.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveStop(si)}
+                    className="shrink-0 text-navy-400 hover:text-red-600"
+                    aria-label="Remover parada"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <FieldError message={errors[`stops_${i}`]} />
         </div>
 
         <div>
