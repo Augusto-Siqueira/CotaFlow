@@ -53,6 +53,16 @@ interface QuoteDelivery {
   freight_value: number | null;
 }
 
+// Presença de linhas aqui é o que diferencia "cotação no formato novo"
+// (lista livre de paradas) de "cotação antiga congelada" (Coleta/Entrega
+// obrigatórios + 3 grupos de waypoints + quote_deliveries) — ver 0030.
+interface QuoteStop {
+  position: number;
+  address: string;
+  weight_kg: number | null;
+  nf_share_pct: number | null;
+}
+
 export default async function QuoteDetailPage({
   params,
 }: {
@@ -88,19 +98,31 @@ export default async function QuoteDetailPage({
       .filter(Boolean);
   }
 
+  const { data: stopsData } = await supabase
+    .from("quote_stops")
+    .select("position, address, weight_kg, nf_share_pct")
+    .eq("quote_id", id)
+    .order("position");
+  const stops = (stopsData ?? []) as QuoteStop[];
+  const isNewFormat = stops.length > 0;
+
   const waypointsOriginColeta = splitWaypoints(quote.waypoints_origin_coleta);
   const waypointsColetaEntrega = splitWaypoints(quote.waypoints_coleta_entrega);
   const waypointsEntregaDestino = splitWaypoints(quote.waypoints_entrega_destino);
 
-  const routeCityNames = [
-    quote.base_origin,
-    ...waypointsOriginColeta,
-    quote.origin,
-    ...waypointsColetaEntrega,
-    quote.destination,
-    ...waypointsEntregaDestino,
-    quote.final_destination,
-  ].filter((name): name is string => Boolean(name?.trim()));
+  const routeCityNames = isNewFormat
+    ? [quote.base_origin, ...stops.map((s) => s.address), quote.final_destination].filter(
+        (name): name is string => Boolean(name?.trim())
+      )
+    : [
+        quote.base_origin,
+        ...waypointsOriginColeta,
+        quote.origin,
+        ...waypointsColetaEntrega,
+        quote.destination,
+        ...waypointsEntregaDestino,
+        quote.final_destination,
+      ].filter((name): name is string => Boolean(name?.trim()));
 
   const routeWaypoints: RouteMapWaypoint[] = [];
   for (const name of routeCityNames) {
@@ -110,11 +132,16 @@ export default async function QuoteDetailPage({
     }
   }
 
-  const { data: deliveries } = await supabase
-    .from("quote_deliveries")
-    .select("id, destination, weight_kg, freight_share_pct, freight_value")
-    .eq("quote_id", id)
-    .order("weight_kg", { ascending: false });
+  // Formato antigo: rateio vem de quote_deliveries. Formato novo: vem das
+  // próprias paradas que tiverem peso preenchido.
+  const { data: deliveries } = isNewFormat
+    ? { data: null }
+    : await supabase
+        .from("quote_deliveries")
+        .select("id, destination, weight_kg, freight_share_pct, freight_value")
+        .eq("quote_id", id)
+        .order("weight_kg", { ascending: false });
+  const stopsWithShare = stops.filter((s) => s.weight_kg !== null);
 
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
@@ -223,47 +250,68 @@ export default async function QuoteDetailPage({
             Rota e carga
           </h2>
           <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-            {quote.base_origin && (
-              <div>
-                <dt className="text-navy-500">Origem</dt>
-                <dd className="font-medium text-navy-900">
-                  {quote.base_origin}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-navy-500">Coleta</dt>
-              <dd className="font-medium text-navy-900">
-                {quote.origin ?? "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-navy-500">Entrega</dt>
-              <dd className="font-medium text-navy-900">
-                {quote.destination ?? "—"}
-              </dd>
-            </div>
-            {quote.final_destination && (
-              <div>
-                <dt className="text-navy-500">Destino final</dt>
-                <dd className="font-medium text-navy-900">
-                  {quote.final_destination}
-                </dd>
-              </div>
-            )}
-            {(waypointsOriginColeta.length > 0 ||
-              waypointsColetaEntrega.length > 0 ||
-              waypointsEntregaDestino.length > 0) && (
-              <div className="sm:col-span-3">
-                <dt className="text-navy-500">Pontos de passagem</dt>
-                <dd className="font-medium text-navy-900">
-                  {[
-                    ...waypointsOriginColeta,
-                    ...waypointsColetaEntrega,
-                    ...waypointsEntregaDestino,
-                  ].join(" → ")}
-                </dd>
-              </div>
+            {isNewFormat ? (
+              <>
+                <div className="sm:col-span-3">
+                  <dt className="text-navy-500">Rota</dt>
+                  <dd className="font-medium text-navy-900">
+                    {routeCityNames.join(" → ") || "—"}
+                  </dd>
+                </div>
+                {(quote.origin || quote.destination) && (
+                  <div className="sm:col-span-3">
+                    <dt className="text-navy-500">Coleta / Entrega (rótulo do PDF)</dt>
+                    <dd className="font-medium text-navy-900">
+                      {quote.origin ?? "—"} → {quote.destination ?? "—"}
+                    </dd>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {quote.base_origin && (
+                  <div>
+                    <dt className="text-navy-500">Origem</dt>
+                    <dd className="font-medium text-navy-900">
+                      {quote.base_origin}
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-navy-500">Coleta</dt>
+                  <dd className="font-medium text-navy-900">
+                    {quote.origin ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-navy-500">Entrega</dt>
+                  <dd className="font-medium text-navy-900">
+                    {quote.destination ?? "—"}
+                  </dd>
+                </div>
+                {quote.final_destination && (
+                  <div>
+                    <dt className="text-navy-500">Destino final</dt>
+                    <dd className="font-medium text-navy-900">
+                      {quote.final_destination}
+                    </dd>
+                  </div>
+                )}
+                {(waypointsOriginColeta.length > 0 ||
+                  waypointsColetaEntrega.length > 0 ||
+                  waypointsEntregaDestino.length > 0) && (
+                  <div className="sm:col-span-3">
+                    <dt className="text-navy-500">Pontos de passagem</dt>
+                    <dd className="font-medium text-navy-900">
+                      {[
+                        ...waypointsOriginColeta,
+                        ...waypointsColetaEntrega,
+                        ...waypointsEntregaDestino,
+                      ].join(" → ")}
+                    </dd>
+                  </div>
+                )}
+              </>
             )}
             <div>
               <dt className="text-navy-500">Distância</dt>
@@ -356,7 +404,7 @@ export default async function QuoteDetailPage({
           </div>
         </div>
 
-        {deliveries && deliveries.length > 0 && (
+        {!isNewFormat && deliveries && deliveries.length > 0 && (
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm sm:col-span-2">
             <h2 className="text-sm font-medium uppercase tracking-wide text-navy-500">
               Fracionado — entregas
@@ -386,6 +434,38 @@ export default async function QuoteDetailPage({
                     </td>
                     <td className="py-2 text-navy-900">
                       {formatCurrency(d.freight_value)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {isNewFormat && stopsWithShare.length > 0 && (
+          <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm sm:col-span-2">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-navy-500">
+              Rateio por parada
+            </h2>
+            <table className="mt-3 w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-navy-500">
+                <tr>
+                  <th className="py-1.5 pr-3 font-medium">Parada</th>
+                  <th className="py-1.5 pr-3 font-medium">Peso</th>
+                  <th className="py-1.5 font-medium">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-100">
+                {stopsWithShare.map((s) => (
+                  <tr key={s.position}>
+                    <td className="py-2 pr-3 text-navy-900">{s.address}</td>
+                    <td className="py-2 pr-3 text-navy-600">
+                      {s.weight_kg?.toLocaleString("pt-BR")} kg
+                    </td>
+                    <td className="py-2 text-navy-600">
+                      {s.nf_share_pct !== null
+                        ? `${s.nf_share_pct.toFixed(1)}%`
+                        : "—"}
                     </td>
                   </tr>
                 ))}
