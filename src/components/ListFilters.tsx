@@ -5,20 +5,41 @@ export interface ClientFilterOption {
   name: string;
 }
 
+export interface StatusFilterOption {
+  value: string;
+  label: string;
+}
+
 export interface ListFilterValue {
   clientId: string;
   from: string;
   to: string;
+  // Vazio = "todos os status/coleta/entrega". Os três seguem o mesmo padrão:
+  // ignorados por telas que não passam `statuses`/`origins`/`destinations`
+  // pra <ListFilters> (ex: lotes) — ficam sempre "" nelas, sem UI pra mudar.
+  status: string;
+  origin: string;
+  destination: string;
 }
 
 export const emptyListFilter: ListFilterValue = {
   clientId: "",
   from: "",
   to: "",
+  status: "",
+  origin: "",
+  destination: "",
 };
 
 export function hasActiveFilter(value: ListFilterValue): boolean {
-  return Boolean(value.clientId || value.from || value.to);
+  return Boolean(
+    value.clientId ||
+      value.from ||
+      value.to ||
+      value.status ||
+      value.origin ||
+      value.destination
+  );
 }
 
 /**
@@ -40,12 +61,22 @@ export function endOfDayIso(date: string): string | null {
 
 export function ListFilters({
   clients,
+  statuses,
+  origins,
+  destinations,
   value,
   onChange,
   resultCount,
   resultNoun,
 }: {
   clients: ClientFilterOption[];
+  // Omitido = tela sem conceito de status (ex: lotes) — não renderiza o
+  // filtro. Passe a lista de opções (ex: QUOTE_STATUSES) pra habilitá-lo.
+  statuses?: readonly StatusFilterOption[];
+  // Idem, pros filtros de Coleta e Entrega — passe a lista de valores
+  // distintos já usados (ex: todo `origin`/`destination` de `quotes`).
+  origins?: string[];
+  destinations?: string[];
   value: ListFilterValue;
   onChange: (value: ListFilterValue) => void;
   resultCount: number;
@@ -97,6 +128,57 @@ export function ListFilters({
             className="mt-1 rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
           />
         </div>
+        {statuses && (
+          <div className="min-w-[160px]">
+            <label className="text-xs font-bold text-navy-600">Status</label>
+            <select
+              value={value.status}
+              onChange={(e) => update("status", e.target.value)}
+              className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">Todos os status</option>
+              {statuses.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {origins && (
+          <div className="min-w-[180px]">
+            <label className="text-xs font-bold text-navy-600">Coleta</label>
+            <select
+              value={value.origin}
+              onChange={(e) => update("origin", e.target.value)}
+              className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">Todos os locais de coleta</option>
+              {origins.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {destinations && (
+          <div className="min-w-[180px]">
+            <label className="text-xs font-bold text-navy-600">Entrega</label>
+            <select
+              value={value.destination}
+              onChange={(e) => update("destination", e.target.value)}
+              className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">Todos os locais de entrega</option>
+              {destinations.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {active && (
           <button
             type="button"

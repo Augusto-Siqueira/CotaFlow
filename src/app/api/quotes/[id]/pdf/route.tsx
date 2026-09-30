@@ -16,7 +16,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, origin, destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, free_time_hours, status, created_at, version, clients(name, document), vehicles(type, axles)"
+      "id, origin, destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, delivery_deadline, validity_date, free_time_hours, over_time_cost, client_quote_number, status, created_at, version, clients(name, document, pdf_layout), vehicles(type, axles)"
     )
     .eq("id", id)
     .single();

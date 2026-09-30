@@ -21,6 +21,7 @@ interface VehicleOption {
   id: string;
   type: string;
   axles: number | null;
+  over_time_rate: number | null;
 }
 
 interface AnttCoefficientOption {
@@ -51,6 +52,8 @@ interface DuplicateSourceQuote {
   insurance_pct: number | null;
   icms_pct: number | null;
   transit_time_hours: number | null;
+  delivery_deadline: string | null;
+  free_time_hours: number | null;
   version: number;
   waypoints_origin_coleta: string | null;
   waypoints_coleta_entrega: string | null;
@@ -73,6 +76,26 @@ interface FormState {
   icms_pct: string;
   parana_rule: boolean;
   transit_time_hours: string;
+  // Texto livre (ex: "1 dia após carregado", "2 dias úteis") — alguns
+  // clientes (Kemin) exigem essa informação destacada na proposta em PDF,
+  // separada do transit time em horas. Opcional, aparece em qualquer layout
+  // que a mostre.
+  delivery_deadline: string;
+  // Data-limite em que os valores desta cotação continuam válidos. Deixado
+  // em branco de propósito ao duplicar uma cotação — cada rodada de preços
+  // precisa de uma validade nova, não a data (provavelmente vencida) da
+  // cotação original.
+  validity_date: string;
+  // Padrão da empresa: 5 horas de franquia antes de cobrar over time.
+  // Editável pra quando um cliente negociar um valor diferente.
+  free_time_hours: string;
+  // Número que o PRÓPRIO CLIENTE usa pra organizar as cotações dele (ex:
+  // Kemin numera pelo sistema interno dela, não pelo ID que o CotaFlow
+  // gera) — texto livre, exibido no lugar do nosso ID no cabeçalho do PDF
+  // de layout Kemin (ver QuoteProposalDocument). Deixado em branco ao
+  // duplicar, mesma razão do validity_date: é um número de uma negociação
+  // específica, não se repete pra uma rodada nova.
+  client_quote_number: string;
   antt_cargo_type: string;
   antt_floor_acknowledged: boolean;
 }
@@ -93,6 +116,10 @@ const emptyForm: FormState = {
   icms_pct: "",
   parana_rule: false,
   transit_time_hours: "",
+  delivery_deadline: "",
+  validity_date: "",
+  free_time_hours: "5",
+  client_quote_number: "",
   antt_cargo_type: "",
   antt_floor_acknowledged: false,
 };
@@ -427,7 +454,10 @@ export default function NewQuotePage({
 
       const [clientsRes, vehiclesRes, anttRes, cityNames, addressesRes, duplicateRes, stopsRes] = await Promise.all([
         supabase.from("clients").select("id, name").order("name"),
-        supabase.from("vehicles").select("id, type, axles").order("type"),
+        supabase
+          .from("vehicles")
+          .select("id, type, axles, over_time_rate")
+          .order("type"),
         supabase
           .from("antt_coefficients")
           .select("axles, cargo_type, ccd, cc")
@@ -438,7 +468,7 @@ export default function NewQuotePage({
           ? supabase
               .from("quotes")
               .select(
-                "id, client_id, base_origin, origin, destination, final_destination, distance_km, vehicle_id, product, nf_value, gross_freight, toll_cost, insurance_pct, icms_pct, transit_time_hours, version, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino"
+                "id, client_id, base_origin, origin, destination, final_destination, distance_km, vehicle_id, product, nf_value, gross_freight, toll_cost, insurance_pct, icms_pct, transit_time_hours, delivery_deadline, free_time_hours, version, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino"
               )
               .eq("id", duplicateId)
               .single()
@@ -489,6 +519,13 @@ export default function NewQuotePage({
             source.transit_time_hours !== null
               ? String(source.transit_time_hours)
               : "",
+          delivery_deadline: source.delivery_deadline ?? "",
+          free_time_hours:
+            source.free_time_hours !== null
+              ? String(source.free_time_hours)
+              : "5",
+          // validity_date fica de fora de propósito — ver comentário no
+          // FormState.
         }));
         setDuplicateSource(source);
 
@@ -552,9 +589,11 @@ export default function NewQuotePage({
       .filter(Boolean);
 
     if (cityNames.length < 2) {
-      setRouteWaypoints([]);
-      setRouteDistanceKm(null);
-      return;
+      const timeoutId = setTimeout(() => {
+        setRouteWaypoints([]);
+        setRouteDistanceKm(null);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
 
     const timeoutId = setTimeout(async () => {
@@ -640,6 +679,9 @@ export default function NewQuotePage({
       }
       if (!isValidNumber(form.transit_time_hours)) {
         errors.transit_time_hours = "Informe um número válido.";
+      }
+      if (!isValidNumber(form.free_time_hours)) {
+        errors.free_time_hours = "Informe um número válido.";
       }
       if (belowAnttFloor && !form.antt_floor_acknowledged) {
         errors.antt_floor_acknowledged =
@@ -741,6 +783,14 @@ export default function NewQuotePage({
         net_freight: netFreight,
         full_freight: fullFreight,
         transit_time_hours: toNumber(form.transit_time_hours),
+        delivery_deadline: form.delivery_deadline.trim() || null,
+        validity_date: form.validity_date || null,
+        client_quote_number: form.client_quote_number.trim() || null,
+        free_time_hours: toNumber(form.free_time_hours),
+        // Copiado do cadastro do veículo no momento do save (mesmo padrão da
+        // cotação em lote, ver migration 0012) — atualizar a taxa do veículo
+        // depois não deve mudar o valor de cotações já emitidas.
+        over_time_cost: selectedVehicle?.over_time_rate ?? null,
         duplicated_from_id: duplicateSource?.id ?? null,
         version: duplicateSource ? duplicateSource.version + 1 : 1,
       })
@@ -1373,25 +1423,103 @@ export default function NewQuotePage({
               Regra especial Paraná (pedágio fora da base do ICMS)
             </label>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-navy-700">
+                  Transit time (horas)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.transit_time_hours}
+                  onChange={(e) =>
+                    updateField("transit_time_hours", e.target.value)
+                  }
+                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Ex: 18"
+                />
+                {stepErrors.transit_time_hours && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {stepErrors.transit_time_hours}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-navy-700">
+                  Free time (horas)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.free_time_hours}
+                  onChange={(e) =>
+                    updateField("free_time_hours", e.target.value)
+                  }
+                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Ex: 5"
+                />
+                {stepErrors.free_time_hours && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {stepErrors.free_time_hours}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-navy-500">
+                  Padrão da empresa: 5h. Over time sai do cadastro do veículo
+                  selecionado.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-navy-700">
+                  Prazo de entrega
+                </label>
+                <input
+                  type="text"
+                  value={form.delivery_deadline}
+                  onChange={(e) =>
+                    updateField("delivery_deadline", e.target.value)
+                  }
+                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Ex: 1 dia após carregado"
+                />
+                <p className="mt-1 text-xs text-navy-500">
+                  Opcional — aparece na proposta em PDF de clientes cujo
+                  layout mostra essa informação.
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-navy-700">
+                  Validade da cotação
+                </label>
+                <input
+                  type="date"
+                  value={form.validity_date}
+                  onChange={(e) => updateField("validity_date", e.target.value)}
+                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
-                Transit time (horas)
+                Número da cotação no cliente
               </label>
               <input
                 type="text"
-                inputMode="decimal"
-                value={form.transit_time_hours}
+                value={form.client_quote_number}
                 onChange={(e) =>
-                  updateField("transit_time_hours", e.target.value)
+                  updateField("client_quote_number", e.target.value)
                 }
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                placeholder="Ex: 18"
+                placeholder="Ex: 123456"
               />
-              {stepErrors.transit_time_hours && (
-                <p className="mt-1 text-xs text-red-600">
-                  {stepErrors.transit_time_hours}
-                </p>
-              )}
+              <p className="mt-1 text-xs text-navy-500">
+                Opcional — só pra clientes (como a Kemin) que numeram as
+                cotações pelo sistema deles. Aparece no cabeçalho do PDF no
+                lugar do nosso código interno.
+              </p>
             </div>
           </div>
         )}

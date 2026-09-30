@@ -15,7 +15,6 @@ import {
 } from "@/components/ListFilters";
 import {
   CardActions,
-  CardBadge,
   CardFields,
   CardField,
   CardHeader,
@@ -23,6 +22,41 @@ import {
   MobileCard,
   MobileCardList,
 } from "@/components/MobileCard";
+import {
+  QUOTE_STATUSES,
+  quoteStatusBadgeClass,
+  quoteStatusLabel,
+} from "@/lib/quoteStatus";
+
+// O Supabase limita cada consulta a 1000 linhas no servidor — pagina pra
+// levantar TODOS os locais de coleta/entrega já usados em alguma cotação,
+// sem depender do filtro ativo agora (o dropdown precisa listar todas as
+// opções possíveis, não só as que batem com o filtro atual). Mesmo padrão
+// de fetchAllCityNames em quotes/new e quotes/batches/new.
+async function fetchOriginsAndDestinations(): Promise<{
+  origins: string[];
+  destinations: string[];
+}> {
+  const pageSize = 1000;
+  const origins = new Set<string>();
+  const destinations = new Set<string>();
+  for (let page = 0; ; page++) {
+    const { data, error } = await supabase
+      .from("quotes")
+      .select("origin, destination")
+      .range(page * pageSize, page * pageSize + pageSize - 1);
+    if (error || !data) break;
+    for (const row of data) {
+      if (row.origin) origins.add(row.origin);
+      if (row.destination) destinations.add(row.destination);
+    }
+    if (data.length < pageSize) break;
+  }
+  return {
+    origins: Array.from(origins).sort(),
+    destinations: Array.from(destinations).sort(),
+  };
+}
 
 interface Quote {
   id: string;
@@ -37,9 +71,26 @@ interface Quote {
   vehicles: { type: string } | null;
 }
 
+// Só leitura, de propósito: trocar o status é ação restrita à tela de
+// Detalhes (ver QuoteStatusSelect) — aqui na lista, editar linha a linha
+// numa tabela rolando vira bagunça fácil de clicar sem querer.
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${quoteStatusBadgeClass(
+        status
+      )}`}
+    >
+      {quoteStatusLabel(status)}
+    </span>
+  );
+}
+
 export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [clients, setClients] = useState<ClientFilterOption[]>([]);
+  const [origins, setOrigins] = useState<string[]>([]);
+  const [destinations, setDestinations] = useState<string[]>([]);
   const [filter, setFilter] = useState<ListFilterValue>(emptyListFilter);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +104,13 @@ export default function QuotesPage() {
       setClients(data ?? []);
     }
     loadClients();
+
+    async function loadLocations() {
+      const { origins, destinations } = await fetchOriginsAndDestinations();
+      setOrigins(origins);
+      setDestinations(destinations);
+    }
+    loadLocations();
   }, []);
 
   useEffect(() => {
@@ -68,6 +126,9 @@ export default function QuotesPage() {
         .order("created_at", { ascending: false });
 
       if (filter.clientId) query = query.eq("client_id", filter.clientId);
+      if (filter.status) query = query.eq("status", filter.status);
+      if (filter.origin) query = query.eq("origin", filter.origin);
+      if (filter.destination) query = query.eq("destination", filter.destination);
       const from = startOfDayIso(filter.from);
       if (from) query = query.gte("created_at", from);
       const to = endOfDayIso(filter.to);
@@ -114,6 +175,9 @@ export default function QuotesPage() {
 
       <ListFilters
         clients={clients}
+        statuses={QUOTE_STATUSES}
+        origins={origins}
+        destinations={destinations}
         value={filter}
         onChange={setFilter}
         resultCount={quotes.length}
@@ -154,7 +218,7 @@ export default function QuotesPage() {
                         {quote.vehicles?.type && ` · ${quote.vehicles.type}`}
                       </>
                     }
-                    badge={<CardBadge>{quote.status}</CardBadge>}
+                    badge={<StatusBadge status={quote.status} />}
                   />
 
                   <CardHighlight
@@ -234,9 +298,7 @@ export default function QuotesPage() {
                       {formatCurrency(quote.full_freight)}
                     </td>
                     <td className="px-6 py-3">
-                      <span className="inline-flex items-center rounded-full bg-navy-100 px-2.5 py-0.5 text-xs font-medium text-navy-700">
-                        {quote.status}
-                      </span>
+                      <StatusBadge status={quote.status} />
                     </td>
                     <td className="px-6 py-3 text-navy-500">
                       {formatDate(quote.created_at)}

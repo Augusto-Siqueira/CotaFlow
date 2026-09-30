@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateOnly } from "@/lib/format";
 import { computeIcmsValue } from "@/lib/quoteCalculations";
 import { getCityCoordinates } from "@/lib/geocoding";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
+import { QuoteStatusSelect } from "@/components/QuoteStatusSelect";
 
 interface QuoteDetail {
   id: string;
@@ -23,6 +24,9 @@ interface QuoteDetail {
   net_freight: number | null;
   full_freight: number | null;
   transit_time_hours: number | null;
+  delivery_deadline: string | null;
+  validity_date: string | null;
+  client_quote_number: string | null;
   free_time_hours: number | null;
   over_time_cost: number | null;
   waypoints_origin_coleta: string | null;
@@ -73,7 +77,7 @@ export default async function QuoteDetailPage({
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, free_time_hours, over_time_cost, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
+      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, delivery_deadline, validity_date, free_time_hours, over_time_cost, client_quote_number, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
     )
     .eq("id", id)
     .single();
@@ -172,9 +176,7 @@ export default async function QuoteDetailPage({
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center rounded-full bg-navy-100 px-3 py-1 text-xs font-medium text-navy-700">
-            {quote.status}
-          </span>
+          <QuoteStatusSelect quoteId={quote.id} initialStatus={quote.status} />
           <Link
             href={`/quotes/new?duplicate=${quote.id}`}
             className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
@@ -339,6 +341,26 @@ export default async function QuoteDetailPage({
                   : "—"}
               </dd>
             </div>
+            <div>
+              <dt className="text-navy-500">Prazo de entrega</dt>
+              <dd className="font-medium text-navy-900">
+                {quote.delivery_deadline ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-navy-500">Validade da cotação</dt>
+              <dd className="font-medium text-navy-900">
+                {formatDateOnly(quote.validity_date)}
+              </dd>
+            </div>
+            {quote.client_quote_number && (
+              <div>
+                <dt className="text-navy-500">Número da cotação no cliente</dt>
+                <dd className="font-medium text-navy-900">
+                  {quote.client_quote_number}
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
 

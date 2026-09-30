@@ -1,6 +1,19 @@
 // Regras de cálculo — seção 5 da especificação técnica.
 // PIS/COFINS (0,9075) é o fator padrão do MVP; deve virar parâmetro em
 // `tax_rules` quando esse módulo existir (ver observação da seção 5.3).
+//
+// PIS_PCT e COFINS_PCT são a decomposição desse mesmo fator nas duas
+// alíquotas que o compõem (regime não-cumulativo: 1,65% + 7,60% = 9,25%,
+// que é exatamente 1 - 0.9075). Só existem pra layouts de PDF que precisam
+// discriminar os dois separadamente (ver src/lib/pdf) — não mudam o valor
+// de nenhum cálculo já existente, é o mesmo número visto de dois jeitos.
+export const PIS_PCT = 1.65;
+export const COFINS_PCT = 7.6;
+// Transporte de carga é fato gerador de ICMS, não de ISS (município não
+// tributa esse serviço) — por isso sempre 0. Existe como constante nomeada
+// só pra deixar isso explícito nos layouts que mostram a linha do ISS.
+export const ISS_PCT = 0;
+
 const NET_FREIGHT_FACTOR = 0.9075;
 
 export function computeInsuranceValue(

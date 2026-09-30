@@ -12,6 +12,7 @@ import {
   MobileCard,
   MobileCardList,
 } from "@/components/MobileCard";
+import { PDF_LAYOUTS, type PdfLayout } from "@/lib/pdfLayout";
 
 interface Client {
   id: string;
@@ -19,6 +20,7 @@ interface Client {
   document: string;
   segment: string | null;
   default_insurance_pct: number | null;
+  pdf_layout: string;
   created_at: string;
 }
 
@@ -27,6 +29,7 @@ interface FormState {
   document: string;
   segment: string;
   default_insurance_pct: string;
+  pdf_layout: PdfLayout;
 }
 
 const emptyForm: FormState = {
@@ -34,6 +37,7 @@ const emptyForm: FormState = {
   document: "",
   segment: "",
   default_insurance_pct: "",
+  pdf_layout: "padrao",
 };
 
 export default function ClientsPage() {
@@ -64,10 +68,37 @@ export default function ClientsPage() {
   }
 
   useEffect(() => {
-    loadClients();
+    queueMicrotask(() => {
+      loadClients();
+    });
   }, []);
 
-  function updateField(field: keyof FormState, value: string) {
+  // Não existe uma tela de edição de cliente separada hoje — diferente de
+  // status de cotação, aqui a lista é o único lugar onde dá pra mudar isso,
+  // então a edição fica inline mesmo. Risco baixo: só troca o template do
+  // PDF, não mexe em nenhum valor calculado.
+  const [layoutError, setLayoutError] = useState<string | null>(null);
+  async function updateLayout(clientId: string, nextLayout: string) {
+    setLayoutError(null);
+    const previous = clients.find((c) => c.id === clientId)?.pdf_layout;
+    setClients((prev) =>
+      prev.map((c) => (c.id === clientId ? { ...c, pdf_layout: nextLayout } : c))
+    );
+
+    const { error } = await supabase
+      .from("clients")
+      .update({ pdf_layout: nextLayout })
+      .eq("id", clientId);
+
+    if (error && previous) {
+      setClients((prev) =>
+        prev.map((c) => (c.id === clientId ? { ...c, pdf_layout: previous } : c))
+      );
+      setLayoutError(`Não foi possível salvar o layout (${error.message}).`);
+    }
+  }
+
+  function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -103,6 +134,7 @@ export default function ClientsPage() {
       document: form.document.trim(),
       segment: form.segment.trim() || null,
       default_insurance_pct: insurancePct,
+      pdf_layout: form.pdf_layout,
     });
 
     setSubmitting(false);
@@ -220,6 +252,32 @@ export default function ClientsPage() {
                 )}
               </div>
 
+              <div>
+                <label
+                  htmlFor="pdf_layout"
+                  className="mb-1 block text-sm font-medium text-navy-700"
+                >
+                  Layout do PDF
+                </label>
+                <select
+                  id="pdf_layout"
+                  value={form.pdf_layout}
+                  onChange={(e) =>
+                    updateField("pdf_layout", e.target.value as PdfLayout)
+                  }
+                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                >
+                  {PDF_LAYOUTS.map((l) => (
+                    <option key={l.value} value={l.value}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-navy-500">
+                  Formato da proposta em PDF gerada pra este cliente.
+                </p>
+              </div>
+
               {submitError && (
                 <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
                   Erro ao salvar: {submitError}
@@ -254,6 +312,12 @@ export default function ClientsPage() {
                 {clients.length === 1 ? "cliente" : "clientes"}
               </span>
             </div>
+
+            {layoutError && (
+              <p className="border-b border-navy-100 px-6 py-2 text-xs text-red-600">
+                {layoutError}
+              </p>
+            )}
 
             {loadingList ? (
               <div className="px-6 py-10 text-center text-sm text-navy-500">
@@ -294,6 +358,23 @@ export default function ClientsPage() {
                         />
                       </CardFields>
 
+                      <div className="mt-3">
+                        <label className="text-[11px] font-medium uppercase tracking-wide text-navy-400">
+                          Layout do PDF
+                        </label>
+                        <select
+                          value={client.pdf_layout}
+                          onChange={(e) => updateLayout(client.id, e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        >
+                          {PDF_LAYOUTS.map((l) => (
+                            <option key={l.value} value={l.value}>
+                              {l.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       <CardActions>
                         <Link
                           href={`/clients/${client.id}/comparativo`}
@@ -314,6 +395,7 @@ export default function ClientsPage() {
                         <th className="px-6 py-3 font-medium">Documento</th>
                         <th className="px-6 py-3 font-medium">Segmento</th>
                         <th className="px-6 py-3 font-medium">Seguro padrão</th>
+                        <th className="px-6 py-3 font-medium">Layout do PDF</th>
                         <th className="px-6 py-3 font-medium">Ações</th>
                       </tr>
                     </thead>
@@ -333,6 +415,21 @@ export default function ClientsPage() {
                             {client.default_insurance_pct !== null
                               ? `${client.default_insurance_pct}%`
                               : "—"}
+                          </td>
+                          <td className="px-6 py-3">
+                            <select
+                              value={client.pdf_layout}
+                              onChange={(e) =>
+                                updateLayout(client.id, e.target.value)
+                              }
+                              className="rounded-lg border border-navy-300 px-2 py-1.5 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                              {PDF_LAYOUTS.map((l) => (
+                                <option key={l.value} value={l.value}>
+                                  {l.label}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-6 py-3">
                             <Link
