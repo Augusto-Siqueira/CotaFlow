@@ -69,7 +69,9 @@ export default function VehiclesPage() {
   }
 
   useEffect(() => {
-    loadVehicles();
+    queueMicrotask(() => {
+      loadVehicles();
+    });
   }, []);
 
   function updateField(field: keyof FormState, value: string) {

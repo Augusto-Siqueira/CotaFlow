@@ -64,7 +64,9 @@ export default function AnttCoefficientsPage() {
   }
 
   useEffect(() => {
-    loadCoefficients();
+    queueMicrotask(() => {
+      loadCoefficients();
+    });
   }, []);
 
   function updateField(field: keyof FormState, value: string) {

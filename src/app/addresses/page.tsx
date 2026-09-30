@@ -43,7 +43,9 @@ export default function AddressesPage() {
   }
 
   useEffect(() => {
-    loadAddresses();
+    queueMicrotask(() => {
+      loadAddresses();
+    });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

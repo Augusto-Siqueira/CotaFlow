@@ -144,6 +144,7 @@ export default function NewQuoteBatchPage() {
 
   const [activeRowIndex, setActiveRowIndex] = useState(0);
   const [routeWaypoints, setRouteWaypoints] = useState<RouteMapWaypoint[]>([]);
+  const [prevRouteWaypoints, setPrevRouteWaypoints] = useState(routeWaypoints);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [geocodingRoute, setGeocodingRoute] = useState(false);
 
@@ -271,8 +272,8 @@ export default function NewQuoteBatchPage() {
       .filter(Boolean);
 
     if (cityNames.length < 2) {
-      setRouteWaypoints([]);
-      return;
+      const timeoutId = setTimeout(() => setRouteWaypoints([]), 0);
+      return () => clearTimeout(timeoutId);
     }
 
     const timeoutId = setTimeout(async () => {
@@ -307,9 +308,10 @@ export default function NewQuoteBatchPage() {
   // Distância ao vivo da rota (linha ativa) — usada só pro piso ANTT abaixo;
   // fica obsoleta assim que a rota muda, até o mapa recalcular e chamar
   // onRouteFound de novo.
-  useEffect(() => {
+  if (routeWaypoints !== prevRouteWaypoints) {
+    setPrevRouteWaypoints(routeWaypoints);
     setRouteDistanceKm(null);
-  }, [routeWaypoints]);
+  }
 
   const insurancePct = toNumber(header.insurance_pct);
 

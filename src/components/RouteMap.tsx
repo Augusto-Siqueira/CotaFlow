@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export interface RouteMapWaypoint {
   lat: number;
@@ -37,10 +37,12 @@ export default function RouteMap({
   showDistance?: boolean;
 }) {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
+  const [prevWaypoints, setPrevWaypoints] = useState(waypoints);
 
-  useEffect(() => {
+  if (waypoints !== prevWaypoints) {
+    setPrevWaypoints(waypoints);
     setDistanceKm(null);
-  }, [waypoints]);
+  }
 
   function handleRouteFound(km: number) {
     setDistanceKm(km);

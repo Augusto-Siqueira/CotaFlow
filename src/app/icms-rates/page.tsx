@@ -69,7 +69,9 @@ export default function IcmsRatesPage() {
   }
 
   useEffect(() => {
-    loadRates();
+    queueMicrotask(() => {
+      loadRates();
+    });
   }, []);
 
   const visibleRates = useMemo(
