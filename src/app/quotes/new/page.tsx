@@ -876,7 +876,7 @@ function NewQuotePage({
           <h1 className="text-xl font-semibold text-brand-800">
             Cotação salva com sucesso.
           </h1>
-          <dl className="mt-6 grid grid-cols-3 gap-4 text-left">
+          <dl className="mt-6 grid grid-cols-1 gap-3 text-left sm:grid-cols-3 sm:gap-4">
             <div>
               <dt className="text-xs uppercase text-brand-700">Gross</dt>
               <dd className="text-base font-medium text-brand-900">
@@ -1034,7 +1034,7 @@ function NewQuotePage({
                 </p>
               </div>
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col-reverse items-start sm:flex-row sm:items-center sm:justify-between">
                   <label className="mb-1 block text-sm font-medium text-navy-700">
                     Destino final
                   </label>
@@ -1553,7 +1553,7 @@ function NewQuotePage({
               <div className="text-navy-900">{form.product}</div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 rounded-lg bg-navy-50 p-4">
+            <div className="grid grid-cols-1 gap-3 rounded-lg bg-navy-50 p-4 sm:grid-cols-3 sm:gap-4">
               <div>
                 <div className="text-xs uppercase text-navy-500">Gross</div>
                 <div className="text-lg font-semibold text-navy-900">
