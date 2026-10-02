@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AdminOnly } from "@/components/AdminOnly";
+import { DeleteQuoteButton } from "@/components/DeleteQuoteButton";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabaseServer";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/format";
@@ -186,6 +187,7 @@ export default async function QuoteDetailPage({
             >
               Duplicar cotação
             </Link>
+            <DeleteQuoteButton quoteId={quote.id} />
           </AdminOnly>
           <a
             href={`/api/quotes/${quote.id}/pdf`}

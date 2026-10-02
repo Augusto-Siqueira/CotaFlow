@@ -96,6 +96,40 @@ export default function QuotesPage() {
   const [filter, setFilter] = useState<ListFilterValue>(emptyListFilter);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) =>
+      prev.size === quotes.length ? new Set() : new Set(quotes.map((q) => q.id))
+    );
+  }
+
+  async function deleteQuotes(ids: string[]) {
+    const label = ids.length === 1 ? "esta cotação" : `${ids.length} cotações`;
+    if (!confirm(`Excluir ${label}? Essa ação não pode ser desfeita.`)) return;
+
+    setDeleting(true);
+    const { error } = await supabase.from("quotes").delete().in("id", ids);
+    setDeleting(false);
+
+    if (error) {
+      alert(`Não foi possível excluir (${error.message}).`);
+      return;
+    }
+    const removed = new Set(ids);
+    setQuotes((prev) => prev.filter((q) => !removed.has(q.id)));
+    setSelected(new Set());
+  }
 
   useEffect(() => {
     async function loadClients() {
@@ -183,10 +217,39 @@ export default function QuotesPage() {
         origins={origins}
         destinations={destinations}
         value={filter}
-        onChange={setFilter}
+        onChange={(value) => {
+          setFilter(value);
+          setSelected(new Set());
+        }}
         resultCount={quotes.length}
         resultNoun={["cotação encontrada", "cotações encontradas"]}
       />
+
+      {isAdmin && selected.size > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm">
+          <span className="text-red-800">
+            {selected.size}{" "}
+            {selected.size === 1 ? "cotação selecionada" : "cotações selecionadas"}
+          </span>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="text-navy-600 underline hover:text-navy-800"
+            >
+              Limpar seleção
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => deleteQuotes([...selected])}
+              className="rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleting ? "Excluindo..." : "Excluir selecionadas"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
         {loading ? (
@@ -260,6 +323,26 @@ export default function QuotesPage() {
                     >
                       PDF
                     </a>
+                    {isAdmin && (
+                      <>
+                        <label className="ml-auto flex items-center gap-1.5 text-navy-600">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(quote.id)}
+                            onChange={() => toggleSelected(quote.id)}
+                          />
+                          Selecionar
+                        </label>
+                        <button
+                          type="button"
+                          disabled={deleting}
+                          onClick={() => deleteQuotes([quote.id])}
+                          className="text-red-600 hover:text-red-800 disabled:opacity-60"
+                        >
+                          Excluir
+                        </button>
+                      </>
+                    )}
                   </CardActions>
                 </MobileCard>
               ))}
@@ -269,6 +352,16 @@ export default function QuotesPage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
                 <tr>
+                  {isAdmin && (
+                    <th className="w-10 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todas"
+                        checked={quotes.length > 0 && selected.size === quotes.length}
+                        onChange={toggleAll}
+                      />
+                    </th>
+                  )}
                   <th className="px-6 py-3 font-medium">Cliente</th>
                   <th className="px-6 py-3 font-medium">Rota</th>
                   <th className="px-6 py-3 font-medium">Veículo</th>
@@ -283,6 +376,16 @@ export default function QuotesPage() {
               <tbody className="divide-y divide-navy-100">
                 {quotes.map((quote) => (
                   <tr key={quote.id} className="hover:bg-navy-50">
+                    {isAdmin && (
+                      <td className="w-10 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar cotação"
+                          checked={selected.has(quote.id)}
+                          onChange={() => toggleSelected(quote.id)}
+                        />
+                      </td>
+                    )}
                     <td className="px-6 py-3 font-medium text-navy-900">
                       {quote.clients?.name ?? "—"}
                     </td>
@@ -323,6 +426,16 @@ export default function QuotesPage() {
                         >
                           PDF
                         </a>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => deleteQuotes([quote.id])}
+                            className="font-medium text-red-600 hover:text-red-800 disabled:opacity-60"
+                          >
+                            Excluir
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
