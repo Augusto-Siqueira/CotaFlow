@@ -1017,11 +1017,13 @@ function NewQuotePage({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Origem
-                </label>
+                <div className="flex items-center">
+                  <label className="mb-1 block text-sm font-medium text-navy-700">
+                    Origem
+                  </label>
+                </div>
                 <AddressField
                   value={form.base_origin}
                   onValueChange={(v) => updateField("base_origin", v)}
@@ -1029,12 +1031,9 @@ function NewQuotePage({
                   cities={cities}
                   addresses={addresses}
                 />
-                <p className="mt-1 text-xs text-navy-500">
-                  Ponto de partida do veículo, antes da coleta.
-                </p>
               </div>
               <div>
-                <div className="flex flex-col-reverse items-start sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center justify-between">
                   <label className="mb-1 block text-sm font-medium text-navy-700">
                     Destino final
                   </label>
