@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { QUOTE_STATUSES, quoteStatusBadgeClass } from "@/lib/quoteStatus";
 
 /**
@@ -17,6 +18,7 @@ export function QuoteStatusSelect({
   quoteId: string;
   initialStatus: string;
 }) {
+  const { isAdmin } = useAuth();
   const [status, setStatus] = useState(initialStatus);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +45,9 @@ export function QuoteStatusSelect({
     <div>
       <select
         value={status}
-        disabled={saving}
+        disabled={saving || !isAdmin}
         onChange={(e) => handleChange(e.target.value)}
-        className={`cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-wait disabled:opacity-70 ${quoteStatusBadgeClass(
+        className={`enabled:cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-wait disabled:opacity-70 ${quoteStatusBadgeClass(
           status
         )}`}
       >

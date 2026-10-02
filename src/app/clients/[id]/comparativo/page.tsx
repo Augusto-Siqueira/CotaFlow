@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabaseServer";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 interface ClientInfo {
@@ -43,6 +43,7 @@ export default async function ClientComparativoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const supabase = await createSupabaseServer();
 
   const { data: clientData, error: clientError } = await supabase
     .from("clients")

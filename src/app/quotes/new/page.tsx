@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency } from "@/lib/format";
 import {
   computeAnttFloor,
@@ -415,7 +416,7 @@ function StopsList({
   );
 }
 
-export default function NewQuotePage({
+function NewQuotePage({
   searchParams,
 }: {
   searchParams: Promise<{ duplicate?: string }>;
@@ -1687,5 +1688,15 @@ export default function NewQuotePage({
         )}
       </div>
     </div>
+  );
+}
+
+export default function NewQuotePageGate(props: {
+  searchParams: Promise<{ duplicate?: string }>;
+}) {
+  return (
+    <AdminGate>
+      <NewQuotePage {...props} />
+    </AdminGate>
   );
 }

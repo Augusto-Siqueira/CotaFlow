@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { AdminOnly } from "@/components/AdminOnly";
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabaseServer";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/format";
 import { computeIcmsValue } from "@/lib/quoteCalculations";
 import { getCityCoordinates } from "@/lib/geocoding";
@@ -73,6 +74,7 @@ export default async function QuoteDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const supabase = await createSupabaseServer();
 
   const { data, error } = await supabase
     .from("quotes")
@@ -177,12 +179,14 @@ export default async function QuoteDetailPage({
         </div>
         <div className="flex items-center gap-3">
           <QuoteStatusSelect quoteId={quote.id} initialStatus={quote.status} />
-          <Link
-            href={`/quotes/new?duplicate=${quote.id}`}
-            className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
-          >
-            Duplicar cotação
-          </Link>
+          <AdminOnly>
+            <Link
+              href={`/quotes/new?duplicate=${quote.id}`}
+              className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+            >
+              Duplicar cotação
+            </Link>
+          </AdminOnly>
           <a
             href={`/api/quotes/${quote.id}/pdf`}
             target="_blank"

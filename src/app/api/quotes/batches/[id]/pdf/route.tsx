@@ -1,5 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabaseServer";
 import {
   BatchProposalDocument,
   type BatchProposalData,
@@ -14,6 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const supabase = await createSupabaseServer();
   const unit = parseFreightUnit(
     new URL(request.url).searchParams.get("unit")
   );

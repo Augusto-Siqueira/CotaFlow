@@ -1,5 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabaseServer";
 import {
   QuoteProposalDocument,
   type QuoteProposalData,
@@ -12,6 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const supabase = await createSupabaseServer();
 
   const { data, error } = await supabase
     .from("quotes")

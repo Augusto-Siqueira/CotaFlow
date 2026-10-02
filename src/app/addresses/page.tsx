@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import LocationPickerMap, { type LatLng } from "@/components/LocationPickerMap";
 
 // A tabela no banco continua chamada `company_bases` (criada antes deste
@@ -15,6 +16,7 @@ interface Address {
 }
 
 export default function AddressesPage() {
+  const { isAdmin } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -102,6 +104,7 @@ export default function AddressesPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
+        {isAdmin && (
         <div className="min-w-0 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
@@ -164,8 +167,9 @@ export default function AddressesPage() {
             </form>
           </div>
         </div>
+        )}
 
-        <div className="min-w-0 lg:col-span-2">
+        <div className={`min-w-0 ${isAdmin ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">
@@ -210,13 +214,13 @@ export default function AddressesPage() {
                           {a.longitude.toFixed(6)}
                         </td>
                         <td className="px-6 py-3 text-right">
-                          <button
+                          {isAdmin && (<button
                             type="button"
                             onClick={() => handleDelete(a.id)}
                             className="text-xs text-red-600 underline hover:text-red-700"
                           >
                             Excluir
-                          </button>
+                          </button>)}
                         </td>
                       </tr>
                     ))}

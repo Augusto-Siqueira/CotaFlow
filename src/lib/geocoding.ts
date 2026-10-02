@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabaseServer";
 
 export interface CityCoordinates {
   lat: number;
@@ -46,6 +46,7 @@ export async function getCityCoordinates(
   const trimmed = name.trim();
   if (!trimmed) return null;
 
+  const supabase = await createSupabaseServer();
   const { data: address } = await supabase
     .from("company_bases")
     .select("latitude, longitude")

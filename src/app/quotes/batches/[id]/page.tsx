@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { AdminOnly } from "@/components/AdminOnly";
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabaseServer";
 import { formatDate } from "@/lib/format";
 import { DeleteBatchButton } from "./DeleteBatchButton";
 import { RoutesTable, type BatchRoute } from "./RoutesTable";
@@ -21,6 +22,7 @@ export default async function QuoteBatchDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const supabase = await createSupabaseServer();
 
   const { data, error } = await supabase
     .from("quote_batches")
@@ -64,7 +66,9 @@ export default async function QuoteBatchDetailPage({
             {routes.length === 1 ? "rota" : "rotas"}
           </p>
         </div>
-        <DeleteBatchButton batchId={batch.id} />
+        <AdminOnly>
+          <DeleteBatchButton batchId={batch.id} />
+        </AdminOnly>
       </div>
 
       <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -50,6 +51,7 @@ export function RoutesTable({
   initialRoutes: BatchRoute[];
 }) {
   const router = useRouter();
+  const { isAdmin } = useAuth();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [unit, setUnit] = useState<FreightUnit>("viagem");
 
@@ -215,7 +217,7 @@ export function RoutesTable({
               >
                 Detalhes
               </Link>
-              <Link
+              {isAdmin && (<><Link
                 href={`/quotes/batches/${batchId}/routes/${route.id}/edit`}
                 className="text-brand-700 underline hover:text-brand-800"
               >
@@ -228,7 +230,7 @@ export function RoutesTable({
                 className="ml-auto text-red-600 hover:text-red-800 disabled:opacity-60"
               >
                 {deletingId === route.id ? "Excluindo..." : "Excluir"}
-              </button>
+              </button></>)}
             </CardActions>
           </MobileCard>
         ))}
@@ -312,7 +314,7 @@ export function RoutesTable({
                     >
                       Detalhes
                     </Link>
-                    <Link
+                    {isAdmin && (<><Link
                       href={`/quotes/batches/${batchId}/routes/${route.id}/edit`}
                       className="font-medium text-brand-700 underline hover:text-brand-800"
                     >
@@ -325,7 +327,7 @@ export function RoutesTable({
                       className="font-medium text-red-600 hover:text-red-800 disabled:opacity-60"
                     >
                       {deletingId === route.id ? "Excluindo..." : "Excluir"}
-                    </button>
+                    </button></>)}
                   </div>
                 </td>
               </tr>

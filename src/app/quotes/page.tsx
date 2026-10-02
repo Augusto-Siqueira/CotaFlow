@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -87,6 +88,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function QuotesPage() {
+  const { isAdmin } = useAuth();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [clients, setClients] = useState<ClientFilterOption[]>([]);
   const [origins, setOrigins] = useState<string[]>([]);
@@ -157,6 +159,7 @@ export default function QuotesPage() {
             Histórico de cotações geradas.
           </p>
         </div>
+        {isAdmin && (
         <div className="flex items-center gap-3">
           <Link
             href="/quotes/batches/new"
@@ -171,6 +174,7 @@ export default function QuotesPage() {
             Nova cotação
           </Link>
         </div>
+        )}
       </div>
 
       <ListFilters

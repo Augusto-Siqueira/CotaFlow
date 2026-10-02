@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency } from "@/lib/format";
 import {
   computeAnttFloor,
@@ -129,7 +130,7 @@ async function fetchAllCityNames(): Promise<string[]> {
   return names;
 }
 
-export default function NewQuoteBatchPage() {
+function NewQuoteBatchPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [anttCoefficients, setAnttCoefficients] = useState<AnttCoefficientOption[]>([]);
@@ -1052,5 +1053,13 @@ export default function NewQuoteBatchPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function NewQuoteBatchPageGate() {
+  return (
+    <AdminGate>
+      <NewQuoteBatchPage />
+    </AdminGate>
   );
 }

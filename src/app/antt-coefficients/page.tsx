@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/format";
 import {
   CardBadge,
@@ -36,6 +37,7 @@ const emptyForm: FormState = {
 };
 
 export default function AnttCoefficientsPage() {
+  const { isAdmin } = useAuth();
   const [coefficients, setCoefficients] = useState<AnttCoefficient[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -130,6 +132,7 @@ export default function AnttCoefficientsPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
+        {isAdmin && (
         <div className="min-w-0 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
@@ -245,8 +248,9 @@ export default function AnttCoefficientsPage() {
             </form>
           </div>
         </div>
+        )}
 
-        <div className="min-w-0 lg:col-span-2">
+        <div className={`min-w-0 ${isAdmin ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { UF_LIST, parseIcmsTable } from "@/lib/icms";
 import {
   CardActions,
@@ -31,6 +32,7 @@ const emptyForm: FormState = {
 };
 
 export default function IcmsRatesPage() {
+  const { isAdmin } = useAuth();
   const [rates, setRates] = useState<IcmsRateRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -193,6 +195,7 @@ export default function IcmsRatesPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
+        {isAdmin && (
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
@@ -354,8 +357,9 @@ export default function IcmsRatesPage() {
             </button>
           </div>
         </div>
+        )}
 
-        <div className="min-w-0 lg:col-span-2">
+        <div className={`min-w-0 ${isAdmin ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">
@@ -418,13 +422,13 @@ export default function IcmsRatesPage() {
                         />
 
                         <CardActions>
-                          <button
+                          {isAdmin && (<button
                             type="button"
                             onClick={() => handleDelete(row)}
                             className="text-red-600 hover:text-red-800"
                           >
                             Excluir
-                          </button>
+                          </button>)}
                         </CardActions>
                       </MobileCard>
                     ))}
@@ -454,13 +458,13 @@ export default function IcmsRatesPage() {
                             {row.rate}%
                           </td>
                           <td className="px-6 py-3">
-                            <button
+                            {isAdmin && (<button
                               type="button"
                               onClick={() => handleDelete(row)}
                               className="font-medium text-red-600 hover:text-red-800"
                             >
                               Excluir
-                            </button>
+                            </button>)}
                           </td>
                         </tr>
                       ))}

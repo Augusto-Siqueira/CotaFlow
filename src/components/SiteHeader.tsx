@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 
 const NAV_LINKS = [
   { href: "/quotes", label: "Cotações" },
@@ -29,6 +31,27 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const active = activeHref(pathname);
+  const { user, isAdmin } = useAuth();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.assign("/login");
+  }
+
+  const userBox = user && (
+    <div className="flex items-center gap-3 text-xs text-navy-200">
+      <span className="rounded-full bg-navy-800 px-2 py-0.5 font-medium text-navy-100">
+        {isAdmin ? "Comercial" : "Somente leitura"}
+      </span>
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="font-medium transition-colors hover:text-brand-400"
+      >
+        Sair
+      </button>
+    </div>
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -57,18 +80,22 @@ export function SiteHeader() {
         </Link>
 
         {/* Menu em linha a partir de sm; no celular fica atrás do botão. */}
-        <nav className="hidden items-center gap-5 text-sm font-medium sm:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={linkClasses(link.href)}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        {user && (
+          <nav className="hidden items-center gap-5 text-sm font-medium sm:flex">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={linkClasses(link.href)}
+              >
+                {link.label}
+              </Link>
+            ))}
+            {userBox}
+          </nav>
+        )}
 
+        {user && (
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
@@ -105,9 +132,10 @@ export function SiteHeader() {
             </svg>
           )}
         </button>
+        )}
       </div>
 
-      {open && (
+      {user && open && (
         <nav
           id="menu-mobile"
           className="border-t border-navy-800 px-4 pb-3 text-sm font-medium sm:hidden"
@@ -126,6 +154,7 @@ export function SiteHeader() {
               {link.label}
             </Link>
           ))}
+          <div className="px-3 pt-3">{userBox}</div>
         </nav>
       )}
     </header>

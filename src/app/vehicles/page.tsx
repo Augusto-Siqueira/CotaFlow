@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/format";
 import {
   CardActions,
@@ -39,6 +40,7 @@ const emptyForm: FormState = {
 };
 
 export default function VehiclesPage() {
+  const { isAdmin } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -239,6 +241,7 @@ export default function VehiclesPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
+        {isAdmin && (
         <div className="min-w-0 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
@@ -408,8 +411,9 @@ export default function VehiclesPage() {
             </form>
           </div>
         </div>
+        )}
 
-        <div className="min-w-0 lg:col-span-2">
+        <div className={`min-w-0 ${isAdmin ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">
@@ -472,13 +476,13 @@ export default function VehiclesPage() {
                       </CardFields>
 
                       <CardActions>
-                        <button
+                        {isAdmin && (<button
                           type="button"
                           onClick={() => startEditing(vehicle)}
                           className="text-brand-700 underline hover:text-brand-800"
                         >
                           Editar
-                        </button>
+                        </button>)}
                       </CardActions>
                     </MobileCard>
                   ))}
@@ -526,13 +530,13 @@ export default function VehiclesPage() {
                               : "—"}
                           </td>
                           <td className="px-6 py-3">
-                            <button
+                            {isAdmin && (<button
                               type="button"
                               onClick={() => startEditing(vehicle)}
                               className="font-medium text-brand-700 underline hover:text-brand-800"
                             >
                               Editar
-                            </button>
+                            </button>)}
                           </td>
                         </tr>
                       ))}

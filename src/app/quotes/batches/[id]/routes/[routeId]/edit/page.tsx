@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency } from "@/lib/format";
 import {
   computeFullFreight,
@@ -72,7 +73,7 @@ async function fetchAllCityNames(): Promise<string[]> {
   return names;
 }
 
-export default function EditBatchRoutePage({
+function EditBatchRoutePage({
   params,
 }: {
   params: Promise<{ id: string; routeId: string }>;
@@ -552,5 +553,15 @@ export default function EditBatchRoutePage({
         </button>
       </div>
     </div>
+  );
+}
+
+export default function EditBatchRoutePageGate(props: {
+  params: Promise<{ id: string; routeId: string }>;
+}) {
+  return (
+    <AdminGate>
+      <EditBatchRoutePage {...props} />
+    </AdminGate>
   );
 }
