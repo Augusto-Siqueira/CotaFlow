@@ -166,11 +166,11 @@ export default async function QuoteDetailPage({
             ← Cotações
           </Link>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
-            Cotação #{quote.id.slice(0, 8).toUpperCase()}{" "}
-            <span className="ml-1 rounded-full bg-navy-100 px-2.5 py-0.5 align-middle text-sm font-medium text-navy-700">
-              {revisionLabel(quote.version)}
-            </span>
+            Cotação #{quote.id.slice(0, 8).toUpperCase()}
           </h1>
+          <p className="mt-1 text-sm font-medium text-navy-700">
+            {revisionLabel(quote.version)}
+          </p>
           <p className="mt-1 text-sm text-navy-500">
             Criada em {formatDate(quote.created_at)}
           </p>

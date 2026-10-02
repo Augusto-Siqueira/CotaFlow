@@ -435,8 +435,9 @@ export function QuoteProposalDocument({
               </Text>
             )}
             <Text style={styles.brandSub}>
-              Emitida em {formatDate(quote.created_at)} · {revisionLabel(quote.version)}
+              Emitida em {formatDate(quote.created_at)}
             </Text>
+            <Text style={styles.brandSub}>{revisionLabel(quote.version)}</Text>
           </View>
         </View>
 
