@@ -350,9 +350,7 @@ function StopsList({
         </button>
       </div>
       <p className="mt-1 text-xs text-navy-500">
-        Ordem em que o veículo visita cada ponto. Preencha o peso (kg) só nas
-        paradas que recebem parte da carga — com 2 ou mais paradas
-        preenchidas, a NF é rateada entre elas.
+        Ordem em que o veículo visita cada ponto.
       </p>
       <div className="mt-2 flex flex-col gap-2">
         {stops.map((stop, index) => (
@@ -367,16 +365,6 @@ function StopsList({
                 placeholder="Ex: Ponta Grossa/PR"
                 cities={cities}
                 addresses={addresses}
-              />
-            </div>
-            <div className="w-32">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={stop.weight_kg}
-                onChange={(e) => updateAt(index, { weight_kg: e.target.value })}
-                className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                placeholder="Peso (kg)"
               />
             </div>
             <div className="mt-1 flex shrink-0 gap-1">
@@ -535,7 +523,7 @@ function NewQuotePage({
           setStops(
             stopsRes.data.map((s) => ({
               address: s.address,
-              weight_kg: s.weight_kg !== null ? String(s.weight_kg) : "",
+              weight_kg: "",
             }))
           );
         } else {
@@ -567,7 +555,7 @@ function NewQuotePage({
             .eq("quote_id", duplicateId);
           if (sourceDeliveries) {
             for (const d of sourceDeliveries) {
-              oldStops.push({ address: d.destination, weight_kg: String(d.weight_kg) });
+              oldStops.push({ address: d.destination, weight_kg: "" });
             }
           }
 
@@ -641,13 +629,6 @@ function NewQuotePage({
       if (!form.client_id) errors.client_id = "Selecione o cliente.";
       if (!stops.some((s) => s.address.trim())) {
         errors.stops = "Informe ao menos uma parada.";
-      } else {
-        const invalidWeight = stops.some(
-          (s) => s.weight_kg.trim() && !isValidNumber(s.weight_kg)
-        );
-        if (invalidWeight) {
-          errors.stops = "O peso de cada parada precisa ser um número válido.";
-        }
       }
       if (!isValidNumber(form.distance_km)) {
         errors.distance_km = "Informe um número válido.";
