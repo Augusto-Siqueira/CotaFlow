@@ -186,8 +186,9 @@ export default async function QuoteDetailPage({
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
           <QuoteStatusSelect quoteId={quote.id} initialStatus={quote.status} />
+          <div className="flex items-center gap-2">
           <AdminOnly>
             <Link
               href={`/quotes/new?duplicate=${quote.id}`}
@@ -205,6 +206,7 @@ export default async function QuoteDetailPage({
           >
             Exportar
           </a>
+          </div>
         </div>
       </div>
 
