@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabaseServer";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, revisionLabel } from "@/lib/format";
 
 interface ClientInfo {
   id: string;
@@ -150,7 +150,7 @@ export default async function ClientComparativoPage({
                             {formatDate(quote.created_at)}
                           </td>
                           <td className="px-6 py-3 text-navy-600">
-                            v{quote.version}
+                            {revisionLabel(quote.version)}
                           </td>
                           <td className="px-6 py-3 text-navy-600">
                             {formatCurrency(quote.gross_freight)}

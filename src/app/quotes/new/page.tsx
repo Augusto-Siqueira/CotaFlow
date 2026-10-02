@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { AdminGate } from "@/components/AdminGate";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, revisionLabel } from "@/lib/format";
 import {
   computeAnttFloor,
   computeFullFreight,
@@ -794,6 +794,7 @@ function NewQuotePage({
         over_time_cost: selectedVehicle?.over_time_rate ?? null,
         duplicated_from_id: duplicateSource?.id ?? null,
         version: duplicateSource ? duplicateSource.version + 1 : 1,
+        ...(duplicateSource ? { status: "vigente" } : {}),
       })
       .select("id")
       .single();
@@ -821,6 +822,18 @@ function NewQuotePage({
         `Não foi possível salvar as paradas da rota (${stopsError.message}). A cotação não foi salva — corrija e tente novamente.`
       );
       return;
+    }
+
+    if (duplicateSource) {
+      const { error: obsoleteError } = await supabase
+        .from("quotes")
+        .update({ status: "obsoleta" })
+        .eq("id", duplicateSource.id);
+      if (obsoleteError) {
+        alert(
+          `A nova revisão foi salva, mas não foi possível marcar a anterior como Obsoleta (${obsoleteError.message}). Altere o status manualmente.`
+        );
+      }
     }
 
     const newCityNames = Array.from(
@@ -952,7 +965,8 @@ function NewQuotePage({
       {duplicateSource && (
         <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Duplicando cotação anterior — ajuste os valores para a nova rodada
-          de preços (versão {duplicateSource.version + 1}).
+          de preços ({revisionLabel(duplicateSource.version + 1)}). Ao salvar, a
+          cotação anterior passa a Obsoleta e esta fica Vigente.
         </div>
       )}
 

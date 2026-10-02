@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { revisionLabel } from "@/lib/format";
 import {
   Document,
   Page,
@@ -434,7 +435,7 @@ export function QuoteProposalDocument({
               </Text>
             )}
             <Text style={styles.brandSub}>
-              Emitida em {formatDate(quote.created_at)}
+              Emitida em {formatDate(quote.created_at)} · {revisionLabel(quote.version)}
             </Text>
           </View>
         </View>

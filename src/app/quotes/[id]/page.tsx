@@ -3,7 +3,12 @@ import { AdminOnly } from "@/components/AdminOnly";
 import { DeleteQuoteButton } from "@/components/DeleteQuoteButton";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabaseServer";
-import { formatCurrency, formatDate, formatDateOnly } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateOnly,
+  revisionLabel,
+} from "@/lib/format";
 import { computeIcmsValue } from "@/lib/quoteCalculations";
 import { getCityCoordinates } from "@/lib/geocoding";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
@@ -161,10 +166,13 @@ export default async function QuoteDetailPage({
             ← Cotações
           </Link>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
-            Cotação #{quote.id.slice(0, 8).toUpperCase()}
+            Cotação #{quote.id.slice(0, 8).toUpperCase()}{" "}
+            <span className="ml-1 rounded-full bg-navy-100 px-2.5 py-0.5 align-middle text-sm font-medium text-navy-700">
+              {revisionLabel(quote.version)}
+            </span>
           </h1>
           <p className="mt-1 text-sm text-navy-500">
-            Criada em {formatDate(quote.created_at)} · versão {quote.version}
+            Criada em {formatDate(quote.created_at)}
           </p>
           {quote.duplicated_from_id && (
             <p className="mt-1 text-xs text-navy-500">

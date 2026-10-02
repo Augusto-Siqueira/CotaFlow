@@ -17,3 +17,10 @@ export function formatDateOnly(value: string | null): string {
   const [year, month, day] = value.split("-");
   return `${day}/${month}/${year}`;
 }
+
+// `quotes.version` começa em 1 na cotação criada do zero. Pro usuário isso é
+// a "Revisão 00"; cada duplicação soma 1 (Revisão 01, 02...).
+export function revisionLabel(version: number | null | undefined): string {
+  const revision = Math.max((version ?? 1) - 1, 0);
+  return `Revisão ${String(revision).padStart(2, "0")}`;
+}
