@@ -1691,12 +1691,14 @@ function NewQuotePage({
   );
 }
 
-export default function NewQuotePageGate(props: {
+export default function NewQuotePageGate({
+  searchParams,
+}: {
   searchParams: Promise<{ duplicate?: string }>;
 }) {
   return (
     <AdminGate>
-      <NewQuotePage {...props} />
+      <NewQuotePage searchParams={searchParams} />
     </AdminGate>
   );
 }
