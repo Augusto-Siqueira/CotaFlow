@@ -157,7 +157,7 @@ export default async function QuoteDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
             href="/quotes"
@@ -186,14 +186,14 @@ export default async function QuoteDetailPage({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <QuoteStatusSelect quoteId={quote.id} initialStatus={quote.status} />
           <AdminOnly>
             <Link
               href={`/quotes/new?duplicate=${quote.id}`}
-              className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+              className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-3 py-1.5 text-sm font-medium text-navy-700 hover:bg-navy-100"
             >
-              Duplicar cotação
+              Duplicar
             </Link>
             <DeleteQuoteButton quoteId={quote.id} />
           </AdminOnly>
@@ -201,9 +201,9 @@ export default async function QuoteDetailPage({
             href={`/api/quotes/${quote.id}/pdf`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
           >
-            Baixar PDF
+            Exportar
           </a>
         </div>
       </div>
