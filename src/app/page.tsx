@@ -27,6 +27,7 @@ function Icon({ d }: { d: string }) {
 
 const MODULES = [
   { href: "/quotes", label: "Cotações", hint: "Histórico e revisões", d: "M9 12h6M9 16h6M7 3h7l5 5v13H7zM14 3v5h5" },
+  { href: "/programacao", label: "Programação", hint: "Carregamentos do dia", d: "M8 3v4M16 3v4M4 9h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zM9 14l2 2 4-4" },
   { href: "/quotes/batches", label: "Lotes", hint: "Várias rotas por cliente", d: "M3 7l9-4 9 4-9 4zM3 12l9 4 9-4M3 17l9 4 9-4" },
   { href: "/clients", label: "Clientes", hint: "Cadastro e comparativo", d: "M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21c0-4 4-6 8-6s8 2 8 6" },
   { href: "/vehicles", label: "Veículos", hint: "Tipos, eixos e taxas", d: "M3 16V6h11v10M14 9h4l3 3v4h-7M7 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z" },

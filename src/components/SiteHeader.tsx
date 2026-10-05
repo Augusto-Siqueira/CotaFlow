@@ -10,6 +10,7 @@ import { APP_VERSION } from "@/lib/version";
 const NAV_LINKS = [
   { href: "/quotes", label: "Cotações" },
   { href: "/quotes/batches", label: "Lotes" },
+  { href: "/programacao", label: "Programação" },
   { href: "/clients", label: "Clientes" },
   { href: "/vehicles", label: "Veículos" },
   { href: "/antt-coefficients", label: "ANTT" },
@@ -32,7 +33,7 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const active = activeHref(pathname);
-  const { user, isAdmin } = useAuth();
+  const { user, role } = useAuth();
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -42,7 +43,11 @@ export function SiteHeader() {
   const userBox = user && (
     <div className="flex items-center gap-3 text-xs text-navy-200">
       <span className="rounded-full bg-navy-800 px-2 py-0.5 font-medium text-navy-100">
-        {isAdmin ? "Comercial" : "Somente leitura"}
+        {role === "admin"
+          ? "Comercial"
+          : role === "logistica"
+            ? "Logística"
+            : "Somente leitura"}
       </span>
       <Link
         href="/versao"
