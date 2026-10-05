@@ -2,6 +2,7 @@
 
 import { LogisticsArt } from "@/components/LogisticsArt";
 import { LoginForm } from "@/components/LoginForm";
+import { APP_VERSION } from "@/lib/version";
 
 export default function LoginPage() {
   return (
@@ -19,6 +20,9 @@ export default function LoginPage() {
             Entre para continuar cotando.
           </p>
           <LoginForm />
+          <p className="mt-10 text-center text-xs text-navy-400">
+            CotaFlow v{APP_VERSION}
+          </p>
         </div>
       </main>
 

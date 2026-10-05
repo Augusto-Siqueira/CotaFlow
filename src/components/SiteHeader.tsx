@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { APP_VERSION } from "@/lib/version";
 
 const NAV_LINKS = [
   { href: "/quotes", label: "Cotações" },
@@ -43,6 +44,13 @@ export function SiteHeader() {
       <span className="rounded-full bg-navy-800 px-2 py-0.5 font-medium text-navy-100">
         {isAdmin ? "Comercial" : "Somente leitura"}
       </span>
+      <Link
+        href="/versao"
+        className="text-navy-400 transition-colors hover:text-brand-400"
+        title="Histórico de versões"
+      >
+        v{APP_VERSION}
+      </Link>
       <button
         type="button"
         onClick={handleLogout}
