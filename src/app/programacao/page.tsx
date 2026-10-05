@@ -350,6 +350,97 @@ export default function ProgramacaoPage() {
     }
   }
 
+  const [showDup, setShowDup] = useState(false);
+  const [dupDate, setDupDate] = useState("");
+  const [dupSelected, setDupSelected] = useState<Set<string>>(new Set());
+  const [dupTargetCount, setDupTargetCount] = useState<number | null>(null);
+  const [dupBusy, setDupBusy] = useState(false);
+  const [dupError, setDupError] = useState<string | null>(null);
+
+  async function countOnDate(d: string) {
+    const { count } = await supabase
+      .from("loading_schedules")
+      .select("id", { count: "exact", head: true })
+      .eq("schedule_date", d);
+    setDupTargetCount(count ?? 0);
+  }
+
+  function openDuplicate() {
+    const target = shiftDate(date, 1);
+    setDupDate(target);
+    setDupSelected(new Set(rows.map((r) => r.id)));
+    setDupTargetCount(null);
+    setDupError(null);
+    setShowDup(true);
+    countOnDate(target);
+  }
+
+  function changeDupDate(d: string) {
+    setDupDate(d);
+    setDupTargetCount(null);
+    if (d) countOnDate(d);
+  }
+
+  function toggleDup(id: string) {
+    setDupSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleDuplicate() {
+    if (!dupDate) {
+      setDupError("Escolha a data de destino.");
+      return;
+    }
+    const chosen = rows.filter((r) => dupSelected.has(r.id));
+    if (chosen.length === 0) {
+      setDupError("Marque ao menos uma carga.");
+      return;
+    }
+
+    setDupBusy(true);
+    setDupError(null);
+    // Tudo igual, menos a data e o status: a carga nova volta a "Programado".
+    const { error } = await supabase.from("loading_schedules").insert(
+      chosen.map((r) => ({
+        schedule_date: dupDate,
+        client_name: r.client_name,
+        cargo: r.cargo,
+        origin: r.origin,
+        destination: r.destination,
+        weight: r.weight,
+        plate: r.plate,
+        trailer_plate: r.trailer_plate,
+        driver: r.driver,
+        loading_time: r.loading_time,
+        status: "programado",
+        quote_id: r.quote_id,
+      }))
+    );
+    setDupBusy(false);
+
+    if (error) {
+      setDupError(`Não foi possível duplicar (${error.message}).`);
+      return;
+    }
+
+    setShowDup(false);
+    if (dupDate !== date) setDate(dupDate);
+    else await fetchRows(date);
+  }
+
+  useEffect(() => {
+    if (!showDup) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowDup(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [showDup]);
+
   async function handleDelete(load: Load) {
     if (!confirm(`Excluir a carga "${load.cargo}" de ${load.client_name}?`)) return;
     const { error } = await supabase
@@ -385,13 +476,23 @@ export default function ProgramacaoPage() {
           <p className="mt-1 text-sm capitalize text-navy-500">{dateLabel}</p>
         </div>
         {canEditSchedule && (
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            + Novo carregamento
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openDuplicate}
+              disabled={rows.length === 0}
+              className="inline-flex items-center justify-center rounded-lg border border-navy-300 bg-white px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Duplicar dia
+            </button>
+            <button
+              type="button"
+              onClick={openNew}
+              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              + Novo carregamento
+            </button>
+          </div>
         )}
       </div>
 
@@ -878,6 +979,119 @@ export default function ProgramacaoPage() {
           })
         )}
       </div>
+
+      {canEditSchedule && showDup && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center"
+          onClick={() => setShowDup(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-medium text-navy-900">
+              Duplicar programação de{" "}
+              {fromIsoDate(date).toLocaleDateString("pt-BR")}
+            </h2>
+            <p className="mt-1 text-sm text-navy-500">
+              Escolha a data e as cargas que se repetem. As cópias entram como
+              Programado.
+            </p>
+
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Duplicar para o dia
+              </label>
+              <input
+                type="date"
+                value={dupDate}
+                onChange={(e) => changeDupDate(e.target.value)}
+                className={inputCls}
+              />
+              {dupTargetCount !== null && dupTargetCount > 0 && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Esse dia já tem {dupTargetCount}{" "}
+                  {dupTargetCount === 1 ? "carga" : "cargas"}. Elas serão
+                  mantidas e as cópias só serão adicionadas.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-sm font-medium text-navy-700">
+                  Cargas ({dupSelected.size} de {rows.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDupSelected(
+                      dupSelected.size === rows.length
+                        ? new Set()
+                        : new Set(rows.map((r) => r.id))
+                    )
+                  }
+                  className="text-xs font-medium text-brand-700 underline hover:text-brand-800"
+                >
+                  {dupSelected.size === rows.length
+                    ? "Desmarcar todas"
+                    : "Marcar todas"}
+                </button>
+              </div>
+              <ul className="max-h-60 divide-y divide-navy-100 overflow-y-auto rounded-lg border border-navy-200">
+                {rows.map((r) => (
+                  <li key={r.id}>
+                    <label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-navy-50">
+                      <input
+                        type="checkbox"
+                        checked={dupSelected.has(r.id)}
+                        onChange={() => toggleDup(r.id)}
+                        className="mt-1"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-navy-900">
+                          {r.client_name} — {r.cargo}
+                        </span>
+                        <span className="block truncate text-xs text-navy-500">
+                          {[r.plate, r.trailer_plate, r.driver]
+                            .filter(Boolean)
+                            .join(" · ") || "Sem placa ou motorista"}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {dupError && (
+              <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {dupError}
+              </div>
+            )}
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={handleDuplicate}
+                disabled={dupBusy}
+                className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {dupBusy
+                  ? "Duplicando..."
+                  : `Duplicar ${dupSelected.size} ${dupSelected.size === 1 ? "carga" : "cargas"}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDup(false)}
+                className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

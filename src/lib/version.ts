@@ -22,6 +22,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Clientes com Razão Social e Nome Fantasia, edição e exclusão, e lista com rolagem.",
       "Programação só aceita cliente, placas e motorista cadastrados.",
       "Na lista da programação, as colunas de placa passam a se chamar Cavalo e Carreta.",
+      "Duplicar dia na programação: copia as cargas escolhidas para outra data, sem apagar o que já estiver lançado nela.",
     ],
   },
   {
