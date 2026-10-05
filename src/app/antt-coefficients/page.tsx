@@ -275,6 +275,7 @@ export default function AnttCoefficientsPage() {
               </div>
             ) : (
               <>
+                <div className="max-h-[70vh] overflow-y-auto sm:hidden">
                 <MobileCardList>
                   {coefficients.map((c) => (
                     <MobileCard key={c.id}>
@@ -302,10 +303,11 @@ export default function AnttCoefficientsPage() {
                     </MobileCard>
                   ))}
                 </MobileCardList>
+                </div>
 
-                <div className="hidden overflow-x-auto sm:block">
+                <div className="hidden max-h-[70vh] overflow-auto sm:block">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
+                    <thead className="sticky top-0 z-10 bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
                       <tr>
                         <th className="px-6 py-3 font-medium">Eixos</th>
                         <th className="px-6 py-3 font-medium">Tipo de carga</th>

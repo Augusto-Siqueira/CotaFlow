@@ -938,9 +938,6 @@ function NewQuotePage({
         <h1 className="text-2xl font-semibold tracking-tight text-navy-900">
           Nova cotação
         </h1>
-        <p className="mt-1 text-sm text-navy-500">
-          Preencha as etapas para calcular o frete Gross / Net / Full.
-        </p>
       </div>
 
       {duplicateSource && (
@@ -1479,10 +1476,6 @@ function NewQuotePage({
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                   placeholder="Ex: 1 dia após carregado"
                 />
-                <p className="mt-1 text-xs text-navy-500">
-                  Opcional — aparece na proposta em PDF de clientes cujo
-                  layout mostra essa informação.
-                </p>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-navy-700">
@@ -1538,7 +1531,7 @@ function NewQuotePage({
               </div>
               {(form.origin.trim() || form.destination.trim()) && (
                 <>
-                  <div className="text-navy-500">Coleta / Entrega (PDF)</div>
+                  <div className="text-navy-500">Coleta / Entrega</div>
                   <div className="text-navy-900">
                     {form.origin.trim() || "—"} → {form.destination.trim() || "—"}
                   </div>
