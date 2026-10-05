@@ -68,6 +68,8 @@ export function SiteHeader() {
       : "text-navy-200 transition-colors hover:text-brand-400";
   }
 
+  if (pathname === "/login") return null;
+
   return (
     <header className="bg-navy-900">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
