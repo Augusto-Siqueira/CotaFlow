@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCurrency } from "@/lib/format";
+import { CurrencyInput } from "@/components/CurrencyInput";
 
 /**
  * Versão mobile de uma linha da tabela de rotas. A tabela tem 13 colunas e no
@@ -191,22 +192,18 @@ export function RouteCard({
           </div>
           <div>
             <label className={labelCls}>Pedágio (R$)</label>
-            <input
-              type="text"
-              inputMode="decimal"
+            <CurrencyInput
               value={values.toll_cost}
-              onChange={(e) => onChange("toll_cost", e.target.value)}
+              onChange={(v) => onChange("toll_cost", v)}
               className={inputNormal}
             />
             <FieldError message={errors[`toll_${i}`]} />
           </div>
           <div>
             <label className={labelCls}>Gross (R$)</label>
-            <input
-              type="text"
-              inputMode="decimal"
+            <CurrencyInput
               value={values.gross_freight}
-              onChange={(e) => onChange("gross_freight", e.target.value)}
+              onChange={(v) => onChange("gross_freight", v)}
               className={inputNormal}
             />
             <FieldError message={errors[`gross_${i}`]} />

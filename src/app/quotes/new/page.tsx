@@ -12,6 +12,7 @@ import {
   computeNetFreight,
 } from "@/lib/quoteCalculations";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
+import { CurrencyInput } from "@/components/CurrencyInput";
 
 interface ClientOption {
   id: string;
@@ -1143,13 +1144,11 @@ function NewQuotePage({
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Pedágio (R$)
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
+              <CurrencyInput
                 value={form.toll_cost}
-                onChange={(e) => updateField("toll_cost", e.target.value)}
+                onChange={(v) => updateField("toll_cost", v)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                placeholder="Ex: 180"
+                placeholder="0,00"
               />
               {stepErrors.toll_cost && (
                 <p className="mt-1 text-xs text-red-600">
@@ -1196,13 +1195,11 @@ function NewQuotePage({
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Valor da NF (R$) <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
+              <CurrencyInput
                 value={form.nf_value}
-                onChange={(e) => updateField("nf_value", e.target.value)}
+                onChange={(v) => updateField("nf_value", v)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                placeholder="Ex: 50000"
+                placeholder="0,00"
               />
               {stepErrors.nf_value && (
                 <p className="mt-1 text-xs text-red-600">{stepErrors.nf_value}</p>
@@ -1260,13 +1257,11 @@ function NewQuotePage({
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Frete Gross (R$) <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
+              <CurrencyInput
                 value={form.gross_freight}
-                onChange={(e) => updateField("gross_freight", e.target.value)}
+                onChange={(v) => updateField("gross_freight", v)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                placeholder="Ex: 4500"
+                placeholder="0,00"
               />
               {stepErrors.gross_freight && (
                 <p className="mt-1 text-xs text-red-600">

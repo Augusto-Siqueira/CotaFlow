@@ -13,6 +13,7 @@ import {
   MobileCard,
   MobileCardList,
 } from "@/components/MobileCard";
+import { CurrencyInput } from "@/components/CurrencyInput";
 
 interface Vehicle {
   id: string;
@@ -337,14 +338,12 @@ export default function VehiclesPage() {
                 >
                   Over time (R$/hora)
                 </label>
-                <input
+                <CurrencyInput
                   id="over_time_rate"
-                  type="text"
-                  inputMode="decimal"
                   value={form.over_time_rate}
-                  onChange={(e) => updateField("over_time_rate", e.target.value)}
+                  onChange={(v) => updateField("over_time_rate", v)}
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  placeholder="Ex: 95,00"
+                  placeholder="0,00"
                 />
                 <p className="mt-1 text-xs text-navy-500">
                   Usado automaticamente nas cotações deste veículo.

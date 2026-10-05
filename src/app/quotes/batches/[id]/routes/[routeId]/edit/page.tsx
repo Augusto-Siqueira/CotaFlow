@@ -10,6 +10,7 @@ import {
   computeFullFreight,
   computeNetFreight,
 } from "@/lib/quoteCalculations";
+import { CurrencyInput } from "@/components/CurrencyInput";
 
 interface VehicleOption {
   id: string;
@@ -449,10 +450,9 @@ function EditBatchRoutePage({
             <label className="text-xs font-medium text-navy-600">
               Pedágio (R$)
             </label>
-            <input
-              type="text"
+            <CurrencyInput
               value={form.toll_cost}
-              onChange={(e) => updateField("toll_cost", e.target.value)}
+              onChange={(v) => updateField("toll_cost", v)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             />
             {errors.toll_cost && (
@@ -463,10 +463,9 @@ function EditBatchRoutePage({
             <label className="text-xs font-medium text-navy-600">
               Frete Gross (R$)
             </label>
-            <input
-              type="text"
+            <CurrencyInput
               value={form.gross_freight}
-              onChange={(e) => updateField("gross_freight", e.target.value)}
+              onChange={(v) => updateField("gross_freight", v)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             />
             {errors.gross_freight && (

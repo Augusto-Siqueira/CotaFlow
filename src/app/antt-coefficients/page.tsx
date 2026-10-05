@@ -13,6 +13,7 @@ import {
   MobileCard,
   MobileCardList,
 } from "@/components/MobileCard";
+import { CurrencyInput } from "@/components/CurrencyInput";
 
 interface AnttCoefficient {
   id: string;
@@ -191,14 +192,12 @@ export default function AnttCoefficientsPage() {
                   CCD — custo por deslocamento (R$/km){" "}
                   <span className="text-red-500">*</span>
                 </label>
-                <input
+                <CurrencyInput
                   id="ccd"
-                  type="text"
-                  inputMode="decimal"
                   value={form.ccd}
-                  onChange={(e) => updateField("ccd", e.target.value)}
+                  onChange={(v) => updateField("ccd", v)}
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  placeholder="Ex: 4.50"
+                  placeholder="0,00"
                 />
                 {formErrors.ccd && (
                   <p className="mt-1 text-xs text-red-600">{formErrors.ccd}</p>
@@ -212,14 +211,12 @@ export default function AnttCoefficientsPage() {
                 >
                   CC — custo por viagem (R$) <span className="text-red-500">*</span>
                 </label>
-                <input
+                <CurrencyInput
                   id="cc"
-                  type="text"
-                  inputMode="decimal"
                   value={form.cc}
-                  onChange={(e) => updateField("cc", e.target.value)}
+                  onChange={(v) => updateField("cc", v)}
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  placeholder="Ex: 350"
+                  placeholder="0,00"
                 />
                 {formErrors.cc && (
                   <p className="mt-1 text-xs text-red-600">{formErrors.cc}</p>
