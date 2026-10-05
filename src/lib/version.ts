@@ -17,6 +17,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Status do carregamento: Programado, Lavando, Carregando e Carregado em Viagem.",
       "Vínculo opcional com uma cotação e lançamento de dias futuros.",
       "Novo perfil Logística, que altera a programação e continua só lendo o resto.",
+      "Origem, destino e placa do semi-reboque na programação, com colunas que só aparecem quando preenchidas.",
+      "Cadastro de frota (cavalos, semi-reboques, trucks e bitrucks) e de motoristas, com apelido.",
+      "Clientes com Razão Social e Nome Fantasia, edição e exclusão, e lista com rolagem.",
+      "Programação só aceita cliente, placas e motorista cadastrados.",
     ],
   },
   {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { VehiclesTabs } from "@/components/VehiclesTabs";
 import { formatCurrency } from "@/lib/format";
 import {
   CardActions,
@@ -232,7 +233,7 @@ export default function VehiclesPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-navy-900">
           Veículos
         </h1>
@@ -240,6 +241,8 @@ export default function VehiclesPage() {
           Cadastre os tipos de veículo usados nas cotações.
         </p>
       </div>
+
+      <VehiclesTabs active="/vehicles" />
 
       <div className="grid gap-8 lg:grid-cols-3">
         {isAdmin && (

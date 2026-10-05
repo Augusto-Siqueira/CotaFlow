@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { normalizePlate } from "@/lib/fleet";
 import {
   LOADING_STATUSES,
   loadingStatusBadge,
@@ -15,16 +16,21 @@ interface Load {
   schedule_date: string;
   client_name: string;
   cargo: string;
+  origin: string | null;
+  destination: string | null;
   weight: string | null;
   plate: string | null;
+  trailer_plate: string | null;
   driver: string | null;
   loading_time: string | null;
   status: string;
   quote_id: string | null;
+  quotes: { client_quote_number: string | null } | null;
 }
 
 interface QuoteOption {
   id: string;
+  client_quote_number: string | null;
   origin: string | null;
   destination: string | null;
   clients: { name: string } | null;
@@ -34,8 +40,11 @@ interface FormState {
   schedule_date: string;
   client_name: string;
   cargo: string;
+  origin: string;
+  destination: string;
   weight: string;
   plate: string;
+  trailer_plate: string;
   driver: string;
   loading_time: string;
   status: string;
@@ -64,8 +73,11 @@ function emptyForm(date: string): FormState {
     schedule_date: date,
     client_name: "",
     cargo: "",
+    origin: "",
+    destination: "",
     weight: "",
     plate: "",
+    trailer_plate: "",
     driver: "",
     loading_time: "",
     status: "programado",
@@ -88,8 +100,11 @@ export default function ProgramacaoPage() {
   } | null>(null);
   const latestDate = useRef(date);
 
-  const [clientNames, setClientNames] = useState<string[]>([]);
+  const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
+  const [tractorPlates, setTractorPlates] = useState<string[]>([]);
+  const [trailerPlates, setTrailerPlates] = useState<string[]>([]);
+  const [drivers, setDrivers] = useState<{ nickname: string; name: string }[]>([]);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -101,7 +116,7 @@ export default function ProgramacaoPage() {
     const { data: rows, error } = await supabase
       .from("loading_schedules")
       .select(
-        "id, schedule_date, client_name, cargo, weight, plate, driver, loading_time, status, quote_id"
+        "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status, quote_id, quotes(client_quote_number)"
       )
       .eq("schedule_date", d)
       .order("loading_time", { ascending: true, nullsFirst: false })
@@ -122,16 +137,35 @@ export default function ProgramacaoPage() {
 
   useEffect(() => {
     async function loadOptions() {
-      const [clientsRes, quotesRes] = await Promise.all([
-        supabase.from("clients").select("name").order("name"),
+      const [clientsRes, quotesRes, fleetRes, driversRes] = await Promise.all([
+        supabase.from("clients").select("name, trade_name").order("name"),
         supabase
           .from("quotes")
-          .select("id, origin, destination, clients(name)")
+          .select("id, client_quote_number, origin, destination, clients(name)")
           .order("created_at", { ascending: false })
           .limit(300),
+        supabase.from("fleet_units").select("plate, kind").order("plate"),
+        supabase.from("drivers").select("name, nickname").order("nickname"),
       ]);
-      setClientNames((clientsRes.data ?? []).map((c) => c.name));
+      setDrivers(
+        (driversRes.data ?? []).map((d) => ({
+          nickname: d.nickname?.trim() || d.name,
+          name: d.name,
+        }))
+      );
+      setClients(
+        (clientsRes.data ?? [])
+          .map((c) => ({ label: c.trade_name?.trim() || c.name, name: c.name }))
+          .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+      );
       setQuotes((quotesRes.data as unknown as QuoteOption[]) ?? []);
+      const fleet = fleetRes.data ?? [];
+      setTractorPlates(
+        fleet.filter((f) => f.kind !== "semirreboque").map((f) => f.plate)
+      );
+      setTrailerPlates(
+        fleet.filter((f) => f.kind === "semirreboque").map((f) => f.plate)
+      );
     }
     loadOptions();
   }, []);
@@ -153,21 +187,42 @@ export default function ProgramacaoPage() {
     for (const q of quotes) {
       m.set(
         q.id,
-        `#${q.id.slice(0, 8).toUpperCase()} · ${q.clients?.name ?? "—"} · ${q.origin ?? "—"} → ${q.destination ?? "—"}`
+        `${q.client_quote_number?.trim() ? `${q.client_quote_number.trim()} · ` : ""}${q.clients?.name ?? "—"} · ${q.origin ?? "—"} → ${q.destination ?? "—"}`
       );
     }
     return m;
   }, [quotes]);
 
   const quoteOptions = useMemo(() => {
-    const name = form.client_name.trim().toLowerCase();
+    const typed = form.client_name.trim().toLowerCase();
+    const match = clients.find((c) => c.label.toLowerCase() === typed);
+    const name = (match?.name ?? typed).toLowerCase();
     const filtered = name
       ? quotes.filter((q) => q.clients?.name.toLowerCase() === name)
       : quotes;
     const list = filtered.length > 0 ? filtered : quotes;
     const selected = quotes.find((q) => q.id === form.quote_id);
     return selected && !list.includes(selected) ? [selected, ...list] : list;
-  }, [quotes, form.client_name, form.quote_id]);
+  }, [quotes, clients, form.client_name, form.quote_id]);
+
+  // Cliente, placas e motorista só aceitam o que está cadastrado (o banco
+  // também barra, ver migration 0045). Vazio é aceito nos opcionais; fora do
+  // cadastro devolve null.
+  function resolve(value: string, options: string[]): string | null {
+    const v = value.trim();
+    if (!v) return "";
+    return options.find((o) => o.toLowerCase() === v.toLowerCase()) ?? null;
+  }
+
+  const clientLabels = useMemo(() => clients.map((c) => c.label), [clients]);
+  const driverNicks = useMemo(() => drivers.map((d) => d.nickname), [drivers]);
+
+  const fieldChecks = {
+    client_name: resolve(form.client_name, clientLabels),
+    plate: resolve(form.plate, tractorPlates),
+    trailer_plate: resolve(form.trailer_plate, trailerPlates),
+    driver: resolve(form.driver, driverNicks),
+  };
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -186,8 +241,11 @@ export default function ProgramacaoPage() {
       schedule_date: load.schedule_date,
       client_name: load.client_name,
       cargo: load.cargo,
+      origin: load.origin ?? "",
+      destination: load.destination ?? "",
       weight: load.weight ?? "",
       plate: load.plate ?? "",
+      trailer_plate: load.trailer_plate ?? "",
       driver: load.driver ?? "",
       loading_time: load.loading_time?.slice(0, 5) ?? "",
       status: load.status,
@@ -214,14 +272,29 @@ export default function ProgramacaoPage() {
       setFormError("Informe a data.");
       return;
     }
+    const invalid = [
+      fieldChecks.client_name === null && "cliente",
+      fieldChecks.plate === null && "placa do cavalo/truck",
+      fieldChecks.trailer_plate === null && "placa do semi-reboque",
+      fieldChecks.driver === null && "motorista",
+    ].filter(Boolean);
+    if (invalid.length > 0) {
+      setFormError(
+        `Escolha na lista um valor cadastrado para: ${invalid.join(", ")}.`
+      );
+      return;
+    }
 
     const payload = {
       schedule_date: form.schedule_date,
-      client_name: form.client_name.trim(),
+      client_name: fieldChecks.client_name ?? form.client_name.trim(),
       cargo: form.cargo.trim(),
+      origin: form.origin.trim() || null,
+      destination: form.destination.trim() || null,
       weight: form.weight.trim() || null,
-      plate: form.plate.trim().toUpperCase() || null,
-      driver: form.driver.trim() || null,
+      plate: fieldChecks.plate || null,
+      trailer_plate: fieldChecks.trailer_plate || null,
+      driver: fieldChecks.driver || null,
       loading_time: form.loading_time || null,
       status: form.status,
       quote_id: form.quote_id || null,
@@ -405,13 +478,18 @@ export default function ProgramacaoPage() {
                 value={form.client_name}
                 onChange={(e) => updateForm("client_name", e.target.value)}
                 className={inputCls}
-                placeholder="Nome do cliente"
+                placeholder="Escolha o cliente"
               />
               <datalist id="clientes-lista">
-                {clientNames.map((n) => (
-                  <option key={n} value={n} />
+                {clients.map((c) => (
+                  <option key={c.label} value={c.label} />
                 ))}
               </datalist>
+              {fieldChecks.client_name === null && (
+                <p className="mt-1 text-xs text-red-600">
+                  Cliente não cadastrado. Escolha um da lista.
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
@@ -451,14 +529,75 @@ export default function ProgramacaoPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
-                Placa
+                Placa do cavalo / truck
               </label>
               <input
                 type="text"
+                list="placas-cavalo"
                 value={form.plate}
-                onChange={(e) => updateForm("plate", e.target.value.toUpperCase())}
-                className={inputCls}
+                onChange={(e) => updateForm("plate", normalizePlate(e.target.value))}
+                className={`${inputCls} uppercase tracking-wide`}
                 placeholder="ABC1D23"
+              />
+              <datalist id="placas-cavalo">
+                {tractorPlates.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              {fieldChecks.plate === null && (
+                <p className="mt-1 text-xs text-red-600">
+                  Placa não cadastrada na frota.
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Placa do semi-reboque
+              </label>
+              <input
+                type="text"
+                list="placas-semi"
+                value={form.trailer_plate}
+                onChange={(e) =>
+                  updateForm("trailer_plate", normalizePlate(e.target.value))
+                }
+                className={`${inputCls} uppercase tracking-wide`}
+                placeholder="ABC1D23"
+              />
+              <datalist id="placas-semi">
+                {trailerPlates.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              {fieldChecks.trailer_plate === null && (
+                <p className="mt-1 text-xs text-red-600">
+                  Placa não cadastrada na frota.
+                </p>
+              )}
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Origem <span className="text-navy-400">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                value={form.origin}
+                onChange={(e) => updateForm("origin", e.target.value)}
+                className={inputCls}
+                placeholder="Ex: Palhoça/SC"
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-navy-700">
+                Destino <span className="text-navy-400">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                value={form.destination}
+                onChange={(e) => updateForm("destination", e.target.value)}
+                className={inputCls}
+                placeholder="Ex: Ponta Grossa/PR"
               />
             </div>
 
@@ -468,11 +607,22 @@ export default function ProgramacaoPage() {
               </label>
               <input
                 type="text"
+                list="motoristas-lista"
                 value={form.driver}
                 onChange={(e) => updateForm("driver", e.target.value)}
                 className={inputCls}
-                placeholder="Nome do motorista"
+                placeholder="Escolha o motorista"
               />
+              <datalist id="motoristas-lista">
+                {drivers.map((d) => (
+                  <option key={d.name} value={d.nickname} label={d.name} />
+                ))}
+              </datalist>
+              {fieldChecks.driver === null && (
+                <p className="mt-1 text-xs text-red-600">
+                  Motorista não cadastrado. Escolha um da lista.
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
@@ -548,7 +698,25 @@ export default function ProgramacaoPage() {
             Nenhum carregamento programado para este dia.
           </div>
         ) : (
-          groups.map(([client, loads]) => (
+          groups.map(([client, loads]) => {
+            const hasOrigin = loads.some((l) => l.origin?.trim());
+            const hasDestination = loads.some((l) => l.destination?.trim());
+            const hasTrailer = loads.some((l) => l.trailer_plate?.trim());
+            const cols = [
+              "2fr",
+              hasOrigin ? "1.4fr" : null,
+              hasDestination ? "1.4fr" : null,
+              "1fr",
+              "1fr",
+              hasTrailer ? "1fr" : null,
+              "1.6fr",
+              "0.8fr",
+              "1.8fr",
+            ]
+              .filter((c): c is string => c !== null)
+              .map((c) => `minmax(0,${c})`)
+              .join("_");
+            return (
             <section
               key={client}
               className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm"
@@ -560,10 +728,16 @@ export default function ProgramacaoPage() {
                 </span>
               </header>
 
-              <div className="hidden grid-cols-[2fr_1fr_1fr_1.6fr_0.8fr_1.6fr] gap-3 px-5 pt-3 text-xs font-medium uppercase tracking-wide text-navy-500 lg:grid">
+              <div
+                style={{ "--cols": cols.replaceAll("_", " ") } as React.CSSProperties}
+                className="hidden gap-3 px-5 pt-3 text-xs font-medium uppercase tracking-wide text-navy-500 lg:grid lg:[grid-template-columns:var(--cols)]"
+              >
                 <span>Carga</span>
+                {hasOrigin && <span>Origem</span>}
+                {hasDestination && <span>Destino</span>}
                 <span>Peso</span>
                 <span>Placa</span>
+                {hasTrailer && <span>Semi-reboque</span>}
                 <span>Motorista</span>
                 <span>Horário</span>
                 <span>Status</span>
@@ -572,10 +746,37 @@ export default function ProgramacaoPage() {
               <ul className="divide-y divide-navy-100">
                 {loads.map((l) => (
                   <li key={l.id} className="px-5 py-3">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm lg:grid-cols-[2fr_1fr_1fr_1.6fr_0.8fr_1.6fr] lg:items-center lg:gap-3">
+                    <div
+                      style={{ "--cols": cols.replaceAll("_", " ") } as React.CSSProperties}
+                      className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm lg:items-center lg:gap-3 lg:[grid-template-columns:var(--cols)]"
+                    >
                       <div className="col-span-2 font-medium text-navy-900 lg:col-span-1">
                         {l.cargo}
                       </div>
+                      {(hasOrigin || hasDestination) && (
+                        <>
+                          {hasOrigin && (
+                            <div
+                              className={`text-navy-700 ${l.origin?.trim() ? "" : "max-lg:hidden"}`}
+                            >
+                              <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                                Origem
+                              </span>
+                              {l.origin || "—"}
+                            </div>
+                          )}
+                          {hasDestination && (
+                            <div
+                              className={`text-navy-700 ${l.destination?.trim() ? "" : "max-lg:hidden"}`}
+                            >
+                              <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                                Destino
+                              </span>
+                              {l.destination || "—"}
+                            </div>
+                          )}
+                        </>
+                      )}
                       <div className="text-navy-700">
                         <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
                           Peso
@@ -588,6 +789,16 @@ export default function ProgramacaoPage() {
                         </span>
                         {l.plate || "—"}
                       </div>
+                      {hasTrailer && (
+                        <div
+                          className={`font-medium tracking-wide text-navy-900 ${l.trailer_plate?.trim() ? "" : "max-lg:hidden"}`}
+                        >
+                          <span className="block text-[11px] font-normal uppercase text-navy-400 lg:hidden">
+                            Semi-reboque
+                          </span>
+                          {l.trailer_plate || "—"}
+                        </div>
+                      )}
                       <div className="text-navy-700">
                         <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
                           Motorista
@@ -605,7 +816,7 @@ export default function ProgramacaoPage() {
                           <select
                             value={l.status}
                             onChange={(e) => changeStatus(l, e.target.value)}
-                            className={`cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(
+                            className={`w-full min-w-0 max-w-[10.5rem] cursor-pointer truncate rounded-full border-0 py-1 pl-2.5 pr-1 text-[11px] font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(
                               l.status
                             )}`}
                           >
@@ -617,7 +828,7 @@ export default function ProgramacaoPage() {
                           </select>
                         ) : (
                           <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${loadingStatusBadge(
+                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${loadingStatusBadge(
                               l.status
                             )}`}
                           >
@@ -634,7 +845,9 @@ export default function ProgramacaoPage() {
                             href={`/quotes/${l.quote_id}`}
                             className="text-brand-700 underline hover:text-brand-800"
                           >
-                            Cotação #{l.quote_id.slice(0, 8).toUpperCase()}
+                            {l.quotes?.client_quote_number?.trim()
+                              ? `Cotação ${l.quotes.client_quote_number.trim()}`
+                              : "Ver cotação"}
                           </Link>
                         )}
                         {canEditSchedule && (
@@ -661,7 +874,8 @@ export default function ProgramacaoPage() {
                 ))}
               </ul>
             </section>
-          ))
+            );
+          })
         )}
       </div>
     </div>
