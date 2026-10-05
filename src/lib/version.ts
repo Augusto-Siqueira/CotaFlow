@@ -21,6 +21,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Cadastro de frota (cavalos, semi-reboques, trucks e bitrucks) e de motoristas, com apelido.",
       "Clientes com Razão Social e Nome Fantasia, edição e exclusão, e lista com rolagem.",
       "Programação só aceita cliente, placas e motorista cadastrados.",
+      "Na lista da programação, as colunas de placa passam a se chamar Cavalo e Carreta.",
     ],
   },
   {

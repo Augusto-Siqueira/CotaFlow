@@ -736,8 +736,8 @@ export default function ProgramacaoPage() {
                 {hasOrigin && <span>Origem</span>}
                 {hasDestination && <span>Destino</span>}
                 <span>Peso</span>
-                <span>Placa</span>
-                {hasTrailer && <span>Semi-reboque</span>}
+                <span>Cavalo</span>
+                {hasTrailer && <span>Carreta</span>}
                 <span>Motorista</span>
                 <span>Horário</span>
                 <span>Status</span>
@@ -785,7 +785,7 @@ export default function ProgramacaoPage() {
                       </div>
                       <div className="font-medium tracking-wide text-navy-900">
                         <span className="block text-[11px] font-normal uppercase text-navy-400 lg:hidden">
-                          Placa
+                          Cavalo
                         </span>
                         {l.plate || "—"}
                       </div>
@@ -794,7 +794,7 @@ export default function ProgramacaoPage() {
                           className={`font-medium tracking-wide text-navy-900 ${l.trailer_plate?.trim() ? "" : "max-lg:hidden"}`}
                         >
                           <span className="block text-[11px] font-normal uppercase text-navy-400 lg:hidden">
-                            Semi-reboque
+                            Carreta
                           </span>
                           {l.trailer_plate || "—"}
                         </div>
