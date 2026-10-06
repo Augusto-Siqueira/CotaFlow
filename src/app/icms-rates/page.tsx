@@ -11,6 +11,7 @@ import {
   MobileCard,
   MobileCardList,
 } from "@/components/MobileCard";
+import { useFeedback } from "@/components/Feedback";
 
 interface IcmsRateRow {
   id: string;
@@ -33,6 +34,7 @@ const emptyForm: FormState = {
 
 export default function IcmsRatesPage() {
   const { isAdmin } = useAuth();
+  const { toastError, confirm: askConfirm } = useFeedback();
   const [rates, setRates] = useState<IcmsRateRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -165,7 +167,7 @@ export default function IcmsRatesPage() {
 
   async function handleDelete(row: IcmsRateRow) {
     if (
-      !confirm(
+      !await askConfirm(
         `Excluir a alíquota ${row.uf_origin} → ${row.uf_destination}?`
       )
     )
@@ -175,7 +177,7 @@ export default function IcmsRatesPage() {
       .delete()
       .eq("id", row.id);
     if (error) {
-      alert(`Não foi possível excluir: ${error.message}`);
+      toastError(`Não foi possível excluir: ${error.message}`);
       return;
     }
     await loadRates();

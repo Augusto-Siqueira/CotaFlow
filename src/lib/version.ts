@@ -19,6 +19,11 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Só o perfil Comercial gerencia as propostas.",
       "Menu interno da proposta (links de seção) funciona sem quebrar o link e sem contar como nova visualização.",
       "Novo status Entrega Concluída na programação de carregamento.",
+      "Lista de cotações paginada (50 por página) e busca na lista de clientes.",
+      "Avisos e confirmações do próprio sistema no lugar das janelas do navegador, e aviso quando a sessão expira.",
+      "Seletores com busca para cliente, placas e motorista na programação, e botão Novo Embarque.",
+      "Impressão da programação do dia e troca de senha pelo cabeçalho.",
+      "Carregamento mais rápido: lista de municípios em cache e verificação de login sem ida ao banco.",
     ],
   },
   {

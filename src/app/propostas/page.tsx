@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { AdminGate } from "@/components/AdminGate";
 import { formatDate, formatDateOnly } from "@/lib/format";
+import { useFeedback } from "@/components/Feedback";
 
 interface Proposal {
   id: string;
@@ -53,6 +54,7 @@ function publicLink(token: string): string {
 
 function ProposalsManager() {
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  const { confirm: askConfirm } = useFeedback();
   const [listError, setListError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -198,7 +200,7 @@ function ProposalsManager() {
 
   async function handleDelete(p: Proposal) {
     if (
-      !confirm(
+      !await askConfirm(
         `Excluir a proposta "${p.title}"? O link enviado ao cliente deixa de funcionar.`
       )
     ) {

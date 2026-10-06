@@ -5,11 +5,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { normalizePlate } from "@/lib/fleet";
+import { SearchSelect } from "@/components/SearchSelect";
 import {
   LOADING_STATUSES,
   loadingStatusBadge,
   loadingStatusLabel,
 } from "@/lib/loadingStatus";
+import { useFeedback } from "@/components/Feedback";
 
 interface Load {
   id: string;
@@ -90,6 +92,7 @@ const inputCls =
 
 export default function ProgramacaoPage() {
   const { canEditSchedule } = useAuth();
+  const { toastError, confirm: askConfirm } = useFeedback();
   const today = toIsoDate(new Date());
 
   const [date, setDate] = useState(today);
@@ -339,7 +342,7 @@ export default function ProgramacaoPage() {
       .update({ status })
       .eq("id", load.id);
     if (error) {
-      alert(`Não foi possível atualizar o status (${error.message}).`);
+      toastError(`Não foi possível atualizar o status (${error.message}).`);
       setData((prev) =>
         prev
           ? {
@@ -446,13 +449,13 @@ export default function ProgramacaoPage() {
   }, [showDup]);
 
   async function handleDelete(load: Load) {
-    if (!confirm(`Excluir a carga "${load.cargo}" de ${load.client_name}?`)) return;
+    if (!await askConfirm(`Excluir a carga "${load.cargo}" de ${load.client_name}?`)) return;
     const { error } = await supabase
       .from("loading_schedules")
       .delete()
       .eq("id", load.id);
     if (error) {
-      alert(`Não foi possível excluir (${error.message}).`);
+      toastError(`Não foi possível excluir (${error.message}).`);
       return;
     }
     await fetchRows(date);
@@ -479,8 +482,16 @@ export default function ProgramacaoPage() {
           </h1>
           <p className="mt-1 text-sm capitalize text-navy-500">{dateLabel}</p>
         </div>
-        {canEditSchedule && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center justify-center rounded-lg border border-navy-300 bg-white px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+          >
+            Imprimir
+          </button>
+          {canEditSchedule && (
+            <>
             <button
               type="button"
               onClick={openDuplicate}
@@ -494,13 +505,15 @@ export default function ProgramacaoPage() {
               onClick={openNew}
               className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
             >
-              + Novo carregamento
+              Novo Embarque
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
         <button
           type="button"
           onClick={() => setDate(shiftDate(date, -1))}
@@ -539,8 +552,9 @@ export default function ProgramacaoPage() {
         >
           Amanhã
         </button>
+        </div>
 
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="ml-auto flex flex-wrap gap-2 print:ml-0">
           {counts.map((c) => (
             <span
               key={c.value}
@@ -555,7 +569,7 @@ export default function ProgramacaoPage() {
       {canEditSchedule && showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mt-6 rounded-xl border border-navy-200 bg-white p-6 shadow-sm"
+          className="mt-6 rounded-xl border border-navy-200 bg-white p-6 shadow-sm print:hidden"
         >
           <h2 className="text-base font-medium text-navy-900">
             {editingId ? "Editar carregamento" : "Novo carregamento"}
@@ -577,19 +591,13 @@ export default function ProgramacaoPage() {
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Cliente <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                list="clientes-lista"
+              <SearchSelect
                 value={form.client_name}
-                onChange={(e) => updateForm("client_name", e.target.value)}
+                onChange={(v) => updateForm("client_name", v)}
+                options={clients.map((c) => ({ value: c.label }))}
                 className={inputCls}
                 placeholder="Escolha o cliente"
               />
-              <datalist id="clientes-lista">
-                {clients.map((c) => (
-                  <option key={c.label} value={c.label} />
-                ))}
-              </datalist>
               {fieldChecks.client_name === null && (
                 <p className="mt-1 text-xs text-red-600">
                   Cliente não cadastrado. Escolha um da lista.
@@ -636,19 +644,13 @@ export default function ProgramacaoPage() {
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Placa do cavalo / truck
               </label>
-              <input
-                type="text"
-                list="placas-cavalo"
+              <SearchSelect
                 value={form.plate}
-                onChange={(e) => updateForm("plate", normalizePlate(e.target.value))}
+                onChange={(v) => updateForm("plate", normalizePlate(v))}
+                options={tractorPlates.map((p) => ({ value: p }))}
                 className={`${inputCls} uppercase tracking-wide`}
                 placeholder="ABC1D23"
               />
-              <datalist id="placas-cavalo">
-                {tractorPlates.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
               {fieldChecks.plate === null && (
                 <p className="mt-1 text-xs text-red-600">
                   Placa não cadastrada na frota.
@@ -659,21 +661,13 @@ export default function ProgramacaoPage() {
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Placa do semi-reboque
               </label>
-              <input
-                type="text"
-                list="placas-semi"
+              <SearchSelect
                 value={form.trailer_plate}
-                onChange={(e) =>
-                  updateForm("trailer_plate", normalizePlate(e.target.value))
-                }
+                onChange={(v) => updateForm("trailer_plate", normalizePlate(v))}
+                options={trailerPlates.map((p) => ({ value: p }))}
                 className={`${inputCls} uppercase tracking-wide`}
                 placeholder="ABC1D23"
               />
-              <datalist id="placas-semi">
-                {trailerPlates.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
               {fieldChecks.trailer_plate === null && (
                 <p className="mt-1 text-xs text-red-600">
                   Placa não cadastrada na frota.
@@ -710,19 +704,16 @@ export default function ProgramacaoPage() {
               <label className="mb-1 block text-sm font-medium text-navy-700">
                 Motorista
               </label>
-              <input
-                type="text"
-                list="motoristas-lista"
+              <SearchSelect
                 value={form.driver}
-                onChange={(e) => updateForm("driver", e.target.value)}
+                onChange={(v) => updateForm("driver", v)}
+                options={drivers.map((d) => ({
+                  value: d.nickname,
+                  hint: d.name,
+                }))}
                 className={inputCls}
                 placeholder="Escolha o motorista"
               />
-              <datalist id="motoristas-lista">
-                {drivers.map((d) => (
-                  <option key={d.name} value={d.nickname} label={d.name} />
-                ))}
-              </datalist>
               {fieldChecks.driver === null && (
                 <p className="mt-1 text-xs text-red-600">
                   Motorista não cadastrado. Escolha um da lista.
@@ -926,7 +917,7 @@ export default function ProgramacaoPage() {
                           <select
                             value={l.status}
                             onChange={(e) => changeStatus(l, e.target.value)}
-                            className={`w-full min-w-0 max-w-[10.5rem] cursor-pointer truncate rounded-full border-0 py-1 pl-2.5 pr-1 text-[11px] font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(
+                            className={`w-full min-w-0 max-w-[10.5rem] cursor-pointer truncate rounded-full border-0 py-1 pl-2.5 pr-1 text-[11px] print:appearance-none font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(
                               l.status
                             )}`}
                           >
@@ -961,7 +952,7 @@ export default function ProgramacaoPage() {
                           </Link>
                         )}
                         {canEditSchedule && (
-                          <>
+                          <span className="flex items-center gap-4 print:hidden">
                             <button
                               type="button"
                               onClick={() => openEdit(l)}
@@ -976,7 +967,7 @@ export default function ProgramacaoPage() {
                             >
                               Excluir
                             </button>
-                          </>
+                          </span>
                         )}
                       </div>
                     )}
@@ -991,7 +982,7 @@ export default function ProgramacaoPage() {
 
       {canEditSchedule && showDup && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center print:hidden"
           onClick={() => setShowDup(false)}
         >
           <div

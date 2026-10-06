@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { fetchAllCityNames, invalidateCityCache } from "@/lib/cities";
 import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency, revisionLabel } from "@/lib/format";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/lib/quoteCalculations";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { CurrencyInput } from "@/components/CurrencyInput";
+import { useFeedback } from "@/components/Feedback";
 
 interface ClientOption {
   id: string;
@@ -167,22 +169,6 @@ function isValidNumber(value: string): boolean {
 // O Supabase limita cada consulta a 1000 linhas no servidor (não dá pra
 // contornar com .limit() no cliente) — com os ~5.570 municípios
 // cadastrados em `cities`, precisa paginar pra trazer a lista inteira.
-async function fetchAllCityNames(): Promise<string[]> {
-  const pageSize = 1000;
-  const names: string[] = [];
-  for (let page = 0; ; page++) {
-    const { data, error } = await supabase
-      .from("cities")
-      .select("name")
-      .order("name")
-      .range(page * pageSize, page * pageSize + pageSize - 1);
-    if (error || !data) break;
-    names.push(...data.map((c) => c.name));
-    if (data.length < pageSize) break;
-  }
-  return names;
-}
-
 // Campo de texto livre (nunca bloqueado por um seletor) com sugestões
 // próprias em vez de <datalist> nativo: clicar na setinha mostra só os
 // endereços cadastrados (lista curta e útil); digitar filtra cidades (e
@@ -411,6 +397,7 @@ function NewQuotePage({
   searchParams: Promise<{ duplicate?: string }>;
 }) {
   const { duplicate: duplicateId } = use(searchParams);
+  const { toastError } = useFeedback();
 
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
@@ -812,7 +799,7 @@ function NewQuotePage({
         .update({ status: "obsoleta" })
         .eq("id", duplicateSource.id);
       if (obsoleteError) {
-        alert(
+        toastError(
           `A nova revisão foi salva, mas não foi possível marcar a anterior como Obsoleta (${obsoleteError.message}). Altere o status manualmente.`
         );
       }
@@ -837,6 +824,7 @@ function NewQuotePage({
           { onConflict: "name", ignoreDuplicates: true }
         );
       if (!citiesError) {
+        invalidateCityCache();
         setCities((prev) => Array.from(new Set([...prev, ...newCityNames])).sort());
       }
     }

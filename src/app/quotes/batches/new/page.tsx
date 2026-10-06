@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { fetchAllCityNames, invalidateCityCache } from "@/lib/cities";
 import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -114,22 +115,6 @@ function isValidNumber(value: string): boolean {
 
 // Supabase limita cada consulta a 1000 linhas — com ~5.570 municípios em
 // `cities`, precisa paginar pra trazer a lista inteira pro datalist.
-async function fetchAllCityNames(): Promise<string[]> {
-  const pageSize = 1000;
-  const names: string[] = [];
-  for (let page = 0; ; page++) {
-    const { data, error } = await supabase
-      .from("cities")
-      .select("name")
-      .order("name")
-      .range(page * pageSize, page * pageSize + pageSize - 1);
-    if (error || !data) break;
-    names.push(...data.map((c) => c.name));
-    if (data.length < pageSize) break;
-  }
-  return names;
-}
-
 function NewQuoteBatchPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
@@ -516,6 +501,7 @@ function NewQuoteBatchPage() {
           newCityNames.map((name) => ({ name })),
           { onConflict: "name", ignoreDuplicates: true }
         );
+      invalidateCityCache();
     }
 
     setSubmitting(false);

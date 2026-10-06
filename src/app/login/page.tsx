@@ -1,10 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { LogisticsArt } from "@/components/LogisticsArt";
 import { LoginForm } from "@/components/LoginForm";
 import { APP_VERSION } from "@/lib/version";
 
 export default function LoginPage() {
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setExpired(
+        new URLSearchParams(window.location.search).get("sessao") === "expirada"
+      );
+    });
+  }, []);
+
   return (
     <div className="grid min-h-screen flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       <main className="flex flex-col justify-center px-6 py-12 sm:px-14">
@@ -19,6 +30,15 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-navy-500">
             Entre para continuar cotando.
           </p>
+          {expired && (
+            <div
+              role="status"
+              className="mt-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800"
+            >
+              Sua sessão expirou. Entre novamente para continuar.
+            </div>
+          )}
+
           <LoginForm />
           <p className="mt-10 text-center text-xs text-navy-400">
             CotaFlow v{APP_VERSION}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -14,6 +14,7 @@ import {
   MobileCardList,
 } from "@/components/MobileCard";
 import { PDF_LAYOUTS, type PdfLayout } from "@/lib/pdfLayout";
+import { useFeedback } from "@/components/Feedback";
 
 interface Client {
   id: string;
@@ -46,7 +47,22 @@ const emptyForm: FormState = {
 
 export default function ClientsPage() {
   const { isAdmin } = useAuth();
-  const [clients, setClients] = useState<Client[]>([]);
+  const { confirm: askConfirm } = useFeedback();
+  const [allClients, setClients] = useState<Client[]>([]);
+  const [search, setSearch] = useState("");
+
+  const clients = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allClients;
+    const digits = q.replace(/\D/g, "");
+    return allClients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.trade_name ?? "").toLowerCase().includes(q) ||
+        (c.segment ?? "").toLowerCase().includes(q) ||
+        (digits !== "" && (c.document ?? "").replace(/\D/g, "").includes(digits))
+    );
+  }, [allClients, search]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -143,7 +159,7 @@ export default function ClientsPage() {
 
   async function handleDelete(client: Client) {
     if (
-      !confirm(
+      !await askConfirm(
         `Excluir o cliente "${client.name}"? Essa ação não pode ser desfeita.`
       )
     ) {
@@ -431,10 +447,17 @@ export default function ClientsPage() {
             </div>
           )}
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-navy-200 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">
                 Clientes cadastrados
               </h2>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por razão social, fantasia ou CNPJ..."
+                className="order-last w-full rounded-lg border border-navy-300 px-3 py-1.5 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:order-none sm:w-80"
+              />
               <span className="text-sm text-navy-500">
                 {clients.length}{" "}
                 {clients.length === 1 ? "cliente" : "clientes"}
@@ -457,7 +480,9 @@ export default function ClientsPage() {
               </div>
             ) : clients.length === 0 ? (
               <div className="px-6 py-10 text-center text-sm text-navy-500">
-                Nenhum cliente cadastrado ainda.
+                {allClients.length === 0
+                  ? "Nenhum cliente cadastrado ainda."
+                  : "Nenhum cliente encontrado para essa busca."}
               </div>
             ) : (
               <>

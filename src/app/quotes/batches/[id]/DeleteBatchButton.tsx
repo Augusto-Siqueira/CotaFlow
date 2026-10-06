@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useFeedback } from "@/components/Feedback";
 
 export function DeleteBatchButton({ batchId }: { batchId: string }) {
+  const { toastError, confirm: askConfirm } = useFeedback();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
     if (
-      !confirm(
+      !await askConfirm(
         "Excluir este lote e todas as suas rotas? Essa ação não pode ser desfeita."
       )
     )
@@ -23,7 +25,7 @@ export function DeleteBatchButton({ batchId }: { batchId: string }) {
       .eq("id", batchId);
 
     if (error) {
-      alert(`Não foi possível excluir o lote: ${error.message}`);
+      toastError(`Não foi possível excluir o lote: ${error.message}`);
       setDeleting(false);
       return;
     }

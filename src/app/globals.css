@@ -56,3 +56,14 @@
 body {
   font-family: var(--font-sans);
 }
+
+/* Impressão (usada pela Programação): paisagem, sem fundo cinza. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  body {
+    background: #ffffff !important;
+  }
+}

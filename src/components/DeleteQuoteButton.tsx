@@ -3,19 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useFeedback } from "@/components/Feedback";
 
 export function DeleteQuoteButton({ quoteId }: { quoteId: string }) {
   const router = useRouter();
+  const { toastError, confirm: askConfirm } = useFeedback();
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    if (!confirm("Excluir esta cotação? Essa ação não pode ser desfeita.")) {
+    if (!await askConfirm("Excluir esta cotação? Essa ação não pode ser desfeita.")) {
       return;
     }
     setDeleting(true);
     const { error } = await supabase.from("quotes").delete().eq("id", quoteId);
     if (error) {
-      alert(`Não foi possível excluir a cotação (${error.message}).`);
+      toastError(`Não foi possível excluir a cotação (${error.message}).`);
       setDeleting(false);
       return;
     }

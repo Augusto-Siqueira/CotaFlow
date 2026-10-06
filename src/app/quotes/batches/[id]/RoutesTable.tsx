@@ -21,6 +21,7 @@ import {
   MobileCard,
   MobileCardList,
 } from "@/components/MobileCard";
+import { useFeedback } from "@/components/Feedback";
 
 export interface BatchRoute {
   id: string;
@@ -52,17 +53,18 @@ export function RoutesTable({
 }) {
   const router = useRouter();
   const { isAdmin } = useAuth();
+  const { toastError, confirm: askConfirm } = useFeedback();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [unit, setUnit] = useState<FreightUnit>("viagem");
 
   async function handleDelete(routeId: string) {
-    if (!confirm("Excluir esta rota do lote?")) return;
+    if (!await askConfirm("Excluir esta rota do lote?")) return;
 
     setDeletingId(routeId);
     const { error } = await supabase.from("quotes").delete().eq("id", routeId);
 
     if (error) {
-      alert(`Não foi possível excluir a rota: ${error.message}`);
+      toastError(`Não foi possível excluir a rota: ${error.message}`);
       setDeletingId(null);
       return;
     }

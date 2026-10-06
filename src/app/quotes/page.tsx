@@ -28,6 +28,7 @@ import {
   quoteStatusBadgeClass,
   quoteStatusLabel,
 } from "@/lib/quoteStatus";
+import { useFeedback } from "@/components/Feedback";
 
 // O Supabase limita cada consulta a 1000 linhas no servidor — pagina pra
 // levantar TODOS os locais de coleta/entrega já usados em alguma cotação,
@@ -41,18 +42,36 @@ async function fetchOriginsAndDestinations(): Promise<{
   const pageSize = 1000;
   const origins = new Set<string>();
   const destinations = new Set<string>();
-  for (let page = 0; ; page++) {
-    const { data, error } = await supabase
-      .from("quotes")
-      .select("origin, destination")
-      .range(page * pageSize, page * pageSize + pageSize - 1);
-    if (error || !data) break;
-    for (const row of data) {
+
+  function collect(data: { origin: string | null; destination: string | null }[] | null) {
+    for (const row of data ?? []) {
       if (row.origin) origins.add(row.origin);
       if (row.destination) destinations.add(row.destination);
     }
-    if (data.length < pageSize) break;
   }
+
+  // A primeira página informa o total (count); as demais saem em paralelo.
+  const first = await supabase
+    .from("quotes")
+    .select("origin, destination", { count: "exact" })
+    .range(0, pageSize - 1);
+  if (first.error) return { origins: [], destinations: [] };
+  collect(first.data);
+
+  const extraPages = Math.max(
+    Math.ceil((first.count ?? first.data?.length ?? 0) / pageSize) - 1,
+    0
+  );
+  const rest = await Promise.all(
+    Array.from({ length: extraPages }, (_, i) =>
+      supabase
+        .from("quotes")
+        .select("origin, destination")
+        .range((i + 1) * pageSize, (i + 2) * pageSize - 1)
+    )
+  );
+  for (const r of rest) collect(r.data);
+
   return {
     origins: Array.from(origins).sort(),
     destinations: Array.from(destinations).sort(),
@@ -87,8 +106,11 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function QuotesPage() {
   const { isAdmin } = useAuth();
+  const { toastError, confirm: askConfirm } = useFeedback();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [clients, setClients] = useState<ClientFilterOption[]>([]);
   const [origins, setOrigins] = useState<string[]>([]);
@@ -98,6 +120,9 @@ export default function QuotesPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -116,19 +141,18 @@ export default function QuotesPage() {
 
   async function deleteQuotes(ids: string[]) {
     const label = ids.length === 1 ? "esta cotação" : `${ids.length} cotações`;
-    if (!confirm(`Excluir ${label}? Essa ação não pode ser desfeita.`)) return;
+    if (!await askConfirm(`Excluir ${label}? Essa ação não pode ser desfeita.`)) return;
 
     setDeleting(true);
     const { error } = await supabase.from("quotes").delete().in("id", ids);
     setDeleting(false);
 
     if (error) {
-      alert(`Não foi possível excluir (${error.message}).`);
+      toastError(`Não foi possível excluir (${error.message}).`);
       return;
     }
-    const removed = new Set(ids);
-    setQuotes((prev) => prev.filter((q) => !removed.has(q.id)));
     setSelected(new Set());
+    setReloadKey((k) => k + 1);
   }
 
   useEffect(() => {
@@ -157,9 +181,11 @@ export default function QuotesPage() {
       let query = supabase
         .from("quotes")
         .select(
-          "id, origin, destination, gross_freight, net_freight, full_freight, status, created_at, clients(name), vehicles(type)"
+          "id, origin, destination, gross_freight, net_freight, full_freight, status, created_at, clients(name), vehicles(type)",
+          { count: "exact" }
         )
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
       if (filter.clientId) query = query.eq("client_id", filter.clientId);
       if (filter.status) query = query.eq("status", filter.status);
@@ -170,17 +196,22 @@ export default function QuotesPage() {
       const to = endOfDayIso(filter.to);
       if (to) query = query.lte("created_at", to);
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) {
         setError(error.message);
+      } else if ((data ?? []).length === 0 && page > 0) {
+        // Apagou tudo da última página: volta uma.
+        setPage(page - 1);
+        return;
       } else {
         setQuotes((data as unknown as Quote[]) ?? []);
+        setTotal(count ?? 0);
       }
       setLoading(false);
     }
     loadQuotes();
-  }, [filter]);
+  }, [filter, page, reloadKey]);
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -219,9 +250,10 @@ export default function QuotesPage() {
         value={filter}
         onChange={(value) => {
           setFilter(value);
+          setPage(0);
           setSelected(new Set());
         }}
-        resultCount={quotes.length}
+        resultCount={total}
         resultNoun={["cotação encontrada", "cotações encontradas"]}
       />
 
@@ -442,6 +474,39 @@ export default function QuotesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-200 px-6 py-3 text-sm text-navy-600">
+              <span>
+                {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + quotes.length} de {total}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(new Set());
+                    setPage((p) => Math.max(p - 1, 0));
+                  }}
+                  disabled={page === 0}
+                  className="rounded-lg border border-navy-300 px-3 py-1.5 font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <span className="px-1">
+                  Página {page + 1} de {Math.max(Math.ceil(total / PAGE_SIZE), 1)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(new Set());
+                    setPage((p) => p + 1);
+                  }}
+                  disabled={(page + 1) * PAGE_SIZE >= total}
+                  className="rounded-lg border border-navy-300 px-3 py-1.5 font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Próxima
+                </button>
+              </div>
             </div>
           </>
         )}

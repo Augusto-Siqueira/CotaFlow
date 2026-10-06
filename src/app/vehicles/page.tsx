@@ -15,6 +15,7 @@ import {
   MobileCardList,
 } from "@/components/MobileCard";
 import { CurrencyInput } from "@/components/CurrencyInput";
+import { useFeedback } from "@/components/Feedback";
 
 interface Vehicle {
   id: string;
@@ -43,6 +44,7 @@ const emptyForm: FormState = {
 
 export default function VehiclesPage() {
   const { isAdmin } = useAuth();
+  const { confirm: askConfirm } = useFeedback();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -165,7 +167,7 @@ export default function VehiclesPage() {
     }
 
     if (
-      !confirm(
+      !await askConfirm(
         `Excluir o veículo "${form.type}"? Essa ação não pode ser desfeita.`
       )
     )

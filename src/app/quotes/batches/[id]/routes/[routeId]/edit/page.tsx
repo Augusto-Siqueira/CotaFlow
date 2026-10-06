@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { fetchAllCityNames } from "@/lib/cities";
 import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -56,22 +57,6 @@ function isValidNumber(value: string): boolean {
 
 function numberToInput(value: number | null): string {
   return value === null ? "" : String(value);
-}
-
-async function fetchAllCityNames(): Promise<string[]> {
-  const pageSize = 1000;
-  const names: string[] = [];
-  for (let page = 0; ; page++) {
-    const { data, error } = await supabase
-      .from("cities")
-      .select("name")
-      .order("name")
-      .range(page * pageSize, page * pageSize + pageSize - 1);
-    if (error || !data) break;
-    names.push(...data.map((c) => c.name));
-    if (data.length < pageSize) break;
-  }
-  return names;
 }
 
 function EditBatchRoutePage({

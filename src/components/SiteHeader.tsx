@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/lib/auth";
+import { useAuth, MANUAL_LOGOUT_KEY } from "@/lib/auth";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { APP_VERSION } from "@/lib/version";
 
 const NAV_LINKS: { href: string; label: string; adminOnly?: boolean }[] = [
@@ -37,7 +38,12 @@ export function SiteHeader() {
   const { user, role } = useAuth();
   const visibleLinks = NAV_LINKS.filter((l) => !l.adminOnly || role === "admin");
 
+  const [passwordOpen, setPasswordOpen] = useState(false);
+
   async function handleLogout() {
+    try {
+      sessionStorage.setItem(MANUAL_LOGOUT_KEY, "1");
+    } catch {}
     await supabase.auth.signOut();
     window.location.assign("/login");
   }
@@ -51,6 +57,13 @@ export function SiteHeader() {
             ? "Logística"
             : "Somente leitura"}
       </span>
+      <button
+        type="button"
+        onClick={() => setPasswordOpen(true)}
+        className="font-medium transition-colors hover:text-brand-400"
+      >
+        Senha
+      </button>
       <Link
         href="/versao"
         className="text-navy-400 transition-colors hover:text-brand-400"
@@ -86,7 +99,7 @@ export function SiteHeader() {
   if (pathname === "/login" || pathname.startsWith("/proposta/")) return null;
 
   return (
-    <header className="bg-navy-900">
+    <header className="bg-navy-900 print:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
         <Link
           href="/"
@@ -173,6 +186,9 @@ export function SiteHeader() {
           ))}
           <div className="px-3 pt-3">{userBox}</div>
         </nav>
+      )}
+      {passwordOpen && (
+        <ChangePasswordDialog onClose={() => setPasswordOpen(false)} />
       )}
     </header>
   );

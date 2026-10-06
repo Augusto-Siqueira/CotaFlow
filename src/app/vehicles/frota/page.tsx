@@ -10,6 +10,7 @@ import {
   normalizePlate,
   type FleetKind,
 } from "@/lib/fleet";
+import { useFeedback } from "@/components/Feedback";
 
 interface Unit {
   id: string;
@@ -22,6 +23,7 @@ const inputCls =
 
 export default function FleetPage() {
   const { canEditSchedule } = useAuth();
+  const { toastError, confirm: askConfirm } = useFeedback();
   const [units, setUnits] = useState<Unit[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -81,13 +83,13 @@ export default function FleetPage() {
   }
 
   async function handleDelete(unit: Unit) {
-    if (!confirm(`Excluir a placa ${unit.plate}?`)) return;
+    if (!await askConfirm(`Excluir a placa ${unit.plate}?`)) return;
     const { error } = await supabase
       .from("fleet_units")
       .delete()
       .eq("id", unit.id);
     if (error) {
-      alert(`Não foi possível excluir (${error.message}).`);
+      toastError(`Não foi possível excluir (${error.message}).`);
       return;
     }
     await loadUnits();

@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { VehiclesTabs } from "@/components/VehiclesTabs";
 import { defaultNickname, formatCpf, isValidCpf, onlyDigits } from "@/lib/cpf";
+import { useFeedback } from "@/components/Feedback";
 
 interface Driver {
   id: string;
@@ -18,6 +19,7 @@ const inputCls =
 
 export default function DriversPage() {
   const { canEditSchedule } = useAuth();
+  const { confirm: askConfirm } = useFeedback();
   const [drivers, setDrivers] = useState<Driver[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export default function DriversPage() {
   }
 
   async function handleDelete(d: Driver) {
-    if (!confirm(`Excluir o motorista "${d.name}"?`)) return;
+    if (!await askConfirm(`Excluir o motorista "${d.name}"?`)) return;
     setActionError(null);
     const { error } = await supabase.from("drivers").delete().eq("id", d.id);
     if (error) {
