@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { prepareProposalHtml } from "@/lib/proposalHtml";
 import { AdminGate } from "@/components/AdminGate";
 
 // Pré-visualização interna: lê direto da tabela (só admin) e NÃO conta como
@@ -46,7 +47,7 @@ function Preview({ id }: { id: string }) {
       ) : (
         <iframe
           title={proposal.title}
-          srcDoc={proposal.html}
+          srcDoc={prepareProposalHtml(proposal.html)}
           sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
           className="w-full flex-1 border-0 bg-white"
           style={{ minHeight: "calc(100vh - 100px)" }}

@@ -2,6 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { prepareProposalHtml } from "@/lib/proposalHtml";
 
 interface Proposal {
   title: string;
@@ -75,7 +76,7 @@ export default function PublicProposalPage({
       </header>
       <iframe
         title={state.proposal.title}
-        srcDoc={state.proposal.html}
+        srcDoc={prepareProposalHtml(state.proposal.html)}
         sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
         className="w-full flex-1 border-0 bg-white"
         style={{ minHeight: "calc(100vh - 48px)" }}

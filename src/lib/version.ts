@@ -17,6 +17,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "O cliente abre o link sem login e só lê; o link pode ser desativado ou ter validade.",
       "Confirmação de leitura: mostra quantas vezes a proposta foi aberta, a primeira e a última visualização.",
       "Só o perfil Comercial gerencia as propostas.",
+      "Menu interno da proposta (links de seção) funciona sem quebrar o link e sem contar como nova visualização.",
     ],
   },
   {
