@@ -14,6 +14,7 @@ import {
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { StepperControl } from "@/components/StepperControl";
 
 interface Load {
   id: string;
@@ -507,44 +508,36 @@ export default function ProgramacaoPage() {
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <button
-          type="button"
-          onClick={() => setDate(shiftDate(date, -1))}
-          className="rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm text-navy-700 hover:bg-navy-100"
-          aria-label="Dia anterior"
-        >
-          ←
-        </button>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => e.target.value && setDate(e.target.value)}
-          className="rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-        />
-        <button
-          type="button"
-          onClick={() => setDate(shiftDate(date, 1))}
-          className="rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm text-navy-700 hover:bg-navy-100"
-          aria-label="Próximo dia"
-        >
-          →
-        </button>
-        <button
-          type="button"
-          onClick={() => setDate(today)}
-          disabled={date === today}
-          className="rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100 disabled:opacity-50"
-        >
-          Hoje
-        </button>
-        <button
-          type="button"
-          onClick={() => setDate(shiftDate(today, 1))}
-          disabled={date === shiftDate(today, 1)}
-          className="rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100 disabled:opacity-50"
-        >
-          Amanhã
-        </button>
+          <StepperControl
+            onPrev={() => setDate(shiftDate(date, -1))}
+            onNext={() => setDate(shiftDate(date, 1))}
+            prevLabel="Dia anterior"
+            nextLabel="Próximo dia"
+          >
+            <input
+              type="date"
+              value={date}
+              aria-label="Data da programação"
+              onChange={(e) => e.target.value && setDate(e.target.value)}
+              className="bg-transparent px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:bg-brand-50"
+            />
+          </StepperControl>
+          <button
+            type="button"
+            onClick={() => setDate(today)}
+            disabled={date === today}
+            className={buttonClasses("secondary", "md")}
+          >
+            Hoje
+          </button>
+          <button
+            type="button"
+            onClick={() => setDate(shiftDate(today, 1))}
+            disabled={date === shiftDate(today, 1)}
+            className={buttonClasses("secondary", "md")}
+          >
+            Amanhã
+          </button>
         </div>
 
         <div className="ml-auto flex flex-wrap gap-2 print:ml-0">

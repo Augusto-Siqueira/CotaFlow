@@ -19,6 +19,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Listas de cotações, lotes, clientes, veículos, ICMS e ANTT padronizadas em tabela no computador e cartões no celular.",
       "Acessibilidade: foco visível no teclado, janelas que prendem o foco e devolvem ao fechar, campos com rótulos ligados e cores com mais contraste.",
       "Botão da página inicial e item do menu renomeados (Nova cotação, Cotações em Lote).",
+      "Novo seletor de data na programação, com setas em bloco único (componente reutilizável).",
     ],
   },
   {
