@@ -23,6 +23,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Programação só aceita cliente, placas e motorista cadastrados.",
       "Na lista da programação, as colunas de placa passam a se chamar Cavalo e Carreta.",
       "Duplicar dia na programação: copia as cargas escolhidas para outra data, sem apagar o que já estiver lançado nela.",
+      "Na programação só é possível vincular cotações vigentes.",
     ],
   },
   {

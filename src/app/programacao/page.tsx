@@ -142,6 +142,7 @@ export default function ProgramacaoPage() {
         supabase
           .from("quotes")
           .select("id, client_quote_number, origin, destination, clients(name)")
+          .eq("status", "vigente")
           .order("created_at", { ascending: false })
           .limit(300),
         supabase.from("fleet_units").select("plate, kind").order("plate"),
@@ -181,6 +182,8 @@ export default function ProgramacaoPage() {
     }
     return Array.from(map.entries());
   }, [rows]);
+
+  const vigenteIds = useMemo(() => new Set(quotes.map((q) => q.id)), [quotes]);
 
   const quoteLabelById = useMemo(() => {
     const m = new Map<string, string>();
@@ -417,7 +420,8 @@ export default function ProgramacaoPage() {
         driver: r.driver,
         loading_time: r.loading_time,
         status: "programado",
-        quote_id: r.quote_id,
+        // Só mantém o vínculo se a cotação ainda é vigente.
+        quote_id: r.quote_id && vigenteIds.has(r.quote_id) ? r.quote_id : null,
       }))
     );
     setDupBusy(false);
@@ -743,7 +747,7 @@ export default function ProgramacaoPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700">
-                Cotação <span className="text-navy-400">(opcional)</span>
+                Cotação vigente <span className="text-navy-400">(opcional)</span>
               </label>
               <select
                 value={form.quote_id}
@@ -751,6 +755,11 @@ export default function ProgramacaoPage() {
                 className={inputCls}
               >
                 <option value="">Sem cotação</option>
+                {form.quote_id && !vigenteIds.has(form.quote_id) && (
+                  <option value={form.quote_id}>
+                    Cotação atual (não está mais vigente)
+                  </option>
+                )}
                 {quoteOptions.map((q) => (
                   <option key={q.id} value={q.id}>
                     {quoteLabelById.get(q.id)}
