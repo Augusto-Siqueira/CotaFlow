@@ -18,6 +18,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Confirmação de leitura: mostra quantas vezes a proposta foi aberta, a primeira e a última visualização.",
       "Só o perfil Comercial gerencia as propostas.",
       "Menu interno da proposta (links de seção) funciona sem quebrar o link e sem contar como nova visualização.",
+      "Novo status Entrega Concluída na programação de carregamento.",
     ],
   },
   {
