@@ -303,9 +303,9 @@ function EditBatchRoutePage({
           {stops ? (
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-navy-600">
+                <span className="text-xs font-medium text-navy-600">
                   Paradas (origem → ... → entrega)
-                </label>
+                </span>
                 <button
                   type="button"
                   onClick={addStop}
@@ -317,10 +317,11 @@ function EditBatchRoutePage({
               <div className="mt-1 flex flex-col gap-2">
                 {stops.map((stop, si) => (
                   <div key={si} className="flex items-center gap-2">
-                    <span className="w-4 shrink-0 text-xs text-navy-400">
+                    <span className="w-4 shrink-0 text-xs text-navy-500">
                       {stopLetter(si)}
                     </span>
                     <input
+                      aria-label={`Parada ${stopLetter(si)}`}
                       type="text"
                       list="edit-route-cities"
                       value={stop}
@@ -338,7 +339,7 @@ function EditBatchRoutePage({
                       <button
                         type="button"
                         onClick={() => removeStop(si)}
-                        className="shrink-0 text-navy-400 hover:text-red-600"
+                        className="shrink-0 text-navy-500 hover:text-red-600"
                         aria-label="Remover parada"
                       >
                         ×
@@ -354,8 +355,8 @@ function EditBatchRoutePage({
           ) : (
             <>
               <div>
-                <label className="text-xs font-medium text-navy-600">Origem</label>
-                <input
+                <label className="text-xs font-medium text-navy-600" htmlFor="rota-origem">Origem</label>
+                <input id="rota-origem"
                   type="text"
                   list="edit-route-cities"
                   value={form.origin}
@@ -367,10 +368,10 @@ function EditBatchRoutePage({
                 )}
               </div>
               <div>
-                <label className="text-xs font-medium text-navy-600">
+                <label className="text-xs font-medium text-navy-600" htmlFor="rota-destino-entrega">
                   Destino (entrega)
                 </label>
-                <input
+                <input id="rota-destino-entrega"
                   type="text"
                   list="edit-route-cities"
                   value={form.destination}
@@ -384,10 +385,10 @@ function EditBatchRoutePage({
             </>
           )}
           <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-destino-fim-de-viagem">
               Destino (fim de viagem)
             </label>
-            <input
+            <input id="rota-destino-fim-de-viagem"
               type="text"
               list="edit-route-cities"
               value={form.final_destination}
@@ -400,8 +401,8 @@ function EditBatchRoutePage({
             </p>
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">Veículo</label>
-            <select
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-veiculo">Veículo</label>
+            <select id="rota-veiculo"
               value={form.vehicle_id}
               onChange={(e) => updateField("vehicle_id", e.target.value)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -418,10 +419,10 @@ function EditBatchRoutePage({
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-lotacao-minima-ton">
               Lotação mínima (ton)
             </label>
-            <input
+            <input id="rota-lotacao-minima-ton"
               type="text"
               value={form.min_load_ton}
               onChange={(e) => updateField("min_load_ton", e.target.value)}
@@ -432,10 +433,10 @@ function EditBatchRoutePage({
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-pedagio-r">
               Pedágio (R$)
             </label>
-            <CurrencyInput
+            <CurrencyInput id="rota-pedagio-r"
               value={form.toll_cost}
               onChange={(v) => updateField("toll_cost", v)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -445,10 +446,10 @@ function EditBatchRoutePage({
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-frete-gross-r">
               Frete Gross (R$)
             </label>
-            <CurrencyInput
+            <CurrencyInput id="rota-frete-gross-r"
               value={form.gross_freight}
               onChange={(v) => updateField("gross_freight", v)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -458,8 +459,8 @@ function EditBatchRoutePage({
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">ICMS (%)</label>
-            <input
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-icms">ICMS (%)</label>
+            <input id="rota-icms"
               type="text"
               value={form.icms_pct}
               onChange={(e) => updateField("icms_pct", e.target.value)}
@@ -470,10 +471,10 @@ function EditBatchRoutePage({
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="rota-transit-time-h">
               Transit time (h)
             </label>
-            <input
+            <input id="rota-transit-time-h"
               type="text"
               value={form.transit_time_hours}
               onChange={(e) =>
@@ -531,7 +532,7 @@ function EditBatchRoutePage({
           type="button"
           onClick={handleSave}
           disabled={submitting}
-          className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="rounded-lg bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60"
         >
           {submitting ? "Salvando..." : "Salvar alterações"}
         </button>

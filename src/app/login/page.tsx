@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LogisticsArt } from "@/components/LogisticsArt";
 import { LoginForm } from "@/components/LoginForm";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { APP_VERSION } from "@/lib/version";
 
 export default function LoginPage() {
@@ -18,7 +19,8 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-      <main className="flex flex-col justify-center px-6 py-12 sm:px-14">
+      <main className="relative flex flex-col justify-center px-6 py-12 sm:px-14">
+        <ThemeToggle className="absolute right-4 top-4 text-navy-500 hover:text-navy-900" />
         <div className="mx-auto w-full max-w-sm">
           <div className="flex items-center gap-2 text-xl font-bold tracking-tight text-navy-900">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-brand-500" />
@@ -40,7 +42,7 @@ export default function LoginPage() {
           )}
 
           <LoginForm />
-          <p className="mt-10 text-center text-xs text-navy-400">
+          <p className="mt-10 text-center text-xs text-navy-500">
             CotaFlow v{APP_VERSION}
           </p>
         </div>

@@ -1,7 +1,9 @@
 "use client";
 
+import { useId } from "react";
 import { formatCurrency } from "@/lib/format";
 import { CurrencyInput } from "@/components/CurrencyInput";
+import { buttonClasses } from "@/components/Button";
 
 /**
  * Versão mobile de uma linha da tabela de rotas. A tabela tem 13 colunas e no
@@ -85,6 +87,7 @@ export function RouteCard({
   onRemove: () => void;
   canRemove: boolean;
 }) {
+  const uid = useId();
   const i = index;
 
   return (
@@ -95,7 +98,7 @@ export function RouteCard({
           <button
             type="button"
             onClick={onRemove}
-            className="text-xs font-medium text-red-600 hover:text-red-800"
+            className={buttonClasses("danger", "sm")}
           >
             Remover
           </button>
@@ -105,7 +108,7 @@ export function RouteCard({
       <div className="mt-3 flex flex-col gap-3">
         <div>
           <div className="flex items-center justify-between">
-            <label className={labelCls}>Paradas (origem → ... → entrega)</label>
+            <span id={`${uid}-paradas`} className={labelCls}>Paradas (origem → ... → entrega)</span>
             <button
               type="button"
               onClick={onAddStop}
@@ -114,13 +117,14 @@ export function RouteCard({
               + parada
             </button>
           </div>
-          <div className="mt-1 flex flex-col gap-2">
+          <div className="mt-1 flex flex-col gap-2" role="group" aria-labelledby={`${uid}-paradas`}>
             {values.stops.map((stop, si) => (
               <div key={si} className="flex items-center gap-2">
-                <span className="w-4 shrink-0 text-xs text-navy-400">
+                <span className="w-4 shrink-0 text-xs text-navy-500">
                   {stopLetter(si)}
                 </span>
                 <input
+                  aria-label={`Parada ${stopLetter(si)}`}
                   type="text"
                   list={citiesListId}
                   value={stop}
@@ -138,7 +142,7 @@ export function RouteCard({
                   <button
                     type="button"
                     onClick={() => onRemoveStop(si)}
-                    className="shrink-0 text-navy-400 hover:text-red-600"
+                    className="shrink-0 text-navy-500 hover:text-red-600"
                     aria-label="Remover parada"
                   >
                     ×
@@ -151,8 +155,8 @@ export function RouteCard({
         </div>
 
         <div>
-          <label className={labelCls}>Destino (fim de viagem)</label>
-          <input
+          <label htmlFor={`${uid}-destino`} className={labelCls}>Destino (fim de viagem)</label>
+          <input id={`${uid}-destino`}
             type="text"
             list={citiesListId}
             value={values.final_destination}
@@ -162,8 +166,8 @@ export function RouteCard({
         </div>
 
         <div>
-          <label className={labelCls}>Veículo</label>
-          <select
+          <label htmlFor={`${uid}-veiculo`} className={labelCls}>Veículo</label>
+          <select id={`${uid}-veiculo`}
             value={values.vehicle_id}
             onChange={(e) => onChange("vehicle_id", e.target.value)}
             className={inputNormal}
@@ -180,8 +184,8 @@ export function RouteCard({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Lotação mín. (ton)</label>
-            <input
+            <label htmlFor={`${uid}-lotacao`} className={labelCls}>Lotação mín. (ton)</label>
+            <input id={`${uid}-lotacao`}
               type="text"
               inputMode="decimal"
               value={values.min_load_ton}
@@ -191,8 +195,8 @@ export function RouteCard({
             <FieldError message={errors[`min_load_${i}`]} />
           </div>
           <div>
-            <label className={labelCls}>Pedágio (R$)</label>
-            <CurrencyInput
+            <label htmlFor={`${uid}-pedagio`} className={labelCls}>Pedágio (R$)</label>
+            <CurrencyInput id={`${uid}-pedagio`}
               value={values.toll_cost}
               onChange={(v) => onChange("toll_cost", v)}
               className={inputNormal}
@@ -200,8 +204,8 @@ export function RouteCard({
             <FieldError message={errors[`toll_${i}`]} />
           </div>
           <div>
-            <label className={labelCls}>Gross (R$)</label>
-            <CurrencyInput
+            <label htmlFor={`${uid}-gross`} className={labelCls}>Gross (R$)</label>
+            <CurrencyInput id={`${uid}-gross`}
               value={values.gross_freight}
               onChange={(v) => onChange("gross_freight", v)}
               className={inputNormal}
@@ -209,8 +213,8 @@ export function RouteCard({
             <FieldError message={errors[`gross_${i}`]} />
           </div>
           <div>
-            <label className={labelCls}>Transit (h)</label>
-            <input
+            <label htmlFor={`${uid}-transit`} className={labelCls}>Transit (h)</label>
+            <input id={`${uid}-transit`}
               type="text"
               inputMode="decimal"
               value={values.transit_time_hours}
@@ -220,8 +224,8 @@ export function RouteCard({
             <FieldError message={errors[`transit_${i}`]} />
           </div>
           <div>
-            <label className={labelCls}>ICMS (%)</label>
-            <input
+            <label htmlFor={`${uid}-icms`} className={labelCls}>ICMS (%)</label>
+            <input id={`${uid}-icms`}
               type="text"
               inputMode="decimal"
               value={values.icms_pct}
@@ -232,10 +236,10 @@ export function RouteCard({
               className={`${inputBase} ${
                 computed.icmsPct === null
                   ? "border-amber-400 bg-amber-50 text-navy-900 placeholder:text-amber-700"
-                  : "border-navy-300 text-navy-900 placeholder:text-navy-400"
+                  : "border-navy-300 text-navy-900 placeholder:text-navy-500"
               }`}
             />
-            <p className="mt-1 text-[11px] text-navy-400">
+            <p className="mt-1 text-[11px] text-navy-500">
               {computed.ufOrigin && computed.ufDestination
                 ? `${computed.ufOrigin} → ${computed.ufDestination}`
                 : "UF não identificada"}
@@ -243,7 +247,7 @@ export function RouteCard({
             <FieldError message={errors[`icms_${i}`]} />
           </div>
           <div>
-            <label className={labelCls}>Over time</label>
+            <span className={labelCls}>Over time</span>
             <p className="mt-1 rounded-lg bg-navy-50 px-3 py-2 text-sm text-navy-700">
               {computed.overTimeRate !== null
                 ? `${formatCurrency(computed.overTimeRate)}/h`

@@ -4,15 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/format";
-import {
-  CardBadge,
-  CardFields,
-  CardField,
-  CardHeader,
-  CardHighlight,
-  MobileCard,
-  MobileCardList,
-} from "@/components/MobileCard";
+import { CardBadge } from "@/components/MobileCard";
+import { DataTable, type Column } from "@/components/DataTable";
 import { CurrencyInput } from "@/components/CurrencyInput";
 
 interface AnttCoefficient {
@@ -36,6 +29,34 @@ const emptyForm: FormState = {
   ccd: "",
   cc: "",
 };
+
+const anttColumns: Column<AnttCoefficient>[] = [
+  {
+    key: "axles",
+    header: "Eixos",
+    cell: (c) => c.axles,
+    mobile: "badge",
+    mobileCell: (c) => (
+      <CardBadge>
+        {c.axles} {c.axles === 1 ? "eixo" : "eixos"}
+      </CardBadge>
+    ),
+    className: "font-medium text-navy-900",
+  },
+  { key: "cargo_type", header: "Tipo de carga", cell: (c) => c.cargo_type, mobile: "title" },
+  {
+    key: "ccd",
+    header: "CCD (R$/km)",
+    cell: (c) => formatCurrency(c.ccd),
+    mobile: "highlight",
+  },
+  {
+    key: "cc",
+    header: "CC (R$)",
+    cell: (c) => formatCurrency(c.cc),
+    mobile: "wideField",
+  },
+];
 
 export default function AnttCoefficientsPage() {
   const { isAdmin } = useAuth();
@@ -238,7 +259,7 @@ export default function AnttCoefficientsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Salvando..." : "Salvar coeficiente"}
               </button>
@@ -271,68 +292,11 @@ export default function AnttCoefficientsPage() {
                 Nenhum coeficiente cadastrado ainda.
               </div>
             ) : (
-              <>
-                <div className="max-h-[70vh] overflow-y-auto sm:hidden">
-                <MobileCardList>
-                  {coefficients.map((c) => (
-                    <MobileCard key={c.id}>
-                      <CardHeader
-                        title={c.cargo_type}
-                        badge={
-                          <CardBadge>
-                            {c.axles} {c.axles === 1 ? "eixo" : "eixos"}
-                          </CardBadge>
-                        }
-                      />
-
-                      <CardHighlight
-                        label="CCD (R$/km)"
-                        value={formatCurrency(c.ccd)}
-                      />
-
-                      <CardFields>
-                        <CardField
-                          label="CC (R$)"
-                          value={formatCurrency(c.cc)}
-                          wide
-                        />
-                      </CardFields>
-                    </MobileCard>
-                  ))}
-                </MobileCardList>
-                </div>
-
-                <div className="hidden max-h-[70vh] overflow-auto sm:block">
-                  <table className="w-full text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Eixos</th>
-                        <th className="px-6 py-3 font-medium">Tipo de carga</th>
-                        <th className="px-6 py-3 font-medium">CCD (R$/km)</th>
-                        <th className="px-6 py-3 font-medium">CC (R$)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-navy-100">
-                      {coefficients.map((c) => (
-                        <tr key={c.id} className="hover:bg-navy-50">
-                          <td className="px-6 py-3 font-medium text-navy-900">
-                            {c.axles}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {c.cargo_type}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {formatCurrency(c.ccd)}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {formatCurrency(c.cc)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+              <DataTable
+                rows={coefficients}
+                rowKey={(c) => c.id}
+                columns={anttColumns}
+              />
             )}
           </div>
         </div>

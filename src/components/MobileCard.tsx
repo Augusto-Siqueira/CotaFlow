@@ -88,7 +88,7 @@ export function CardField({
 }) {
   return (
     <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}>
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-navy-400">
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-navy-500">
         {label}
       </dt>
       <dd className="truncate text-sm text-navy-800">{value}</dd>

@@ -71,7 +71,7 @@ export function LoginForm() {
             type="button"
             onClick={() => setShowPassword((v) => !v)}
             aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-navy-400 hover:text-navy-700"
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-navy-500 hover:text-navy-700"
           >
             <svg
               width="20"
@@ -112,7 +112,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? "Entrando..." : "Entrar"}
       </button>

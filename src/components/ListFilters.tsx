@@ -96,8 +96,8 @@ export function ListFilters({
     <div className="mb-4 rounded-xl border border-navy-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-[200px] flex-1">
-          <label className="text-xs font-bold text-navy-600">Cliente</label>
-          <select
+          <label className="text-xs font-bold text-navy-600" htmlFor="filtro-cliente">Cliente</label>
+          <select id="filtro-cliente"
             value={value.clientId}
             onChange={(e) => update("clientId", e.target.value)}
             className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -111,8 +111,8 @@ export function ListFilters({
           </select>
         </div>
         <div>
-          <label className="mr-3 text-xs font-bold text-navy-600">De</label>
-          <input
+          <label className="mr-3 text-xs font-bold text-navy-600" htmlFor="filtro-de">De</label>
+          <input id="filtro-de"
             type="date"
             value={value.from}
             onChange={(e) => update("from", e.target.value)}
@@ -120,8 +120,8 @@ export function ListFilters({
           />
         </div>
         <div>
-          <label className="mr-3 text-xs font-bold text-navy-600">Até</label>
-          <input
+          <label className="mr-3 text-xs font-bold text-navy-600" htmlFor="filtro-ate">Até</label>
+          <input id="filtro-ate"
             type="date"
             value={value.to}
             onChange={(e) => update("to", e.target.value)}
@@ -130,8 +130,8 @@ export function ListFilters({
         </div>
         {statuses && (
           <div className="min-w-[160px]">
-            <label className="text-xs font-bold text-navy-600">Status</label>
-            <select
+            <label className="text-xs font-bold text-navy-600" htmlFor="filtro-status">Status</label>
+            <select id="filtro-status"
               value={value.status}
               onChange={(e) => update("status", e.target.value)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -147,8 +147,8 @@ export function ListFilters({
         )}
         {origins && (
           <div className="min-w-[180px]">
-            <label className="text-xs font-bold text-navy-600">Coleta</label>
-            <select
+            <label className="text-xs font-bold text-navy-600" htmlFor="filtro-coleta">Coleta</label>
+            <select id="filtro-coleta"
               value={value.origin}
               onChange={(e) => update("origin", e.target.value)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -164,8 +164,8 @@ export function ListFilters({
         )}
         {destinations && (
           <div className="min-w-[180px]">
-            <label className="text-xs font-bold text-navy-600">Entrega</label>
-            <select
+            <label className="text-xs font-bold text-navy-600" htmlFor="filtro-entrega">Entrega</label>
+            <select id="filtro-entrega"
               value={value.destination}
               onChange={(e) => update("destination", e.target.value)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"

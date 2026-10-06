@@ -11,6 +11,7 @@ import {
   type FleetKind,
 } from "@/lib/fleet";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
 
 interface Unit {
   id: string;
@@ -121,10 +122,10 @@ export default function FleetPage() {
 
               <div className="mt-5 flex flex-col gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-navy-700">
+                  <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="frota-placa">
                     Placa <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <input id="frota-placa"
                     type="text"
                     value={plate}
                     onChange={(e) => setPlate(normalizePlate(e.target.value))}
@@ -133,10 +134,10 @@ export default function FleetPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-navy-700">
+                  <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="frota-tipo">
                     Tipo <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <select id="frota-tipo"
                     value={kind}
                     onChange={(e) => setKind(e.target.value as FleetKind)}
                     className={inputCls}
@@ -158,7 +159,7 @@ export default function FleetPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? "Salvando..." : "Salvar placa"}
                 </button>
@@ -221,7 +222,7 @@ export default function FleetPage() {
                               <button
                                 type="button"
                                 onClick={() => handleDelete(u)}
-                                className="text-xs font-medium text-red-600 hover:text-red-800"
+                                className={buttonClasses("danger", "sm")}
                               >
                                 Excluir
                               </button>

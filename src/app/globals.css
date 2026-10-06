@@ -16,6 +16,17 @@
   --color-ink-900: #20242c;
   --color-ink-950: #15181e;
 
+
+  /* Superfícies SEMPRE escuras (cabeçalho, faixa de boas-vindas): não mudam no
+     modo escuro, por isso não usam a escala navy, que é invertida lá. */
+  --color-chrome-100: #dde2ee;
+  --color-chrome-200: #bac5de;
+  --color-chrome-300: #91a1ca;
+  --color-chrome-700: #2b395a;
+  --color-chrome-800: #212c45;
+  --color-chrome-900: #192134;
+  --color-chrome-950: #111622;
+
   --color-navy-50: #f1f3f8;
   --color-navy-100: #dde2ee;
   --color-navy-200: #bac5de;
@@ -65,5 +76,120 @@ body {
   }
   body {
     background: #ffffff !important;
+  }
+}
+
+/* Acessibilidade: foco sempre visível (teclado) e placeholder legível. */
+:where(a, button, summary, select, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-navy-400);
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Modo escuro (classe `dark` no <html>, ver ThemeToggle e o script do layout).
+   Em vez de reescrever cada tela, a escala navy é invertida e os tons de
+   verde/vermelho/amarelo são trocados por versões escuras. Só o que mistura
+   papéis (fundo branco, botão verde/vermelho com texto branco) tem regra à
+   parte, logo abaixo.
+--------------------------------------------------------------------------- */
+/* Só na tela: ao imprimir (ex: Programação) o papel continua claro. */
+@media screen {
+html.dark {
+  color-scheme: dark;
+
+  --color-navy-50: #0f1420;
+  --color-navy-100: #1e2740;
+  --color-navy-200: #2c3652;
+  --color-navy-300: #5b6b96;
+  --color-navy-400: #8d9cc4;
+  --color-navy-500: #a2afd2;
+  --color-navy-600: #b6c1dd;
+  --color-navy-700: #cbd4ea;
+  --color-navy-800: #dce3f3;
+  --color-navy-900: #eaeef8;
+  --color-navy-950: #f4f6fb;
+
+  --color-brand-50: #11261a;
+  --color-brand-100: #173323;
+  --color-brand-200: #1f4a2e;
+  --color-brand-300: #2a6a3d;
+  --color-brand-400: #5fc766;
+  --color-brand-600: #6fcb78;
+  --color-brand-700: #8fdc9a;
+  --color-brand-800: #b0e8b8;
+  --color-brand-900: #cdf2d2;
+
+  --color-red-50: #2a1214;
+  --color-red-100: #3a1719;
+  --color-red-200: #5a2226;
+  --color-red-300: #7f2f35;
+  --color-red-500: #f87171;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+
+  --color-amber-50: #2b2110;
+  --color-amber-100: #3a2c12;
+  --color-amber-300: #7a5a1a;
+  --color-amber-400: #a67c1f;
+  --color-amber-700: #fbbf24;
+  --color-amber-800: #fcd34d;
+
+  --color-teal-100: #0f3a36;
+  --color-teal-800: #5eead4;
+  --color-sky-100: #0c2e45;
+  --color-sky-800: #7dd3fc;
+}
+
+html.dark .bg-white {
+  background-color: #161d2e;
+}
+html.dark .hover\:bg-white:hover {
+  background-color: #1e2740;
+}
+html.dark .bg-white\/70 {
+  background-color: rgb(22 29 46 / 0.7);
+}
+
+/* Botões cheios com texto branco: mantêm fundo escuro (a escala clara dos
+   textos verdes/vermelhos foi invertida acima). */
+html.dark .bg-brand-700 {
+  background-color: #2f7d37;
+}
+html.dark .hover\:bg-brand-800:hover {
+  background-color: #27682e;
+}
+html.dark .bg-red-600,
+html.dark .bg-red-700 {
+  background-color: #b91c1c;
+}
+html.dark .hover\:bg-red-700:hover,
+html.dark .hover\:bg-red-800:hover {
+  background-color: #991b1b;
+}
+
+html.dark ::selection {
+  background: #2a6a3d;
+}
+
+/* Mapas: escurece os blocos do mapa (só os blocos; rota e marcadores ficam). */
+html.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+}
+}
+
+/* Menu lateral: entrada deslizando da esquerda. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
   }
 }

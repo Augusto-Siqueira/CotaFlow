@@ -175,6 +175,8 @@ function isValidNumber(value: string): boolean {
 // endereços) que começam com o que foi digitado, em vez de despejar a
 // lista inteira de cidades já usadas.
 function AddressField({
+  id,
+  ariaLabel,
   value,
   onValueChange,
   placeholder,
@@ -182,6 +184,8 @@ function AddressField({
   cities,
   addresses,
 }: {
+  id?: string;
+  ariaLabel?: string;
   value: string;
   onValueChange: (value: string) => void;
   placeholder: string;
@@ -228,6 +232,8 @@ function AddressField({
     <div ref={containerRef} className="relative">
       <div className="relative">
         <input
+          id={id}
+          aria-label={ariaLabel}
           type="text"
           value={value}
           onChange={(e) => {
@@ -248,7 +254,7 @@ function AddressField({
           onClick={() =>
             setOpenMode((prev) => (prev === "addresses" ? "closed" : "addresses"))
           }
-          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-navy-400 hover:text-navy-600"
+          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-navy-500 hover:text-navy-600"
           aria-label="Ver endereços cadastrados"
         >
           ▾
@@ -325,9 +331,9 @@ function StopsList({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-navy-700">
+        <span id="cot-paradas" className="text-sm font-medium text-navy-700">
           Paradas <span className="text-red-500">*</span>
-        </label>
+        </span>
         <button
           type="button"
           onClick={() => onChange([...stops, emptyStop()])}
@@ -339,7 +345,7 @@ function StopsList({
       <p className="mt-1 text-xs text-navy-500">
         Ordem em que o veículo visita cada ponto.
       </p>
-      <div className="mt-2 flex flex-col gap-2">
+      <div className="mt-2 flex flex-col gap-2" role="group" aria-labelledby="cot-paradas">
         {stops.map((stop, index) => (
           <div key={index} className="flex items-start gap-2">
             <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-navy-100 text-xs font-semibold text-navy-600">
@@ -347,6 +353,7 @@ function StopsList({
             </span>
             <div className="flex-1">
               <AddressField
+                ariaLabel={`Parada ${stopLetter(index)}`}
                 value={stop.address}
                 onValueChange={(v) => updateAt(index, { address: v })}
                 placeholder="Ex: Ponta Grossa/PR"
@@ -902,7 +909,7 @@ function NewQuotePage({
             </a>
             <Link
               href={`/quotes/${savedQuoteId}`}
-              className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800"
+              className="rounded-lg bg-chrome-900 px-4 py-2 text-sm font-medium text-white hover:bg-chrome-800"
             >
               Ver detalhes
             </Link>
@@ -944,9 +951,9 @@ function NewQuotePage({
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
                   i === step
-                    ? "bg-navy-900 text-white"
+                    ? "bg-chrome-900 text-white"
                     : i < step
-                    ? "bg-brand-500 text-white"
+                    ? "bg-brand-700 text-white"
                     : "bg-navy-200 text-navy-500"
                 }`}
               >
@@ -975,10 +982,10 @@ function NewQuotePage({
         {step === 0 && (
           <div className="flex flex-col gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-cliente">
                 Cliente <span className="text-red-500">*</span>
               </label>
-              <select
+              <select id="cot-cliente"
                 value={form.client_id}
                 onChange={(e) => updateField("client_id", e.target.value)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -1006,11 +1013,12 @@ function NewQuotePage({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <div className="flex items-center">
-                  <label className="mb-1 block text-sm font-medium text-navy-700">
+                  <label htmlFor="cot-origem" className="mb-1 block text-sm font-medium text-navy-700">
                     Origem
                   </label>
                 </div>
                 <AddressField
+                  id="cot-origem"
                   value={form.base_origin}
                   onValueChange={(v) => updateField("base_origin", v)}
                   placeholder="Ex: Palhoça/SC (garagem)"
@@ -1020,7 +1028,7 @@ function NewQuotePage({
               </div>
               <div>
                 <div className="flex items-center justify-between">
-                  <label className="mb-1 block text-sm font-medium text-navy-700">
+                  <label htmlFor="cot-destino-final" className="mb-1 block text-sm font-medium text-navy-700">
                     Destino final
                   </label>
                   {form.base_origin && (
@@ -1036,6 +1044,7 @@ function NewQuotePage({
                   )}
                 </div>
                 <AddressField
+                  id="cot-destino-final"
                   value={form.final_destination}
                   onValueChange={(v) => updateField("final_destination", v)}
                   placeholder="Ex: Palhoça/SC (retorno vazio)"
@@ -1057,10 +1066,10 @@ function NewQuotePage({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-coleta">
                   Coleta
                 </label>
-                <AddressField
+                <AddressField id="cot-coleta"
                   value={form.origin}
                   onValueChange={(v) => updateField("origin", v)}
                   placeholder="Ex: São Paulo/SP"
@@ -1069,10 +1078,10 @@ function NewQuotePage({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-entrega">
                   Entrega
                 </label>
-                <AddressField
+                <AddressField id="cot-entrega"
                   value={form.destination}
                   onValueChange={(v) => updateField("destination", v)}
                   placeholder="Ex: Curitiba/PR"
@@ -1088,10 +1097,10 @@ function NewQuotePage({
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-distancia-km">
                 Distância (km)
               </label>
-              <input
+              <input id="cot-distancia-km"
                 type="text"
                 inputMode="decimal"
                 value={form.distance_km}
@@ -1129,10 +1138,10 @@ function NewQuotePage({
               {/* Cálculo automático de pedágio (WikiRota) congelado por
                   enquanto — ver src/lib/wikirota.ts. Preenchimento manual
                   até definirmos a próxima fonte de pedágio automático. */}
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-pedagio-r">
                 Pedágio (R$)
               </label>
-              <CurrencyInput
+              <CurrencyInput id="cot-pedagio-r"
                 value={form.toll_cost}
                 onChange={(v) => updateField("toll_cost", v)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -1146,9 +1155,9 @@ function NewQuotePage({
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <span className="mb-1 block text-sm font-medium text-navy-700">
                 Mapa da rota
-              </label>
+              </span>
               {geocodingRoute && (
                 <p className="mb-2 text-xs text-navy-500">
                   Localizando cidades no mapa...
@@ -1165,10 +1174,10 @@ function NewQuotePage({
         {step === 1 && (
           <div className="flex flex-col gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-produto">
                 Produto <span className="text-red-500">*</span>
               </label>
-              <input
+              <input id="cot-produto"
                 type="text"
                 value={form.product}
                 onChange={(e) => updateField("product", e.target.value)}
@@ -1180,10 +1189,10 @@ function NewQuotePage({
               )}
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-valor-da-nf-r">
                 Valor da NF (R$) <span className="text-red-500">*</span>
               </label>
-              <CurrencyInput
+              <CurrencyInput id="cot-valor-da-nf-r"
                 value={form.nf_value}
                 onChange={(v) => updateField("nf_value", v)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -1206,10 +1215,10 @@ function NewQuotePage({
         {step === 2 && (
           <div className="flex flex-col gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-veiculo">
                 Veículo <span className="text-red-500">*</span>
               </label>
-              <select
+              <select id="cot-veiculo"
                 value={form.vehicle_id}
                 onChange={(e) => updateField("vehicle_id", e.target.value)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -1242,10 +1251,10 @@ function NewQuotePage({
         {step === 3 && (
           <div className="flex flex-col gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-frete-gross-r">
                 Frete Gross (R$) <span className="text-red-500">*</span>
               </label>
-              <CurrencyInput
+              <CurrencyInput id="cot-frete-gross-r"
                 value={form.gross_freight}
                 onChange={(v) => updateField("gross_freight", v)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -1265,10 +1274,10 @@ function NewQuotePage({
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-tipo-de-carga-piso-antt">
                 Tipo de carga (piso ANTT)
               </label>
-              <select
+              <select id="cot-tipo-de-carga-piso-antt"
                 value={form.antt_cargo_type}
                 onChange={(e) => updateField("antt_cargo_type", e.target.value)}
                 className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -1348,10 +1357,10 @@ function NewQuotePage({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-seguro">
                   Seguro (%)
                 </label>
-                <input
+                <input id="cot-seguro"
                   type="text"
                   inputMode="decimal"
                   value={form.insurance_pct}
@@ -1369,10 +1378,10 @@ function NewQuotePage({
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-icms">
                   ICMS (%) <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input id="cot-icms"
                   type="text"
                   inputMode="decimal"
                   value={form.icms_pct}
@@ -1400,10 +1409,10 @@ function NewQuotePage({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-transit-time-horas">
                   Transit time (horas)
                 </label>
-                <input
+                <input id="cot-transit-time-horas"
                   type="text"
                   inputMode="decimal"
                   value={form.transit_time_hours}
@@ -1420,10 +1429,10 @@ function NewQuotePage({
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-free-time-horas">
                   Free time (horas)
                 </label>
-                <input
+                <input id="cot-free-time-horas"
                   type="text"
                   inputMode="decimal"
                   value={form.free_time_hours}
@@ -1447,10 +1456,10 @@ function NewQuotePage({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-prazo-de-entrega">
                   Prazo de entrega
                 </label>
-                <input
+                <input id="cot-prazo-de-entrega"
                   type="text"
                   value={form.delivery_deadline}
                   onChange={(e) =>
@@ -1461,10 +1470,10 @@ function NewQuotePage({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-validade-da-cotacao">
                   Validade da cotação
                 </label>
-                <input
+                <input id="cot-validade-da-cotacao"
                   type="date"
                   value={form.validity_date}
                   onChange={(e) => updateField("validity_date", e.target.value)}
@@ -1474,10 +1483,10 @@ function NewQuotePage({
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-numero-da-cotacao-no-cliente">
                 Número da cotação no cliente
               </label>
-              <input
+              <input id="cot-numero-da-cotacao-no-cliente"
                 type="text"
                 value={form.client_quote_number}
                 onChange={(e) =>
@@ -1643,7 +1652,7 @@ function NewQuotePage({
         {step < STEPS.length - 1 ? (
           <button
             onClick={goNext}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
           >
             Avançar
           </button>
@@ -1651,7 +1660,7 @@ function NewQuotePage({
           <button
             onClick={handleSave}
             disabled={submitting}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Salvando..." : "Salvar cotação"}
           </button>

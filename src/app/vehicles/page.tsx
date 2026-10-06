@@ -5,17 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { VehiclesTabs } from "@/components/VehiclesTabs";
 import { formatCurrency } from "@/lib/format";
-import {
-  CardActions,
-  CardFields,
-  CardField,
-  CardHeader,
-  CardHighlight,
-  MobileCard,
-  MobileCardList,
-} from "@/components/MobileCard";
+import { DataTable, type Column } from "@/components/DataTable";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
 
 interface Vehicle {
   id: string;
@@ -233,6 +226,55 @@ export default function VehiclesPage() {
     await loadVehicles();
   }
 
+  const vehicleColumns: Column<Vehicle>[] = [
+    {
+      key: "type",
+      header: "Tipo",
+      cell: (v) => v.type,
+      mobile: "title",
+      className: "font-medium text-navy-900",
+    },
+    { key: "axles", header: "Eixos", cell: (v) => v.axles ?? "—" },
+    {
+      key: "capacity",
+      header: "Capacidade",
+      cell: (v) =>
+        v.capacity_kg !== null
+          ? `${v.capacity_kg.toLocaleString("pt-BR")} kg`
+          : "—",
+    },
+    {
+      key: "antt",
+      header: "Categoria ANTT",
+      cell: (v) => v.antt_category || "—",
+      mobile: "wideField",
+    },
+    {
+      key: "overtime",
+      header: "Over time",
+      cell: (v) =>
+        typeof v.over_time_rate === "number"
+          ? `${formatCurrency(v.over_time_rate)}/h`
+          : "—",
+      mobile: "highlight",
+    },
+    {
+      key: "actions",
+      header: "Ações",
+      cell: (v) =>
+        isAdmin ? (
+          <button
+            type="button"
+            onClick={() => startEditing(v)}
+            className={buttonClasses("soft", "sm")}
+          >
+            Editar
+          </button>
+        ) : null,
+      mobile: "actions",
+    },
+  ];
+
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
       <div className="mb-6">
@@ -376,7 +418,7 @@ export default function VehiclesPage() {
                 <button
                   type="submit"
                   disabled={submitting || deleting}
-                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting
                     ? "Salvando..."
@@ -442,112 +484,12 @@ export default function VehiclesPage() {
                 Nenhum veículo cadastrado ainda.
               </div>
             ) : (
-              <>
-                <MobileCardList>
-                  {vehicles.map((vehicle) => (
-                    <MobileCard
-                      key={vehicle.id}
-                      className={
-                        vehicle.id === editingId ? "bg-brand-50/60" : ""
-                      }
-                    >
-                      <CardHeader title={vehicle.type} />
-
-                      <CardHighlight
-                        label="Over time"
-                        value={
-                          typeof vehicle.over_time_rate === "number"
-                            ? `${formatCurrency(vehicle.over_time_rate)}/h`
-                            : "—"
-                        }
-                      />
-
-                      <CardFields>
-                        <CardField label="Eixos" value={vehicle.axles ?? "—"} />
-                        <CardField
-                          label="Capacidade"
-                          value={
-                            vehicle.capacity_kg !== null
-                              ? `${vehicle.capacity_kg.toLocaleString("pt-BR")} kg`
-                              : "—"
-                          }
-                        />
-                        <CardField
-                          label="Categoria ANTT"
-                          value={vehicle.antt_category || "—"}
-                          wide
-                        />
-                      </CardFields>
-
-                      <CardActions>
-                        {isAdmin && (<button
-                          type="button"
-                          onClick={() => startEditing(vehicle)}
-                          className="text-brand-700 underline hover:text-brand-800"
-                        >
-                          Editar
-                        </button>)}
-                      </CardActions>
-                    </MobileCard>
-                  ))}
-                </MobileCardList>
-
-                <div className="hidden overflow-x-auto sm:block">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Tipo</th>
-                        <th className="px-6 py-3 font-medium">Eixos</th>
-                        <th className="px-6 py-3 font-medium">Capacidade</th>
-                        <th className="px-6 py-3 font-medium">Categoria ANTT</th>
-                        <th className="px-6 py-3 font-medium">Over time</th>
-                        <th className="px-6 py-3 font-medium">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-navy-100">
-                      {vehicles.map((vehicle) => (
-                        <tr
-                          key={vehicle.id}
-                          className={
-                            vehicle.id === editingId
-                              ? "bg-brand-50/60"
-                              : "hover:bg-navy-50"
-                          }
-                        >
-                          <td className="px-6 py-3 font-medium text-navy-900">
-                            {vehicle.type}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {vehicle.axles ?? "—"}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {vehicle.capacity_kg !== null
-                              ? `${vehicle.capacity_kg.toLocaleString("pt-BR")} kg`
-                              : "—"}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {vehicle.antt_category || "—"}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {typeof vehicle.over_time_rate === "number"
-                              ? `${formatCurrency(vehicle.over_time_rate)}/h`
-                              : "—"}
-                          </td>
-                          <td className="px-6 py-3">
-                            {isAdmin && (<button
-                              type="button"
-                              onClick={() => startEditing(vehicle)}
-                              className="font-medium text-brand-700 underline hover:text-brand-800"
-                            >
-                              Editar
-                            </button>)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+              <DataTable
+                rows={vehicles}
+                rowKey={(v) => v.id}
+                columns={vehicleColumns}
+                rowClassName={(v) => (v.id === editingId ? "bg-brand-50/60" : "")}
+              />
             )}
           </div>
         </div>

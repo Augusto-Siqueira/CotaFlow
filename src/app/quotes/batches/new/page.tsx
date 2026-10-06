@@ -20,6 +20,7 @@ import {
   type IcmsRateMap,
 } from "@/lib/icms";
 import { RouteCard } from "./RouteCard";
+import { buttonClasses } from "@/components/Button";
 
 interface ClientOption {
   id: string;
@@ -544,7 +545,7 @@ function NewQuoteBatchPage() {
             </button>
             <Link
               href={`/quotes/batches/${savedBatchId}`}
-              className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800"
+              className="rounded-lg bg-chrome-900 px-4 py-2 text-sm font-medium text-white hover:bg-chrome-800"
             >
               Ver lote
             </Link>
@@ -578,8 +579,8 @@ function NewQuoteBatchPage() {
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <div>
-            <label className="text-xs font-medium text-navy-600">Cliente</label>
-            <select
+            <label className="text-xs font-medium text-navy-600" htmlFor="lote-cliente">Cliente</label>
+            <select id="lote-cliente"
               value={header.client_id}
               onChange={(e) => updateHeader("client_id", e.target.value)}
               className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -596,8 +597,8 @@ function NewQuoteBatchPage() {
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">Produto</label>
-            <input
+            <label className="text-xs font-medium text-navy-600" htmlFor="lote-produto">Produto</label>
+            <input id="lote-produto"
               type="text"
               value={header.product}
               onChange={(e) => updateHeader("product", e.target.value)}
@@ -608,10 +609,10 @@ function NewQuoteBatchPage() {
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="lote-seguro-sobre-a-nf">
               Seguro (% sobre a NF)
             </label>
-            <input
+            <input id="lote-seguro-sobre-a-nf"
               type="text"
               value={header.insurance_pct}
               onChange={(e) => updateHeader("insurance_pct", e.target.value)}
@@ -622,10 +623,10 @@ function NewQuoteBatchPage() {
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-navy-600">
+            <label className="text-xs font-medium text-navy-600" htmlFor="lote-free-time-horas">
               Free time (horas)
             </label>
-            <input
+            <input id="lote-free-time-horas"
               type="text"
               value={header.free_time_hours}
               onChange={(e) => updateHeader("free_time_hours", e.target.value)}
@@ -740,7 +741,7 @@ function NewQuoteBatchPage() {
                     <div className="flex w-44 flex-col gap-1">
                       {row.stops.map((stop, si) => (
                         <div key={si} className="flex items-center gap-1">
-                          <span className="w-4 shrink-0 text-xs text-navy-400">
+                          <span className="w-4 shrink-0 text-xs text-navy-500">
                             {stopLetter(si)}
                           </span>
                           <input
@@ -762,7 +763,7 @@ function NewQuoteBatchPage() {
                             <button
                               type="button"
                               onClick={() => removeStop(i, si)}
-                              className="shrink-0 text-navy-400 hover:text-red-600"
+                              className="shrink-0 text-navy-500 hover:text-red-600"
                               aria-label="Remover parada"
                             >
                               ×
@@ -892,7 +893,7 @@ function NewQuoteBatchPage() {
                       className={`w-20 rounded-lg border px-2 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 ${
                         computedRows[i].icmsPct === null
                           ? "border-amber-400 bg-amber-50 text-navy-900 placeholder:text-amber-700"
-                          : "border-navy-300 text-navy-900 placeholder:text-navy-400"
+                          : "border-navy-300 text-navy-900 placeholder:text-navy-500"
                       }`}
                     />
                     {errors[`icms_${i}`] && (
@@ -917,7 +918,7 @@ function NewQuoteBatchPage() {
                       <button
                         type="button"
                         onClick={() => removeRow(i)}
-                        className="text-xs text-red-600 hover:text-red-800"
+                        className={buttonClasses("danger", "sm")}
                         aria-label="Remover rota"
                       >
                         Remover
@@ -940,7 +941,7 @@ function NewQuoteBatchPage() {
         <h2 className="text-sm font-medium uppercase tracking-wide text-navy-500">
           Mapa da rota{" "}
           {activeRow?.stops.some((s) => s.trim()) ? (
-            <span className="normal-case text-navy-400">
+            <span className="normal-case text-navy-500">
               — linha {activeRowIndex + 1}:{" "}
               {activeRow.stops.map((s) => s || "?").join(" → ")}
               {activeRow?.final_destination.trim()
@@ -961,10 +962,10 @@ function NewQuoteBatchPage() {
 
         {activeRow && (
           <div className="mt-3 rounded-lg border border-navy-200 p-3">
-            <label className="mb-1 block text-xs font-medium text-navy-700">
+            <label className="mb-1 block text-xs font-medium text-navy-700" htmlFor="lote-tipo-de-carga-piso-antt-linh">
               Tipo de carga (piso ANTT) — linha {activeRowIndex + 1}
             </label>
-            <select
+            <select id="lote-tipo-de-carga-piso-antt-linh"
               value={activeRow.antt_cargo_type}
               onChange={(e) =>
                 updateRow(activeRowIndex, "antt_cargo_type", e.target.value)
@@ -1033,7 +1034,7 @@ function NewQuoteBatchPage() {
           type="button"
           onClick={handleSave}
           disabled={submitting}
-          className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="rounded-lg bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60"
         >
           {submitting ? "Salvando..." : "Salvar lote"}
         </button>

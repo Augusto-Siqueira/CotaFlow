@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { AdminGate } from "@/components/AdminGate";
 import { formatDate, formatDateOnly } from "@/lib/format";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 
 interface Proposal {
   id: string;
@@ -94,15 +96,6 @@ function ProposalsManager() {
     setEditingId(null);
     setFormError(null);
   }
-
-  useEffect(() => {
-    if (!showForm) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") closeForm();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [showForm]);
 
   function openNew() {
     setEditingId(null);
@@ -229,7 +222,7 @@ function ProposalsManager() {
         <button
           type="button"
           onClick={openNew}
-          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
         >
           Nova proposta
         </button>
@@ -281,7 +274,7 @@ function ProposalsManager() {
                       </div>
                       <div
                         className={`mt-1 text-xs ${
-                          p.view_count > 0 ? "text-brand-700" : "text-navy-400"
+                          p.view_count > 0 ? "text-brand-700" : "text-navy-500"
                         }`}
                       >
                         {p.view_count > 0
@@ -294,34 +287,34 @@ function ProposalsManager() {
                       <button
                         type="button"
                         onClick={() => copyLink(p)}
-                        className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+                        className={buttonClasses("primary", "sm")}
                       >
                         Copiar link
                       </button>
                       <Link
                         href={`/propostas/${p.id}`}
-                        className="font-medium text-brand-700 underline hover:text-brand-800"
+                        className={buttonClasses("soft", "sm")}
                       >
                         Visualizar
                       </Link>
                       <button
                         type="button"
                         onClick={() => openEdit(p)}
-                        className="font-medium text-brand-700 underline hover:text-brand-800"
+                        className={buttonClasses("soft", "sm")}
                       >
                         Editar
                       </button>
                       <button
                         type="button"
                         onClick={() => toggleActive(p)}
-                        className="font-medium text-navy-600 underline hover:text-navy-800"
+                        className={buttonClasses("secondary", "sm")}
                       >
                         {p.active ? "Desativar link" : "Reativar link"}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(p)}
-                        className="font-medium text-red-600 hover:text-red-800"
+                        className={buttonClasses("danger", "sm")}
                       >
                         Excluir
                       </button>
@@ -335,25 +328,18 @@ function ProposalsManager() {
       </div>
 
       {showForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center"
-          onClick={closeForm}
-        >
-          <form
-            onSubmit={handleSubmit}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl"
-          >
-            <h2 className="text-base font-medium text-navy-900">
+        <Modal onClose={closeForm} labelledBy="proposal-modal-title" className="max-w-2xl">
+          <form onSubmit={handleSubmit}>
+            <h2 id="proposal-modal-title" className="text-base font-medium text-navy-900">
               {editingId ? "Editar proposta" : "Nova proposta"}
             </h2>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prop-titulo">
                   Título <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input id="prop-titulo"
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -362,10 +348,10 @@ function ProposalsManager() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Cliente <span className="text-navy-400">(opcional)</span>
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prop-cliente-opcional">
+                  Cliente <span className="text-navy-500">(opcional)</span>
                 </label>
-                <input
+                <input id="prop-cliente-opcional"
                   type="text"
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
@@ -374,10 +360,10 @@ function ProposalsManager() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
-                  Link válido até <span className="text-navy-400">(opcional)</span>
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prop-link-valido-ate-opcional">
+                  Link válido até <span className="text-navy-500">(opcional)</span>
                 </label>
-                <input
+                <input id="prop-link-valido-ate-opcional"
                   type="date"
                   value={expiresAt}
                   onChange={(e) => setExpiresAt(e.target.value)}
@@ -386,7 +372,7 @@ function ProposalsManager() {
               </div>
               <div className="sm:col-span-2">
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="text-sm font-medium text-navy-700">
+                  <label htmlFor="prop-html" className="text-sm font-medium text-navy-700">
                     HTML da proposta <span className="text-red-500">*</span>
                   </label>
                   <label className="cursor-pointer text-xs font-medium text-brand-700 underline hover:text-brand-800">
@@ -400,6 +386,7 @@ function ProposalsManager() {
                   </label>
                 </div>
                 <textarea
+                  id="prop-html"
                   value={html}
                   onChange={(e) => setHtml(e.target.value)}
                   rows={10}
@@ -424,7 +411,7 @@ function ProposalsManager() {
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex-1 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar proposta"}
               </button>
@@ -437,7 +424,7 @@ function ProposalsManager() {
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -202,7 +202,7 @@ export default async function QuoteDetailPage({
             href={`/api/quotes/${quote.id}/pdf`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+            className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-800"
           >
             Exportar
           </a>

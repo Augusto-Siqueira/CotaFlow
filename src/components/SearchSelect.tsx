@@ -17,12 +17,14 @@ const MAX_VISIBLE = 50;
  * continua validando se ele existe nas opções.
  */
 export function SearchSelect({
+  id,
   value,
   onChange,
   options,
   placeholder,
   className = "",
 }: {
+  id?: string;
   value: string;
   onChange: (value: string) => void;
   options: SearchOption[];
@@ -71,6 +73,7 @@ export function SearchSelect({
   return (
     <div className="relative">
       <input
+        id={id}
         type="text"
         role="combobox"
         aria-expanded={open}
@@ -123,7 +126,7 @@ export function SearchSelect({
             ))
           )}
           {filtered.length > MAX_VISIBLE && (
-            <li className="px-3 py-1.5 text-xs text-navy-400">
+            <li className="px-3 py-1.5 text-xs text-navy-500">
               Mostrando {MAX_VISIBLE} de {filtered.length}. Digite para filtrar.
             </li>
           )}

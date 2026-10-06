@@ -4,14 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { UF_LIST, parseIcmsTable } from "@/lib/icms";
-import {
-  CardActions,
-  CardHeader,
-  CardHighlight,
-  MobileCard,
-  MobileCardList,
-} from "@/components/MobileCard";
+import { DataTable, type Column } from "@/components/DataTable";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
 
 interface IcmsRateRow {
   id: string;
@@ -183,6 +178,50 @@ export default function IcmsRatesPage() {
     await loadRates();
   }
 
+  const icmsColumns: Column<IcmsRateRow>[] = [
+    {
+      key: "origin",
+      header: "Origem",
+      cell: (r) => r.uf_origin,
+      mobile: "title",
+      mobileCell: (r) => (
+        <>
+          {r.uf_origin} <span className="text-navy-500">→</span>{" "}
+          {r.uf_destination}
+        </>
+      ),
+      className: "font-medium text-navy-900",
+    },
+    {
+      key: "destination",
+      header: "Destino",
+      cell: (r) => r.uf_destination,
+      mobile: "hidden",
+    },
+    {
+      key: "rate",
+      header: "Alíquota",
+      cell: (r) => `${r.rate}%`,
+      mobile: "highlight",
+      className: "text-navy-900",
+    },
+    {
+      key: "actions",
+      header: "Ações",
+      cell: (r) =>
+        isAdmin ? (
+          <button
+            type="button"
+            onClick={() => handleDelete(r)}
+            className={buttonClasses("danger", "sm")}
+          >
+            Excluir
+          </button>
+        ) : null,
+      mobile: "actions",
+    },
+  ];
+
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
       <div className="mb-8">
@@ -205,10 +244,10 @@ export default function IcmsRatesPage() {
             </h2>
             <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="icms-uf-de-origem">
                   UF de origem <span className="text-red-500">*</span>
                 </label>
-                <select
+                <select id="icms-uf-de-origem"
                   value={form.uf_origin}
                   onChange={(e) => updateField("uf_origin", e.target.value)}
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -228,10 +267,10 @@ export default function IcmsRatesPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="icms-uf-de-destino">
                   UF de destino <span className="text-red-500">*</span>
                 </label>
-                <select
+                <select id="icms-uf-de-destino"
                   value={form.uf_destination}
                   onChange={(e) => updateField("uf_destination", e.target.value)}
                   className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -251,10 +290,10 @@ export default function IcmsRatesPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="icms-aliquota">
                   Alíquota (%) <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input id="icms-aliquota"
                   type="text"
                   inputMode="decimal"
                   value={form.rate}
@@ -281,7 +320,7 @@ export default function IcmsRatesPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Salvando..." : "Salvar alíquota"}
               </button>
@@ -401,79 +440,12 @@ export default function IcmsRatesPage() {
                   : "Nenhuma alíquota para essa origem."}
               </div>
             ) : (
-              <>
-                {/* Sem o filtro de origem são 729 pares; limitar a altura evita
-                    uma rolagem de página interminável no celular. */}
-                <div className="max-h-[32rem] overflow-auto sm:hidden">
-                  <MobileCardList>
-                    {visibleRates.map((row) => (
-                      <MobileCard key={row.id}>
-                        <CardHeader
-                          title={
-                            <>
-                              {row.uf_origin}{" "}
-                              <span className="text-navy-400">→</span>{" "}
-                              {row.uf_destination}
-                            </>
-                          }
-                        />
-
-                        <CardHighlight
-                          label="Alíquota"
-                          value={`${row.rate}%`}
-                        />
-
-                        <CardActions>
-                          {isAdmin && (<button
-                            type="button"
-                            onClick={() => handleDelete(row)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            Excluir
-                          </button>)}
-                        </CardActions>
-                      </MobileCard>
-                    ))}
-                  </MobileCardList>
-                </div>
-
-                <div className="hidden max-h-[32rem] overflow-auto sm:block">
-                  <table className="w-full text-left text-sm">
-                    <thead className="sticky top-0 bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Origem</th>
-                        <th className="px-6 py-3 font-medium">Destino</th>
-                        <th className="px-6 py-3 font-medium">Alíquota</th>
-                        <th className="px-6 py-3 font-medium">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-navy-100">
-                      {visibleRates.map((row) => (
-                        <tr key={row.id} className="hover:bg-navy-50">
-                          <td className="px-6 py-3 font-medium text-navy-900">
-                            {row.uf_origin}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {row.uf_destination}
-                          </td>
-                          <td className="px-6 py-3 text-navy-900">
-                            {row.rate}%
-                          </td>
-                          <td className="px-6 py-3">
-                            {isAdmin && (<button
-                              type="button"
-                              onClick={() => handleDelete(row)}
-                              className="font-medium text-red-600 hover:text-red-800"
-                            >
-                              Excluir
-                            </button>)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+              <DataTable
+                rows={visibleRates}
+                rowKey={(r) => r.id}
+                columns={icmsColumns}
+                scrollClassName="max-h-[32rem]"
+              />
             )}
           </div>
         </div>

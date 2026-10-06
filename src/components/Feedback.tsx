@@ -4,10 +4,10 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
 } from "react";
+import { Modal } from "@/components/Modal";
 
 type ToastKind = "success" | "error" | "info";
 
@@ -77,19 +77,6 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     setPending(null);
   }
 
-  useEffect(() => {
-    if (!pending) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        resolver.current?.(false);
-        resolver.current = null;
-        setPending(null);
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [pending]);
-
   const api: FeedbackApi = {
     toastSuccess: (m) => push(m, "success"),
     toastError: (m) => push(m, "error"),
@@ -125,39 +112,36 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
       </div>
 
       {pending && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-navy-950/50 p-4 print:hidden"
-          onClick={() => answer(false)}
+        <Modal
+          onClose={() => answer(false)}
+          labelledBy="confirm-title"
+          role="alertdialog"
+          zIndex="z-[70]"
+          align="center"
+          className="max-w-sm"
         >
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-base font-medium text-navy-900">
-              {pending.options.title ?? "Confirmar"}
-            </h2>
-            <p className="mt-2 text-sm text-navy-600">{pending.message}</p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                autoFocus
-                onClick={() => answer(false)}
-                className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => answer(true)}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                {pending.options.confirmLabel ?? "Excluir"}
-              </button>
-            </div>
+          <h2 id="confirm-title" className="text-base font-medium text-navy-900">
+            {pending.options.title ?? "Confirmar"}
+          </h2>
+          <p className="mt-2 text-sm text-navy-600">{pending.message}</p>
+          <div className="mt-5 flex justify-end gap-3">
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => answer(false)}
+              className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => answer(true)}
+              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
+            >
+              {pending.options.confirmLabel ?? "Excluir"}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </FeedbackContext.Provider>
   );

@@ -14,21 +14,14 @@ import {
   type ClientFilterOption,
   type ListFilterValue,
 } from "@/components/ListFilters";
-import {
-  CardActions,
-  CardFields,
-  CardField,
-  CardHeader,
-  CardHighlight,
-  MobileCard,
-  MobileCardList,
-} from "@/components/MobileCard";
+import { DataTable, type Column } from "@/components/DataTable";
 import {
   QUOTE_STATUSES,
   quoteStatusBadgeClass,
   quoteStatusLabel,
 } from "@/lib/quoteStatus";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
 
 // O Supabase limita cada consulta a 1000 linhas no servidor — pagina pra
 // levantar TODOS os locais de coleta/entrega já usados em alguma cotação,
@@ -213,6 +206,99 @@ export default function QuotesPage() {
     loadQuotes();
   }, [filter, page, reloadKey]);
 
+  const quoteColumns: Column<Quote>[] = [
+    {
+      key: "client",
+      header: "Cliente",
+      cell: (q) => q.clients?.name ?? "—",
+      mobile: "subtitle",
+      className: "font-medium text-navy-900",
+    },
+    {
+      key: "route",
+      header: "Rota",
+      cell: (q) => `${q.origin} → ${q.destination}`,
+      mobile: "title",
+      mobileCell: (q) => (
+        <>
+          {q.origin ?? "—"} <span className="text-navy-500">→</span>{" "}
+          {q.destination ?? "—"}
+        </>
+      ),
+    },
+    {
+      key: "vehicle",
+      header: "Veículo",
+      cell: (q) => q.vehicles?.type ?? "—",
+      mobile: "subtitle",
+      mobileCell: (q) => q.vehicles?.type || null,
+    },
+    {
+      key: "gross",
+      header: "Gross",
+      cell: (q) => formatCurrency(q.gross_freight),
+      mobile: "field",
+      mobileOrder: 3.5,
+    },
+    {
+      key: "net",
+      header: "Net",
+      cell: (q) => formatCurrency(q.net_freight),
+      mobile: "field",
+      mobileOrder: 3,
+    },
+    {
+      key: "full",
+      header: "Full",
+      cell: (q) => formatCurrency(q.full_freight),
+      mobile: "highlight",
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (q) => <StatusBadge status={q.status} />,
+      mobile: "badge",
+      className: "",
+    },
+    {
+      key: "date",
+      header: "Data",
+      cell: (q) => formatDate(q.created_at),
+      mobile: "field",
+      className: "text-navy-500",
+    },
+    {
+      key: "actions",
+      header: "Ações",
+      cell: (q) => (
+        <div className="flex items-center gap-2">
+          <Link href={`/quotes/${q.id}`} className={buttonClasses("soft", "sm")}>
+            Detalhes
+          </Link>
+          <a
+            href={`/api/quotes/${q.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonClasses("soft", "sm")}
+          >
+            PDF
+          </a>
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => deleteQuotes([q.id])}
+              className={buttonClasses("danger", "sm")}
+            >
+              Excluir
+            </button>
+          )}
+        </div>
+      ),
+      mobile: "actions",
+    },
+  ];
+
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
       <div className="mb-8 flex items-center justify-between">
@@ -234,7 +320,7 @@ export default function QuotesPage() {
           </Link>
           <Link
             href="/quotes/new"
-            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
           >
             Nova cotação
           </Link>
@@ -299,182 +385,22 @@ export default function QuotesPage() {
               : "Nenhuma cotação cadastrada ainda."}
           </div>
         ) : (
-          <>
-            <MobileCardList>
-              {quotes.map((quote) => (
-                <MobileCard key={quote.id}>
-                  <CardHeader
-                    title={
-                      <>
-                        {quote.origin ?? "—"}{" "}
-                        <span className="text-navy-400">→</span>{" "}
-                        {quote.destination ?? "—"}
-                      </>
-                    }
-                    subtitle={
-                      <>
-                        {quote.clients?.name ?? "—"}
-                        {quote.vehicles?.type && ` · ${quote.vehicles.type}`}
-                      </>
-                    }
-                    badge={<StatusBadge status={quote.status} />}
-                  />
-
-                  <CardHighlight
-                    label="Frete Full"
-                    value={formatCurrency(quote.full_freight)}
-                  />
-
-                  <CardFields>
-                    <CardField
-                      label="Net"
-                      value={formatCurrency(quote.net_freight)}
-                    />
-                    <CardField
-                      label="Gross"
-                      value={formatCurrency(quote.gross_freight)}
-                    />
-                    <CardField
-                      label="Data"
-                      value={formatDate(quote.created_at)}
-                    />
-                  </CardFields>
-
-                  <CardActions>
-                    <Link
-                      href={`/quotes/${quote.id}`}
-                      className="text-brand-700 underline hover:text-brand-800"
-                    >
-                      Detalhes
-                    </Link>
-                    <a
-                      href={`/api/quotes/${quote.id}/pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand-700 underline hover:text-brand-800"
-                    >
-                      PDF
-                    </a>
-                    {isAdmin && (
-                      <>
-                        <label className="ml-auto flex items-center gap-1.5 text-navy-600">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(quote.id)}
-                            onChange={() => toggleSelected(quote.id)}
-                          />
-                          Selecionar
-                        </label>
-                        <button
-                          type="button"
-                          disabled={deleting}
-                          onClick={() => deleteQuotes([quote.id])}
-                          className="text-red-600 hover:text-red-800 disabled:opacity-60"
-                        >
-                          Excluir
-                        </button>
-                      </>
-                    )}
-                  </CardActions>
-                </MobileCard>
-              ))}
-            </MobileCardList>
-
-            <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                <tr>
-                  {isAdmin && (
-                    <th className="w-10 px-4 py-3">
-                      <input
-                        type="checkbox"
-                        aria-label="Selecionar todas"
-                        checked={quotes.length > 0 && selected.size === quotes.length}
-                        onChange={toggleAll}
-                      />
-                    </th>
-                  )}
-                  <th className="px-6 py-3 font-medium">Cliente</th>
-                  <th className="px-6 py-3 font-medium">Rota</th>
-                  <th className="px-6 py-3 font-medium">Veículo</th>
-                  <th className="px-6 py-3 font-medium">Gross</th>
-                  <th className="px-6 py-3 font-medium">Net</th>
-                  <th className="px-6 py-3 font-medium">Full</th>
-                  <th className="px-6 py-3 font-medium">Status</th>
-                  <th className="px-6 py-3 font-medium">Data</th>
-                  <th className="px-6 py-3 font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-100">
-                {quotes.map((quote) => (
-                  <tr key={quote.id} className="hover:bg-navy-50">
-                    {isAdmin && (
-                      <td className="w-10 px-4 py-3">
-                        <input
-                          type="checkbox"
-                          aria-label="Selecionar cotação"
-                          checked={selected.has(quote.id)}
-                          onChange={() => toggleSelected(quote.id)}
-                        />
-                      </td>
-                    )}
-                    <td className="px-6 py-3 font-medium text-navy-900">
-                      {quote.clients?.name ?? "—"}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {quote.origin} → {quote.destination}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {quote.vehicles?.type ?? "—"}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {formatCurrency(quote.gross_freight)}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {formatCurrency(quote.net_freight)}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {formatCurrency(quote.full_freight)}
-                    </td>
-                    <td className="px-6 py-3">
-                      <StatusBadge status={quote.status} />
-                    </td>
-                    <td className="px-6 py-3 text-navy-500">
-                      {formatDate(quote.created_at)}
-                    </td>
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-3">
-                        <Link
-                          href={`/quotes/${quote.id}`}
-                          className="font-medium text-brand-700 underline hover:text-brand-800"
-                        >
-                          Detalhes
-                        </Link>
-                        <a
-                          href={`/api/quotes/${quote.id}/pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-brand-700 underline hover:text-brand-800"
-                        >
-                          PDF
-                        </a>
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            disabled={deleting}
-                            onClick={() => deleteQuotes([quote.id])}
-                            className="font-medium text-red-600 hover:text-red-800 disabled:opacity-60"
-                          >
-                            Excluir
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
+            <>
+              <DataTable
+                rows={quotes}
+                rowKey={(q) => q.id}
+                columns={quoteColumns}
+                selection={
+                  isAdmin
+                    ? {
+                        isSelected: (q) => selected.has(q.id),
+                        onToggle: (q) => toggleSelected(q.id),
+                        allSelected: quotes.length > 0 && selected.size === quotes.length,
+                        onToggleAll: toggleAll,
+                      }
+                    : undefined
+                }
+              />
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-200 px-6 py-3 text-sm text-navy-600">
               <span>

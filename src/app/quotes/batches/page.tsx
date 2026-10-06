@@ -14,15 +14,9 @@ import {
   type ClientFilterOption,
   type ListFilterValue,
 } from "@/components/ListFilters";
-import {
-  CardActions,
-  CardBadge,
-  CardFields,
-  CardField,
-  CardHeader,
-  MobileCard,
-  MobileCardList,
-} from "@/components/MobileCard";
+import { CardBadge } from "@/components/MobileCard";
+import { DataTable, type Column } from "@/components/DataTable";
+import { buttonClasses } from "@/components/Button";
 
 interface QuoteBatch {
   id: string;
@@ -31,6 +25,64 @@ interface QuoteBatch {
   clients: { name: string } | null;
   quotes: { id: string }[];
 }
+
+const batchColumns: Column<QuoteBatch>[] = [
+  {
+    key: "client",
+    header: "Cliente",
+    cell: (b) => b.clients?.name ?? "—",
+    mobile: "title",
+    className: "font-medium text-navy-900",
+  },
+  {
+    key: "product",
+    header: "Produto",
+    cell: (b) => b.product ?? "—",
+    mobile: "wideField",
+  },
+  {
+    key: "routes",
+    header: "Rotas",
+    cell: (b) => b.quotes?.length ?? 0,
+    mobile: "badge",
+    mobileCell: (b) => {
+      const n = b.quotes?.length ?? 0;
+      return (
+        <CardBadge tone="brand">
+          {n} {n === 1 ? "rota" : "rotas"}
+        </CardBadge>
+      );
+    },
+  },
+  {
+    key: "date",
+    header: "Data",
+    cell: (b) => formatDate(b.created_at),
+    mobile: "subtitle",
+    className: "text-navy-500",
+  },
+  {
+    key: "actions",
+    header: "Ações",
+    cell: (b) => (
+      <Link
+        href={`/quotes/batches/${b.id}`}
+        className={buttonClasses("soft", "sm")}
+      >
+        Detalhes
+      </Link>
+    ),
+    mobileCell: (b) => (
+      <Link
+        href={`/quotes/batches/${b.id}`}
+        className={buttonClasses("soft", "sm")}
+      >
+        Ver lote
+      </Link>
+    ),
+    mobile: "actions",
+  },
+];
 
 export default function QuoteBatchesPage() {
   const { isAdmin } = useAuth();
@@ -93,7 +145,7 @@ export default function QuoteBatchesPage() {
         {isAdmin && (
         <Link
           href="/quotes/batches/new"
-          className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
         >
           Novo lote
         </Link>
@@ -124,81 +176,11 @@ export default function QuoteBatchesPage() {
               : "Nenhum lote cadastrado ainda."}
           </div>
         ) : (
-          <>
-            <MobileCardList>
-              {batches.map((batch) => {
-                const nRotas = batch.quotes?.length ?? 0;
-                return (
-                  <MobileCard key={batch.id}>
-                    <CardHeader
-                      title={batch.clients?.name ?? "—"}
-                      subtitle={formatDate(batch.created_at)}
-                      badge={
-                        <CardBadge tone="brand">
-                          {nRotas} {nRotas === 1 ? "rota" : "rotas"}
-                        </CardBadge>
-                      }
-                    />
-                    <CardFields>
-                      <CardField
-                        label="Produto"
-                        value={batch.product ?? "—"}
-                        wide
-                      />
-                    </CardFields>
-                    <CardActions>
-                      <Link
-                        href={`/quotes/batches/${batch.id}`}
-                        className="text-brand-700 underline hover:text-brand-800"
-                      >
-                        Ver lote
-                      </Link>
-                    </CardActions>
-                  </MobileCard>
-                );
-              })}
-            </MobileCardList>
-
-            <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                <tr>
-                  <th className="px-6 py-3 font-medium">Cliente</th>
-                  <th className="px-6 py-3 font-medium">Produto</th>
-                  <th className="px-6 py-3 font-medium">Rotas</th>
-                  <th className="px-6 py-3 font-medium">Data</th>
-                  <th className="px-6 py-3 font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-100">
-                {batches.map((batch) => (
-                  <tr key={batch.id} className="hover:bg-navy-50">
-                    <td className="px-6 py-3 font-medium text-navy-900">
-                      {batch.clients?.name ?? "—"}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {batch.product ?? "—"}
-                    </td>
-                    <td className="px-6 py-3 text-navy-600">
-                      {batch.quotes?.length ?? 0}
-                    </td>
-                    <td className="px-6 py-3 text-navy-500">
-                      {formatDate(batch.created_at)}
-                    </td>
-                    <td className="px-6 py-3">
-                      <Link
-                        href={`/quotes/batches/${batch.id}`}
-                        className="font-medium text-brand-700 underline hover:text-brand-800"
-                      >
-                        Detalhes
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-          </>
+          <DataTable
+            rows={batches}
+            rowKey={(b) => b.id}
+            columns={batchColumns}
+          />
         )}
       </div>
     </div>

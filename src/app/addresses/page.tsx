@@ -133,9 +133,9 @@ export default function AddressesPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <span className="mb-1 block text-sm font-medium text-navy-700">
                   Local no mapa <span className="text-red-500">*</span>
-                </label>
+                </span>
                 <LocationPickerMap value={location} onChange={setLocation} />
                 {location && (
                   <p className="mt-2 text-xs text-navy-600">
@@ -160,7 +160,7 @@ export default function AddressesPage() {
               <button
                 type="submit"
                 disabled={submitting || !name.trim() || !location}
-                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Salvando..." : "Salvar endereço"}
               </button>

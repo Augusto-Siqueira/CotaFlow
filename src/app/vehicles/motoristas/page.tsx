@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth";
 import { VehiclesTabs } from "@/components/VehiclesTabs";
 import { defaultNickname, formatCpf, isValidCpf, onlyDigits } from "@/lib/cpf";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 
 interface Driver {
   id: string;
@@ -59,15 +61,6 @@ export default function DriversPage() {
     setEditingId(null);
     setFormError(null);
   }
-
-  useEffect(() => {
-    if (!showForm) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") closeForm();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [showForm]);
 
   function openNew() {
     setEditingId(null);
@@ -166,7 +159,7 @@ export default function DriversPage() {
           <button
             type="button"
             onClick={openNew}
-            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800"
           >
             Novo motorista
           </button>
@@ -249,14 +242,14 @@ export default function DriversPage() {
                           <button
                             type="button"
                             onClick={() => openEdit(d)}
-                            className="font-medium text-brand-700 underline hover:text-brand-800"
+                            className={buttonClasses("soft", "sm")}
                           >
                             Editar
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDelete(d)}
-                            className="font-medium text-red-600 hover:text-red-800"
+                            className={buttonClasses("danger", "sm")}
                           >
                             Excluir
                           </button>
@@ -272,25 +265,18 @@ export default function DriversPage() {
       </div>
 
       {canEditSchedule && showForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center"
-          onClick={closeForm}
-        >
-          <form
-            onSubmit={handleSubmit}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-          >
-            <h2 className="text-base font-medium text-navy-900">
+        <Modal onClose={closeForm} labelledBy="driver-modal-title" className="max-w-md">
+          <form onSubmit={handleSubmit}>
+            <h2 id="driver-modal-title" className="text-base font-medium text-navy-900">
               {editingId ? "Editar motorista" : "Novo motorista"}
             </h2>
 
             <div className="mt-5 flex flex-col gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="mot-nome">
                   Nome <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input id="mot-nome"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -300,10 +286,10 @@ export default function DriversPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="mot-apelido">
                   Apelido
                 </label>
-                <input
+                <input id="mot-apelido"
                   type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
@@ -316,10 +302,10 @@ export default function DriversPage() {
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-navy-700">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="mot-cpf">
                   CPF <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input id="mot-cpf"
                   type="text"
                   inputMode="numeric"
                   value={cpf}
@@ -339,7 +325,7 @@ export default function DriversPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex-1 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar motorista"}
                 </button>
@@ -353,7 +339,7 @@ export default function DriversPage() {
               </div>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

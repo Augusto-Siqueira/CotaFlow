@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabaseServer";
 import { formatCurrency, formatDate, revisionLabel } from "@/lib/format";
+import { buttonClasses } from "@/components/Button";
 
 interface ClientInfo {
   id: string;
@@ -163,7 +164,7 @@ export default async function ClientComparativoPage({
                           </td>
                           <td className="px-6 py-3">
                             {delta === null ? (
-                              <span className="text-navy-400">—</span>
+                              <span className="text-navy-500">—</span>
                             ) : (
                               <span
                                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -186,7 +187,7 @@ export default async function ClientComparativoPage({
                               </span>
                               <Link
                                 href={`/quotes/${quote.id}`}
-                                className="text-xs font-medium text-brand-700 underline hover:text-brand-800"
+                                className={buttonClasses("soft", "sm")}
                               >
                                 Detalhes
                               </Link>

@@ -12,6 +12,8 @@ import {
   loadingStatusLabel,
 } from "@/lib/loadingStatus";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 
 interface Load {
   id: string;
@@ -439,15 +441,6 @@ export default function ProgramacaoPage() {
     else await fetchRows(date);
   }
 
-  useEffect(() => {
-    if (!showDup) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setShowDup(false);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [showDup]);
-
   async function handleDelete(load: Load) {
     if (!await askConfirm(`Excluir a carga "${load.cargo}" de ${load.client_name}?`)) return;
     const { error } = await supabase
@@ -503,7 +496,7 @@ export default function ProgramacaoPage() {
             <button
               type="button"
               onClick={openNew}
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
             >
               Novo Embarque
             </button>
@@ -577,10 +570,10 @@ export default function ProgramacaoPage() {
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-data">
                 Data
               </label>
-              <input
+              <input id="prog-data"
                 type="date"
                 value={form.schedule_date}
                 onChange={(e) => updateForm("schedule_date", e.target.value)}
@@ -588,10 +581,10 @@ export default function ProgramacaoPage() {
               />
             </div>
             <div className="lg:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-cliente">
                 Cliente <span className="text-red-500">*</span>
               </label>
-              <SearchSelect
+              <SearchSelect id="prog-cliente"
                 value={form.client_name}
                 onChange={(v) => updateForm("client_name", v)}
                 options={clients.map((c) => ({ value: c.label }))}
@@ -605,10 +598,10 @@ export default function ProgramacaoPage() {
               )}
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-horario">
                 Horário
               </label>
-              <input
+              <input id="prog-horario"
                 type="time"
                 value={form.loading_time}
                 onChange={(e) => updateForm("loading_time", e.target.value)}
@@ -617,10 +610,10 @@ export default function ProgramacaoPage() {
             </div>
 
             <div className="lg:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-carga">
                 Carga <span className="text-red-500">*</span>
               </label>
-              <input
+              <input id="prog-carga"
                 type="text"
                 value={form.cargo}
                 onChange={(e) => updateForm("cargo", e.target.value)}
@@ -629,10 +622,10 @@ export default function ProgramacaoPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-peso">
                 Peso
               </label>
-              <input
+              <input id="prog-peso"
                 type="text"
                 value={form.weight}
                 onChange={(e) => updateForm("weight", e.target.value)}
@@ -641,10 +634,10 @@ export default function ProgramacaoPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-placa-do-cavalo-truck">
                 Placa do cavalo / truck
               </label>
-              <SearchSelect
+              <SearchSelect id="prog-placa-do-cavalo-truck"
                 value={form.plate}
                 onChange={(v) => updateForm("plate", normalizePlate(v))}
                 options={tractorPlates.map((p) => ({ value: p }))}
@@ -658,10 +651,10 @@ export default function ProgramacaoPage() {
               )}
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-placa-do-semi-reboque">
                 Placa do semi-reboque
               </label>
-              <SearchSelect
+              <SearchSelect id="prog-placa-do-semi-reboque"
                 value={form.trailer_plate}
                 onChange={(v) => updateForm("trailer_plate", normalizePlate(v))}
                 options={trailerPlates.map((p) => ({ value: p }))}
@@ -676,10 +669,10 @@ export default function ProgramacaoPage() {
             </div>
 
             <div className="lg:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-navy-700">
-                Origem <span className="text-navy-400">(opcional)</span>
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-origem-opcional">
+                Origem <span className="text-navy-500">(opcional)</span>
               </label>
-              <input
+              <input id="prog-origem-opcional"
                 type="text"
                 value={form.origin}
                 onChange={(e) => updateForm("origin", e.target.value)}
@@ -688,10 +681,10 @@ export default function ProgramacaoPage() {
               />
             </div>
             <div className="lg:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-navy-700">
-                Destino <span className="text-navy-400">(opcional)</span>
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-destino-opcional">
+                Destino <span className="text-navy-500">(opcional)</span>
               </label>
-              <input
+              <input id="prog-destino-opcional"
                 type="text"
                 value={form.destination}
                 onChange={(e) => updateForm("destination", e.target.value)}
@@ -701,10 +694,10 @@ export default function ProgramacaoPage() {
             </div>
 
             <div className="lg:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-motorista">
                 Motorista
               </label>
-              <SearchSelect
+              <SearchSelect id="prog-motorista"
                 value={form.driver}
                 onChange={(v) => updateForm("driver", v)}
                 options={drivers.map((d) => ({
@@ -721,10 +714,10 @@ export default function ProgramacaoPage() {
               )}
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-status">
                 Status
               </label>
-              <select
+              <select id="prog-status"
                 value={form.status}
                 onChange={(e) => updateForm("status", e.target.value)}
                 className={inputCls}
@@ -737,10 +730,10 @@ export default function ProgramacaoPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-navy-700">
-                Cotação vigente <span className="text-navy-400">(opcional)</span>
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-cotacao-vigente-opcional">
+                Cotação vigente <span className="text-navy-500">(opcional)</span>
               </label>
-              <select
+              <select id="prog-cotacao-vigente-opcional"
                 value={form.quote_id}
                 onChange={(e) => updateForm("quote_id", e.target.value)}
                 className={inputCls}
@@ -770,7 +763,7 @@ export default function ProgramacaoPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Adicionar"}
             </button>
@@ -860,7 +853,7 @@ export default function ProgramacaoPage() {
                             <div
                               className={`text-navy-700 ${l.origin?.trim() ? "" : "max-lg:hidden"}`}
                             >
-                              <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                              <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                                 Origem
                               </span>
                               {l.origin || "—"}
@@ -870,7 +863,7 @@ export default function ProgramacaoPage() {
                             <div
                               className={`text-navy-700 ${l.destination?.trim() ? "" : "max-lg:hidden"}`}
                             >
-                              <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                              <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                                 Destino
                               </span>
                               {l.destination || "—"}
@@ -879,13 +872,13 @@ export default function ProgramacaoPage() {
                         </>
                       )}
                       <div className="text-navy-700">
-                        <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                        <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                           Peso
                         </span>
                         {l.weight || "—"}
                       </div>
                       <div className="font-medium tracking-wide text-navy-900">
-                        <span className="block text-[11px] font-normal uppercase text-navy-400 lg:hidden">
+                        <span className="block text-[11px] font-normal uppercase text-navy-500 lg:hidden">
                           Cavalo
                         </span>
                         {l.plate || "—"}
@@ -894,20 +887,20 @@ export default function ProgramacaoPage() {
                         <div
                           className={`font-medium tracking-wide text-navy-900 ${l.trailer_plate?.trim() ? "" : "max-lg:hidden"}`}
                         >
-                          <span className="block text-[11px] font-normal uppercase text-navy-400 lg:hidden">
+                          <span className="block text-[11px] font-normal uppercase text-navy-500 lg:hidden">
                             Carreta
                           </span>
                           {l.trailer_plate || "—"}
                         </div>
                       )}
                       <div className="text-navy-700">
-                        <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                        <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                           Motorista
                         </span>
                         {l.driver || "—"}
                       </div>
                       <div className="text-navy-700">
-                        <span className="block text-[11px] uppercase text-navy-400 lg:hidden">
+                        <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                           Horário
                         </span>
                         {l.loading_time ? l.loading_time.slice(0, 5) : "—"}
@@ -944,7 +937,7 @@ export default function ProgramacaoPage() {
                         {l.quote_id && (
                           <Link
                             href={`/quotes/${l.quote_id}`}
-                            className="text-brand-700 underline hover:text-brand-800"
+                            className={buttonClasses("soft", "sm")}
                           >
                             {l.quotes?.client_quote_number?.trim()
                               ? `Cotação ${l.quotes.client_quote_number.trim()}`
@@ -956,14 +949,14 @@ export default function ProgramacaoPage() {
                             <button
                               type="button"
                               onClick={() => openEdit(l)}
-                              className="font-medium text-brand-700 underline hover:text-brand-800"
+                              className={buttonClasses("soft", "sm")}
                             >
                               Editar
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDelete(l)}
-                              className="font-medium text-red-600 hover:text-red-800"
+                              className={buttonClasses("danger", "sm")}
                             >
                               Excluir
                             </button>
@@ -981,15 +974,8 @@ export default function ProgramacaoPage() {
       </div>
 
       {canEditSchedule && showDup && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center print:hidden"
-          onClick={() => setShowDup(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-base font-medium text-navy-900">
+        <Modal onClose={() => setShowDup(false)} labelledBy="dup-modal-title" className="max-w-lg">
+            <h2 id="dup-modal-title" className="text-base font-medium text-navy-900">
               Duplicar programação de{" "}
               {fromIsoDate(date).toLocaleDateString("pt-BR")}
             </h2>
@@ -999,10 +985,10 @@ export default function ProgramacaoPage() {
             </p>
 
             <div className="mt-4">
-              <label className="mb-1 block text-sm font-medium text-navy-700">
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-duplicar-para-o-dia">
                 Duplicar para o dia
               </label>
-              <input
+              <input id="prog-duplicar-para-o-dia"
                 type="date"
                 value={dupDate}
                 onChange={(e) => changeDupDate(e.target.value)}
@@ -1031,7 +1017,7 @@ export default function ProgramacaoPage() {
                         : new Set(rows.map((r) => r.id))
                     )
                   }
-                  className="text-xs font-medium text-brand-700 underline hover:text-brand-800"
+                  className={buttonClasses("soft", "sm")}
                 >
                   {dupSelected.size === rows.length
                     ? "Desmarcar todas"
@@ -1075,7 +1061,7 @@ export default function ProgramacaoPage() {
                 type="button"
                 onClick={handleDuplicate}
                 disabled={dupBusy}
-                className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex-1 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {dupBusy
                   ? "Duplicando..."
@@ -1089,8 +1075,7 @@ export default function ProgramacaoPage() {
                 Cancelar
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -22,6 +22,7 @@ import {
   MobileCardList,
 } from "@/components/MobileCard";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
 
 export interface BatchRoute {
   id: string;
@@ -105,7 +106,7 @@ export function RoutesTable({
                 onClick={() => setUnit(option.value)}
                 className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium sm:flex-none ${
                   unit === option.value
-                    ? "bg-brand-600 text-white"
+                    ? "bg-brand-700 text-white"
                     : "text-navy-600 hover:bg-navy-100"
                 }`}
               >
@@ -125,7 +126,7 @@ export function RoutesTable({
             href={`/api/quotes/batches/${batchId}/pdf${exportQuery}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 sm:flex-none"
+            className="inline-flex flex-1 items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 sm:flex-none"
           >
             Baixar PDF
           </a>
@@ -149,7 +150,7 @@ export function RoutesTable({
               title={
                 <>
                   {route.origin ?? "—"}{" "}
-                  <span className="text-navy-400">→</span>{" "}
+                  <span className="text-navy-500">→</span>{" "}
                   {route.destination ?? "—"}
                 </>
               }
@@ -215,13 +216,13 @@ export function RoutesTable({
             <CardActions>
               <Link
                 href={`/quotes/${route.id}`}
-                className="text-brand-700 underline hover:text-brand-800"
+                className={buttonClasses("soft", "sm")}
               >
                 Detalhes
               </Link>
               {isAdmin && (<><Link
                 href={`/quotes/batches/${batchId}/routes/${route.id}/edit`}
-                className="text-brand-700 underline hover:text-brand-800"
+                className={buttonClasses("soft", "sm")}
               >
                 Editar
               </Link>
@@ -229,7 +230,7 @@ export function RoutesTable({
                 type="button"
                 onClick={() => handleDelete(route.id)}
                 disabled={deletingId === route.id}
-                className="ml-auto text-red-600 hover:text-red-800 disabled:opacity-60"
+                className={`${buttonClasses("danger", "sm")} ml-auto`}
               >
                 {deletingId === route.id ? "Excluindo..." : "Excluir"}
               </button></>)}
@@ -312,13 +313,13 @@ export function RoutesTable({
                   <div className="flex items-center gap-3 whitespace-nowrap">
                     <Link
                       href={`/quotes/${route.id}`}
-                      className="font-medium text-brand-700 underline hover:text-brand-800"
+                      className={buttonClasses("soft", "sm")}
                     >
                       Detalhes
                     </Link>
                     {isAdmin && (<><Link
                       href={`/quotes/batches/${batchId}/routes/${route.id}/edit`}
-                      className="font-medium text-brand-700 underline hover:text-brand-800"
+                      className={buttonClasses("soft", "sm")}
                     >
                       Editar
                     </Link>
@@ -326,7 +327,7 @@ export function RoutesTable({
                       type="button"
                       onClick={() => handleDelete(route.id)}
                       disabled={deletingId === route.id}
-                      className="font-medium text-red-600 hover:text-red-800 disabled:opacity-60"
+                      className={buttonClasses("danger", "sm")}
                     >
                       {deletingId === route.id ? "Excluindo..." : "Excluir"}
                     </button></>)}

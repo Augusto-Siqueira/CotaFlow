@@ -4,6 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { AuthProvider } from "@/lib/auth";
 import { FeedbackProvider } from "@/components/Feedback";
+import { THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -24,7 +25,11 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${plusJakartaSans.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col bg-navy-50 text-navy-900">
         <FeedbackProvider>
           <AuthProvider>

@@ -43,7 +43,7 @@ export default function Home() {
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 p-8 text-white lg:col-span-2">
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-chrome-900 via-chrome-800 to-chrome-700 p-8 text-white lg:col-span-2">
           <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-500/20 blur-2xl" />
           <LogisticsArt />
           <p className="relative text-sm font-medium text-brand-300">
@@ -52,7 +52,7 @@ export default function Home() {
           <h1 className="relative mt-2 text-3xl font-semibold tracking-tight">
             {isAdmin ? "Pronto para a próxima cotação?" : "Consulte as cotações"}
           </h1>
-          <p className="relative mt-2 max-w-md text-sm text-navy-200">
+          <p className="relative mt-2 max-w-md text-sm text-chrome-200">
             {stats
               ? `${stats.vigentes} vigentes e ${stats.rascunhos} rascunhos em andamento.`
               : "Carregando..."}
@@ -61,9 +61,9 @@ export default function Home() {
             {isAdmin && (
               <Link
                 href="/quotes/new"
-                className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-600"
+                className="rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-800"
               >
-                + Nova cotação
+                Nova cotação
               </Link>
             )}
             <Link

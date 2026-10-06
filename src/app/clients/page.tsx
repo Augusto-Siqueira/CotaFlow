@@ -4,17 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import {
-  CardActions,
-  CardFields,
-  CardField,
-  CardHeader,
-  CardHighlight,
-  MobileCard,
-  MobileCardList,
-} from "@/components/MobileCard";
+import { DataTable, type Column } from "@/components/DataTable";
 import { PDF_LAYOUTS, type PdfLayout } from "@/lib/pdfLayout";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 
 interface Client {
   id: string;
@@ -238,14 +232,104 @@ export default function ClientsPage() {
     await loadClients();
   }
 
-  useEffect(() => {
-    if (!showForm) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") cancelEditing();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [showForm]);
+  const layoutSelect = (client: Client, className: string) => (
+    <select
+      disabled={!isAdmin}
+      value={client.pdf_layout}
+      onChange={(e) => updateLayout(client.id, e.target.value)}
+      className={className}
+    >
+      {PDF_LAYOUTS.map((l) => (
+        <option key={l.value} value={l.value}>
+          {l.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const clientColumns: Column<Client>[] = [
+    {
+      key: "name",
+      header: "Razão Social",
+      cell: (c) => c.name,
+      mobile: "title",
+      className: "font-medium text-navy-900",
+    },
+    {
+      key: "trade_name",
+      header: "Nome Fantasia",
+      cell: (c) => c.trade_name || "—",
+      mobile: "subtitle",
+      mobileCell: (c) => c.trade_name || null,
+    },
+    {
+      key: "document",
+      header: "Documento",
+      cell: (c) => c.document,
+      mobile: "subtitle",
+    },
+    {
+      key: "segment",
+      header: "Segmento",
+      cell: (c) => c.segment || "—",
+      mobile: "wideField",
+    },
+    {
+      key: "insurance",
+      header: "Seguro padrão",
+      cell: (c) =>
+        c.default_insurance_pct !== null ? `${c.default_insurance_pct}%` : "—",
+      mobile: "highlight",
+    },
+    {
+      key: "layout",
+      header: "Layout do PDF",
+      cell: (c) =>
+        layoutSelect(
+          c,
+          "rounded-lg border border-navy-300 px-2 py-1.5 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+        ),
+      mobileCell: (c) =>
+        layoutSelect(
+          c,
+          "w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+        ),
+      mobile: "wideField",
+    },
+    {
+      key: "actions",
+      header: "Ações",
+      cell: (c) => (
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/clients/${c.id}/comparativo`}
+            className={buttonClasses("soft", "sm")}
+          >
+            Comparativo
+          </Link>
+          {isAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={() => startEditing(c)}
+                className={buttonClasses("soft", "sm")}
+              >
+                Editar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(c)}
+                className={buttonClasses("danger", "sm")}
+              >
+                Excluir
+              </button>
+            </>
+          )}
+        </div>
+      ),
+      mobile: "actions",
+    },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -262,7 +346,7 @@ export default function ClientsPage() {
           <button
             type="button"
             onClick={openNew}
-            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800"
           >
             Novo cliente
           </button>
@@ -271,15 +355,8 @@ export default function ClientsPage() {
 
       <div>
         {isAdmin && showForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4 sm:items-center"
-          onClick={cancelEditing}
-        >
-          <div
-            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-base font-medium text-navy-900">
+        <Modal onClose={cancelEditing} labelledBy="client-modal-title" className="max-w-lg">
+            <h2 id="client-modal-title" className="text-base font-medium text-navy-900">
               {editingId ? "Editar cliente" : "Novo cliente"}
             </h2>
 
@@ -420,7 +497,7 @@ export default function ClientsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting
                   ? "Salvando..."
@@ -436,8 +513,7 @@ export default function ClientsPage() {
                 Cancelar
               </button>
             </form>
-          </div>
-        </div>
+        </Modal>
         )}
 
         <div className="min-w-0">
@@ -485,169 +561,11 @@ export default function ClientsPage() {
                   : "Nenhum cliente encontrado para essa busca."}
               </div>
             ) : (
-              <>
-                <div className="max-h-[70vh] overflow-y-auto sm:hidden">
-                <MobileCardList>
-                  {clients.map((client) => (
-                    <MobileCard key={client.id}>
-                      <CardHeader
-                        title={client.name}
-                        subtitle={
-                          client.trade_name
-                            ? `${client.trade_name} · ${client.document}`
-                            : client.document
-                        }
-                      />
-
-                      <CardHighlight
-                        label="Seguro padrão"
-                        value={
-                          client.default_insurance_pct !== null
-                            ? `${client.default_insurance_pct}%`
-                            : "—"
-                        }
-                      />
-
-                      <CardFields>
-                        <CardField
-                          label="Segmento"
-                          value={client.segment || "—"}
-                          wide
-                        />
-                      </CardFields>
-
-                      <div className="mt-3">
-                        <label className="text-[11px] font-medium uppercase tracking-wide text-navy-400">
-                          Layout do PDF
-                        </label>
-                        <select
-                          disabled={!isAdmin}
-                          value={client.pdf_layout}
-                          onChange={(e) => updateLayout(client.id, e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                        >
-                          {PDF_LAYOUTS.map((l) => (
-                            <option key={l.value} value={l.value}>
-                              {l.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <CardActions>
-                        <Link
-                          href={`/clients/${client.id}/comparativo`}
-                          className="text-brand-700 underline hover:text-brand-800"
-                        >
-                          Comparativo
-                        </Link>
-                        {isAdmin && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => startEditing(client)}
-                              className="text-brand-700 underline hover:text-brand-800"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(client)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              Excluir
-                            </button>
-                          </>
-                        )}
-                      </CardActions>
-                    </MobileCard>
-                  ))}
-                </MobileCardList>
-                </div>
-
-                <div className="hidden max-h-[70vh] overflow-auto sm:block">
-                  <table className="w-full text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Razão Social</th>
-                        <th className="px-6 py-3 font-medium">Nome Fantasia</th>
-                        <th className="px-6 py-3 font-medium">Documento</th>
-                        <th className="px-6 py-3 font-medium">Segmento</th>
-                        <th className="px-6 py-3 font-medium">Seguro padrão</th>
-                        <th className="px-6 py-3 font-medium">Layout do PDF</th>
-                        <th className="px-6 py-3 font-medium">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-navy-100">
-                      {clients.map((client) => (
-                        <tr key={client.id} className="hover:bg-navy-50">
-                          <td className="px-6 py-3 font-medium text-navy-900">
-                            {client.name}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {client.trade_name || "—"}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {client.document}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {client.segment || "—"}
-                          </td>
-                          <td className="px-6 py-3 text-navy-600">
-                            {client.default_insurance_pct !== null
-                              ? `${client.default_insurance_pct}%`
-                              : "—"}
-                          </td>
-                          <td className="px-6 py-3">
-                            <select
-                              disabled={!isAdmin}
-                              value={client.pdf_layout}
-                              onChange={(e) =>
-                                updateLayout(client.id, e.target.value)
-                              }
-                              className="rounded-lg border border-navy-300 px-2 py-1.5 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                            >
-                              {PDF_LAYOUTS.map((l) => (
-                                <option key={l.value} value={l.value}>
-                                  {l.label}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-6 py-3">
-                            <div className="flex items-center gap-3">
-                              <Link
-                                href={`/clients/${client.id}/comparativo`}
-                                className="font-medium text-brand-700 underline hover:text-brand-800"
-                              >
-                                Comparativo
-                              </Link>
-                              {isAdmin && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditing(client)}
-                                    className="font-medium text-brand-700 underline hover:text-brand-800"
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDelete(client)}
-                                    className="font-medium text-red-600 hover:text-red-800"
-                                  >
-                                    Excluir
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+              <DataTable
+                rows={clients}
+                rowKey={(c) => c.id}
+                columns={clientColumns}
+              />
             )}
           </div>
         </div>

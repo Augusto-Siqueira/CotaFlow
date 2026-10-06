@@ -65,12 +65,12 @@ export default function PublicProposalPage({
 
   return (
     <div className="flex min-h-screen flex-1 flex-col">
-      <header className="flex items-center justify-between bg-navy-900 px-5 py-3 text-white">
+      <header className="flex items-center justify-between bg-chrome-900 px-5 py-3 text-white">
         <div className="flex items-center gap-2 font-bold tracking-tight">
           <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
           CotaFlow
         </div>
-        <span className="truncate pl-4 text-sm text-navy-200">
+        <span className="truncate pl-4 text-sm text-chrome-200">
           {state.proposal.title}
         </span>
       </header>
