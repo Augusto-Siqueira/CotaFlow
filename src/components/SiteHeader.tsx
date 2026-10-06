@@ -7,10 +7,11 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { APP_VERSION } from "@/lib/version";
 
-const NAV_LINKS = [
+const NAV_LINKS: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "/quotes", label: "Cotações" },
   { href: "/quotes/batches", label: "Lotes" },
   { href: "/programacao", label: "Programação" },
+  { href: "/propostas", label: "Propostas", adminOnly: true },
   { href: "/clients", label: "Clientes" },
   { href: "/vehicles", label: "Veículos" },
   { href: "/antt-coefficients", label: "ANTT" },
@@ -34,6 +35,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const active = activeHref(pathname);
   const { user, role } = useAuth();
+  const visibleLinks = NAV_LINKS.filter((l) => !l.adminOnly || role === "admin");
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -81,7 +83,7 @@ export function SiteHeader() {
       : "text-navy-200 transition-colors hover:text-brand-400";
   }
 
-  if (pathname === "/login") return null;
+  if (pathname === "/login" || pathname.startsWith("/proposta/")) return null;
 
   return (
     <header className="bg-navy-900">
@@ -97,7 +99,7 @@ export function SiteHeader() {
         {/* Menu em linha a partir de sm; no celular fica atrás do botão. */}
         {user && (
           <nav className="hidden items-center gap-5 text-sm font-medium sm:flex">
-            {NAV_LINKS.map((link) => (
+            {visibleLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -155,7 +157,7 @@ export function SiteHeader() {
           id="menu-mobile"
           className="border-t border-navy-800 px-4 pb-3 text-sm font-medium sm:hidden"
         >
-          {NAV_LINKS.map((link) => (
+          {visibleLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}

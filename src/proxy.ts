@@ -31,6 +31,11 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLogin = pathname === "/login";
 
+  // Link de proposta comercial enviado ao cliente: único trecho aberto sem
+  // login. A tabela continua fechada; a página só abre UMA proposta, pelo
+  // código do link, via função do banco.
+  if (pathname.startsWith("/proposta/")) return response;
+
   if (!user && !isLogin) {
     if (pathname.startsWith("/api/")) {
       return Response.json({ error: "Não autenticado." }, { status: 401 });

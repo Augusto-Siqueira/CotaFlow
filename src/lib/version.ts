@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.01";
+export const APP_VERSION = "1.02";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.02",
+    date: "2026-10-06",
+    notes: [
+      "Nova aba Propostas Comerciais: guarda o HTML das propostas e gera um link próprio para enviar ao cliente.",
+      "O cliente abre o link sem login e só lê; o link pode ser desativado ou ter validade.",
+      "Confirmação de leitura: mostra quantas vezes a proposta foi aberta, a primeira e a última visualização.",
+      "Só o perfil Comercial gerencia as propostas.",
+    ],
+  },
   {
     version: "1.01",
     date: "2026-10-05",
