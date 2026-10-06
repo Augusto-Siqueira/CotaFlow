@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { Modal } from "@/components/Modal";
+import { buttonClasses } from "@/components/Button";
 
 type ToastKind = "success" | "error" | "info";
 
@@ -129,7 +130,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
               type="button"
               data-autofocus
               onClick={() => answer(false)}
-              className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+              className={buttonClasses("secondary", "md")}
             >
               Cancelar
             </button>

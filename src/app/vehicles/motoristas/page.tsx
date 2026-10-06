@@ -332,7 +332,7 @@ export default function DriversPage() {
                 <button
                   type="button"
                   onClick={closeForm}
-                  className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+                  className={buttonClasses("secondary", "md")}
                 >
                   Cancelar
                 </button>

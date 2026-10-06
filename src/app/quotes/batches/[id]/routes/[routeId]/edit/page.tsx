@@ -12,6 +12,7 @@ import {
   computeNetFreight,
 } from "@/lib/quoteCalculations";
 import { CurrencyInput } from "@/components/CurrencyInput";
+import { buttonClasses } from "@/components/Button";
 
 interface VehicleOption {
   id: string;
@@ -524,7 +525,7 @@ function EditBatchRoutePage({
       <div className="mt-6 flex justify-end gap-3">
         <Link
           href={`/quotes/batches/${batchId}`}
-          className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+          className={buttonClasses("secondary", "md")}
         >
           Cancelar
         </Link>

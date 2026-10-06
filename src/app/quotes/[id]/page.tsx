@@ -13,6 +13,7 @@ import { computeIcmsValue } from "@/lib/quoteCalculations";
 import { getCityCoordinates } from "@/lib/geocoding";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { QuoteStatusSelect } from "@/components/QuoteStatusSelect";
+import { buttonClasses } from "@/components/Button";
 
 interface QuoteDetail {
   id: string;
@@ -192,7 +193,7 @@ export default async function QuoteDetailPage({
           <AdminOnly>
             <Link
               href={`/quotes/new?duplicate=${quote.id}`}
-              className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-3 py-1.5 text-sm font-medium text-navy-700 hover:bg-navy-100"
+              className={buttonClasses("secondary", "compact")}
             >
               Duplicar
             </Link>

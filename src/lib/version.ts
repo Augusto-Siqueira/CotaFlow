@@ -20,6 +20,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Acessibilidade: foco visível no teclado, janelas que prendem o foco e devolvem ao fechar, campos com rótulos ligados e cores com mais contraste.",
       "Botão da página inicial e item do menu renomeados (Nova cotação, Cotações em Lote).",
       "Novo seletor de data na programação, com setas em bloco único (componente reutilizável).",
+      "Troca de senha mais segura: pede a senha atual e encerra as outras sessões abertas depois da troca.",
     ],
   },
   {

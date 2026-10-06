@@ -206,10 +206,9 @@ export default function ProgramacaoPage() {
     const typed = form.client_name.trim().toLowerCase();
     const match = clients.find((c) => c.label.toLowerCase() === typed);
     const name = (match?.name ?? typed).toLowerCase();
-    const filtered = name
+    const list = name
       ? quotes.filter((q) => q.clients?.name.toLowerCase() === name)
-      : quotes;
-    const list = filtered.length > 0 ? filtered : quotes;
+      : [];
     const selected = quotes.find((q) => q.id === form.quote_id);
     return selected && !list.includes(selected) ? [selected, ...list] : list;
   }, [quotes, clients, form.client_name, form.quote_id]);
@@ -480,7 +479,7 @@ export default function ProgramacaoPage() {
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center justify-center rounded-lg border border-navy-300 bg-white px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+            className={buttonClasses("secondary", "md")}
           >
             Imprimir
           </button>
@@ -490,7 +489,7 @@ export default function ProgramacaoPage() {
               type="button"
               onClick={openDuplicate}
               disabled={rows.length === 0}
-              className="inline-flex items-center justify-center rounded-lg border border-navy-300 bg-white px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className={buttonClasses("secondary", "md")}
             >
               Duplicar dia
             </button>
@@ -763,7 +762,7 @@ export default function ProgramacaoPage() {
             <button
               type="button"
               onClick={closeForm}
-              className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+              className={buttonClasses("secondary", "md")}
             >
               Cancelar
             </button>
@@ -1063,7 +1062,7 @@ export default function ProgramacaoPage() {
               <button
                 type="button"
                 onClick={() => setShowDup(false)}
-                className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+                className={buttonClasses("secondary", "md")}
               >
                 Cancelar
               </button>

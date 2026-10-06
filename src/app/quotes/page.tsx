@@ -15,6 +15,7 @@ import {
   type ListFilterValue,
 } from "@/components/ListFilters";
 import { DataTable, type Column } from "@/components/DataTable";
+import { StepperControl } from "@/components/StepperControl";
 import {
   QUOTE_STATUSES,
   quoteStatusBadgeClass,
@@ -314,7 +315,7 @@ export default function QuotesPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/quotes/batches/new"
-            className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+            className={buttonClasses("secondary", "md")}
           >
             Cotação em lote
           </Link>
@@ -406,33 +407,24 @@ export default function QuotesPage() {
               <span>
                 {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + quotes.length} de {total}
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(new Set());
-                    setPage((p) => Math.max(p - 1, 0));
-                  }}
-                  disabled={page === 0}
-                  className="rounded-lg border border-navy-300 px-3 py-1.5 font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Anterior
-                </button>
-                <span className="px-1">
+              <StepperControl
+                onPrev={() => {
+                  setSelected(new Set());
+                  setPage((p) => Math.max(p - 1, 0));
+                }}
+                onNext={() => {
+                  setSelected(new Set());
+                  setPage((p) => p + 1);
+                }}
+                prevLabel="Página anterior"
+                nextLabel="Próxima página"
+                prevDisabled={page === 0}
+                nextDisabled={(page + 1) * PAGE_SIZE >= total}
+              >
+                <span className="px-4 py-2 text-sm font-medium text-navy-800">
                   Página {page + 1} de {Math.max(Math.ceil(total / PAGE_SIZE), 1)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(new Set());
-                    setPage((p) => p + 1);
-                  }}
-                  disabled={(page + 1) * PAGE_SIZE >= total}
-                  className="rounded-lg border border-navy-300 px-3 py-1.5 font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Próxima
-                </button>
-              </div>
+              </StepperControl>
             </div>
           </>
         )}

@@ -508,7 +508,7 @@ export default function ClientsPage() {
               <button
                 type="button"
                 onClick={cancelEditing}
-                className="inline-flex items-center justify-center rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+                className={buttonClasses("secondary", "md")}
               >
                 Cancelar
               </button>

@@ -15,6 +15,7 @@ import {
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { useFeedback } from "@/components/Feedback";
+import { buttonClasses } from "@/components/Button";
 
 interface ClientOption {
   id: string;
@@ -366,7 +367,7 @@ function StopsList({
                 type="button"
                 onClick={() => moveAt(index, -1)}
                 disabled={index === 0}
-                className="rounded border border-navy-300 px-1.5 py-1 text-navy-500 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-30"
+                className="rounded border border-navy-300 px-1.5 py-1 text-navy-500 transition-colors hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-navy-300 disabled:hover:bg-transparent disabled:hover:text-navy-500"
                 aria-label="Mover parada pra cima"
               >
                 ↑
@@ -375,7 +376,7 @@ function StopsList({
                 type="button"
                 onClick={() => moveAt(index, 1)}
                 disabled={index === stops.length - 1}
-                className="rounded border border-navy-300 px-1.5 py-1 text-navy-500 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-30"
+                className="rounded border border-navy-300 px-1.5 py-1 text-navy-500 transition-colors hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-navy-300 disabled:hover:bg-transparent disabled:hover:text-navy-500"
                 aria-label="Mover parada pra baixo"
               >
                 ↓
@@ -1644,7 +1645,7 @@ function NewQuotePage({
         <button
           onClick={goBack}
           disabled={step === 0}
-          className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className={buttonClasses("secondary", "md")}
         >
           Voltar
         </button>

@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClasses } from "@/components/Button";
+
 export interface ClientFilterOption {
   id: string;
   name: string;
@@ -183,7 +185,7 @@ export function ListFilters({
           <button
             type="button"
             onClick={() => onChange(emptyListFilter)}
-            className="rounded-lg border border-navy-300 px-4 py-2 text-sm font-medium text-navy-700 hover:bg-navy-100"
+            className={buttonClasses("secondary", "md")}
           >
             Limpar filtros
           </button>

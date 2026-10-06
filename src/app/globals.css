@@ -85,6 +85,34 @@ body {
   outline-offset: 2px;
 }
 
+/* Cursor: mão só no que tem ação (regra do projeto, ver CLAUDE.md). Texto,
+   cartões estáticos e campos de digitação ficam com o cursor padrão. */
+a[href],
+button,
+summary,
+select,
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="submit"],
+input[type="button"],
+input[type="file"],
+input[type="date"]::-webkit-calendar-picker-indicator,
+label:has(input[type="checkbox"]),
+label:has(input[type="radio"]) {
+  cursor: pointer;
+}
+button:disabled,
+select:disabled,
+input:disabled,
+[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--color-navy-400);
@@ -149,6 +177,52 @@ html.dark {
 
 html.dark .bg-white {
   background-color: #161d2e;
+}
+/* Lista aberta dos <select>: o navegador a desenha à parte, então fundo e
+   texto precisam ser definidos na própria <option>. */
+html.dark select option,
+html.dark select optgroup {
+  background-color: #161d2e;
+  color: #eaeef8;
+}
+/* Botão vermelho (Excluir) no escuro: o hover do tema quase não aparecia.
+   Agora acende (fundo e borda vermelhos, brilho) e levanta um pouco. */
+html.dark .btn-danger,
+html.dark .btn-soft {
+  transition: background-color 0.18s, border-color 0.18s, color 0.18s,
+    box-shadow 0.18s, transform 0.18s;
+}
+html.dark .btn-danger:hover:not(:disabled) {
+  background-color: #5a2226;
+  border-color: #f87171;
+  color: #fecaca;
+  box-shadow: 0 0 0 3px rgb(248 113 113 / 0.18), 0 4px 12px rgb(248 113 113 / 0.25);
+  transform: translateY(-1px);
+}
+/* Mesma animação no botão verde suave (Editar, Detalhes, PDF). */
+html.dark .btn-soft:hover:not(:disabled) {
+  background-color: #1f4a2e;
+  border-color: #5fc766;
+  color: #cdf2d2;
+  box-shadow: 0 0 0 3px rgb(95 199 102 / 0.18), 0 4px 12px rgb(95 199 102 / 0.25);
+  transform: translateY(-1px);
+}
+html.dark .btn-danger:active:not(:disabled),
+html.dark .btn-soft:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.dark .btn-danger,
+  html.dark .btn-soft {
+    transition: none;
+  }
+  html.dark .btn-danger:hover:not(:disabled),
+  html.dark .btn-danger:active:not(:disabled),
+  html.dark .btn-soft:hover:not(:disabled),
+  html.dark .btn-soft:active:not(:disabled) {
+    transform: none;
+  }
 }
 html.dark .hover\:bg-white:hover {
   background-color: #1e2740;
