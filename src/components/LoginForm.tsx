@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { CaptchaWidget, type CaptchaRef } from "@/components/CaptchaWidget";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -9,6 +10,8 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<CaptchaRef>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -18,10 +21,18 @@ export function LoginForm() {
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
+      options: { captchaToken: captchaToken ?? undefined },
     });
 
     if (error) {
-      setError("E-mail ou senha incorretos.");
+      setError(
+        /captcha/i.test(error.message)
+          ? "Não foi possível confirmar a verificação anti-robô. Tente de novo."
+          : "E-mail ou senha incorretos."
+      );
+      // O token só vale uma vez: pede um novo.
+      captchaRef.current?.reset();
+      setCaptchaToken(null);
       setSubmitting(false);
       return;
     }
@@ -100,6 +111,8 @@ export function LoginForm() {
         </div>
       </div>
 
+      <CaptchaWidget ref={captchaRef} onToken={setCaptchaToken} />
+
       {error && (
         <p
           role="alert"
@@ -111,7 +124,7 @@ export function LoginForm() {
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || !captchaToken}
         className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? "Entrando..." : "Entrar"}
