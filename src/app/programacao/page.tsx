@@ -99,6 +99,8 @@ export default function ProgramacaoPage() {
   const today = toIsoDate(new Date());
 
   const [date, setDate] = useState(today);
+  // Status escolhido nos contadores do topo ("" = todos).
+  const [statusFilter, setStatusFilter] = useState("");
   const [data, setData] = useState<{
     date: string;
     rows: Load[];
@@ -183,11 +185,12 @@ export default function ProgramacaoPage() {
   const groups = useMemo(() => {
     const map = new Map<string, Load[]>();
     for (const r of rows) {
+      if (statusFilter && r.status !== statusFilter) continue;
       const key = r.client_name.trim() || "Sem cliente";
       map.set(key, [...(map.get(key) ?? []), r]);
     }
     return Array.from(map.entries());
-  }, [rows]);
+  }, [rows, statusFilter]);
 
   const vigenteIds = useMemo(() => new Set(quotes.map((q) => q.id)), [quotes]);
 
@@ -540,14 +543,27 @@ export default function ProgramacaoPage() {
         </div>
 
         <div className="ml-auto flex flex-wrap gap-2 print:ml-0">
-          {counts.map((c) => (
-            <span
-              key={c.value}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${c.badge}`}
-            >
-              {c.label}: {c.count}
-            </span>
-          ))}
+          {counts.map((c) => {
+            const active = statusFilter === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                aria-pressed={active}
+                title={active ? "Mostrar todos" : `Filtrar por ${c.label}`}
+                onClick={() => setStatusFilter(active ? "" : c.value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${c.badge} ${
+                  active
+                    ? "ring-2 ring-brand-600 ring-offset-1"
+                    : statusFilter
+                      ? "opacity-50 hover:opacity-100"
+                      : "hover:brightness-110"
+                }`}
+              >
+                {c.label}: {c.count}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -781,7 +797,9 @@ export default function ProgramacaoPage() {
           </div>
         ) : groups.length === 0 ? (
           <div className="rounded-xl border border-navy-200 bg-white px-6 py-10 text-center text-sm text-navy-500">
-            Nenhum carregamento programado para este dia.
+            {statusFilter && rows.length > 0
+              ? "Nenhum carregamento com este status neste dia."
+              : "Nenhum carregamento programado para este dia."}
           </div>
         ) : (
           groups.map(([client, loads]) => {
