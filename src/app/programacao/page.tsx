@@ -273,6 +273,32 @@ export default function ProgramacaoPage() {
     setFormError(null);
   }
 
+  // Para cada placa informada, olha o último carregamento lançado (maior data,
+  // desempate pelo mais recente) e devolve um aviso se ele não foi concluído.
+  async function findOpenTrips(
+    checks: { label: string; plate: string | null; column: "plate" | "trailer_plate" }[]
+  ): Promise<string[]> {
+    const warnings: string[] = [];
+    for (const c of checks) {
+      if (!c.plate) continue;
+      const { data: last } = await supabase
+        .from("loading_schedules")
+        .select("schedule_date, status, client_name")
+        .eq(c.column, c.plate)
+        .order("schedule_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (last && last.status !== "entregue") {
+        const [y, m, d] = last.schedule_date.split("-");
+        warnings.push(
+          `A placa ${c.plate} (${c.label}) tem viagem em aberto: carregamento de ${d}/${m}/${y} (${loadingStatusLabel(last.status)}). Conclua a entrega antes de lançá-la de novo.`
+        );
+      }
+    }
+    return warnings;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.client_name.trim() || !form.cargo.trim()) {
@@ -313,6 +339,21 @@ export default function ProgramacaoPage() {
 
     setSaving(true);
     setFormError(null);
+
+    // Placa só entra em carregamento novo se a última viagem dela estiver
+    // como Entrega Concluída.
+    if (!editingId) {
+      const open = await findOpenTrips([
+        { label: "Cavalo/truck", plate: payload.plate, column: "plate" },
+        { label: "Semi-reboque", plate: payload.trailer_plate, column: "trailer_plate" },
+      ]);
+      if (open.length > 0) {
+        setSaving(false);
+        setFormError(open.join(" "));
+        return;
+      }
+    }
+
     const { error } = editingId
       ? await supabase.from("loading_schedules").update(payload).eq("id", editingId)
       : await supabase.from("loading_schedules").insert(payload);
