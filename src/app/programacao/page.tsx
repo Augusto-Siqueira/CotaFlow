@@ -33,6 +33,9 @@ interface Load {
   quotes: { client_quote_number: string | null } | null;
 }
 
+// Status que só podem ser usados com a viagem anterior da placa concluída.
+const RESTRICTED_STATUSES = new Set(["lavando", "carregando", "em_viagem"]);
+
 interface QuoteOption {
   id: string;
   client_quote_number: string | null;
@@ -273,26 +276,44 @@ export default function ProgramacaoPage() {
     setFormError(null);
   }
 
-  // Para cada placa informada, olha o último carregamento lançado (maior data,
-  // desempate pelo mais recente) e devolve um aviso se ele não foi concluído.
-  async function findOpenTrips(
-    checks: { label: string; plate: string | null; column: "plate" | "trailer_plate" }[]
+  // Viagem "programado" pode ser lançada à vontade (dá para adiantar a
+  // programação). Já passar para Lavando, Carregando ou Carregado em Viagem só
+  // é permitido quando as viagens ANTERIORES da mesma placa estão em Entrega
+  // Concluída. "Anterior" = data menor, ou mesma data lançada antes.
+  async function findPriorOpenTrips(
+    checks: { label: string; plate: string | null; column: "plate" | "trailer_plate" }[],
+    scheduleDate: string,
+    selfId: string | null
   ): Promise<string[]> {
+    let selfCreated = new Date().toISOString();
+    if (selfId) {
+      const { data: me } = await supabase
+        .from("loading_schedules")
+        .select("created_at")
+        .eq("id", selfId)
+        .maybeSingle();
+      if (me?.created_at) selfCreated = me.created_at;
+    }
     const warnings: string[] = [];
     for (const c of checks) {
       if (!c.plate) continue;
-      const { data: last } = await supabase
+      const { data: others } = await supabase
         .from("loading_schedules")
-        .select("schedule_date, status, client_name")
+        .select("id, schedule_date, status, created_at")
         .eq(c.column, c.plate)
+        .neq("status", "entregue")
+        .lte("schedule_date", scheduleDate)
         .order("schedule_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (last && last.status !== "entregue") {
-        const [y, m, d] = last.schedule_date.split("-");
+        .order("created_at", { ascending: false });
+      const prior = (others ?? []).find(
+        (o) =>
+          o.id !== selfId &&
+          (o.schedule_date < scheduleDate || o.created_at < selfCreated)
+      );
+      if (prior) {
+        const [y, m, d] = prior.schedule_date.split("-");
         warnings.push(
-          `A placa ${c.plate} (${c.label}) tem viagem em aberto: carregamento de ${d}/${m}/${y} (${loadingStatusLabel(last.status)}). Conclua a entrega antes de lançá-la de novo.`
+          `A placa ${c.plate} (${c.label}) tem viagem em aberto: carregamento de ${d}/${m}/${y} (${loadingStatusLabel(prior.status)}). Conclua a entrega antes de iniciar esta viagem.`
         );
       }
     }
@@ -340,13 +361,24 @@ export default function ProgramacaoPage() {
     setSaving(true);
     setFormError(null);
 
-    // Placa só entra em carregamento novo se a última viagem dela estiver
-    // como Entrega Concluída.
-    if (!editingId) {
-      const open = await findOpenTrips([
-        { label: "Cavalo/truck", plate: payload.plate, column: "plate" },
-        { label: "Semi-reboque", plate: payload.trailer_plate, column: "trailer_plate" },
-      ]);
+    // Só "Programado" entra livre; os demais status exigem a viagem anterior
+    // da placa concluída.
+    const original = editingId ? rows.find((r) => r.id === editingId) : null;
+    const changed =
+      !original ||
+      original.status !== payload.status ||
+      original.plate !== payload.plate ||
+      original.trailer_plate !== payload.trailer_plate ||
+      original.schedule_date !== payload.schedule_date;
+    if (RESTRICTED_STATUSES.has(payload.status) && changed) {
+      const open = await findPriorOpenTrips(
+        [
+          { label: "Cavalo/truck", plate: payload.plate, column: "plate" },
+          { label: "Semi-reboque", plate: payload.trailer_plate, column: "trailer_plate" },
+        ],
+        payload.schedule_date,
+        editingId
+      );
       if (open.length > 0) {
         setSaving(false);
         setFormError(open.join(" "));
@@ -375,6 +407,20 @@ export default function ProgramacaoPage() {
 
   async function changeStatus(load: Load, status: string) {
     const previous = load.status;
+    if (RESTRICTED_STATUSES.has(status)) {
+      const open = await findPriorOpenTrips(
+        [
+          { label: "Cavalo/truck", plate: load.plate, column: "plate" },
+          { label: "Semi-reboque", plate: load.trailer_plate, column: "trailer_plate" },
+        ],
+        load.schedule_date,
+        load.id
+      );
+      if (open.length > 0) {
+        toastError(open.join(" "));
+        return;
+      }
+    }
     setData((prev) =>
       prev
         ? {
