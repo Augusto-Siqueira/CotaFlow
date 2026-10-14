@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { fetchAllCityNames, invalidateCityCache } from "@/lib/cities";
+import { fetchAllCityNames, invalidateCityCache, isCityWithUf } from "@/lib/cities";
 import { AddressField, type AddressOption } from "@/components/AddressField";
 import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency, revisionLabel } from "@/lib/format";
@@ -702,7 +702,7 @@ function NewQuotePage({
           ...stopsWithShare.map((s) => s.address),
         ]
           .map((c) => c.trim())
-          .filter(Boolean)
+          .filter(isCityWithUf)
       )
     );
     if (newCityNames.length > 0) {

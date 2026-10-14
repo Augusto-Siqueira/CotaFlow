@@ -1,8 +1,14 @@
 import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 1000;
-const CACHE_KEY = "cotaflow:cities:v1";
+const CACHE_KEY = "cotaflow:cities:v2";
 const TTL_MS = 6 * 60 * 60 * 1000;
+
+// A tabela `cities` só guarda municípios reais, no formato "Cidade/UF".
+// Textos soltos digitados à mão não entram nela nem aparecem nas sugestões.
+export function isCityWithUf(name: string): boolean {
+  return /^.+\/[A-Z]{2}$/.test(name.trim());
+}
 
 let memory: string[] | null = null;
 let inflight: Promise<string[]> | null = null;

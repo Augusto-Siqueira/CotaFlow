@@ -14,7 +14,7 @@ import {
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
-import { fetchAllCityNames } from "@/lib/cities";
+import { fetchAllCityNames, isCityWithUf } from "@/lib/cities";
 import { DestinationsCell, DestinationsInput } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
@@ -185,7 +185,11 @@ export default function ProgramacaoPage() {
       );
     }
     loadOptions();
-    fetchAllCityNames().then(setCityNames);
+    // A tabela `cities` também guarda textos digitados à mão nas cotações
+    // (ex: "PALHOÇA"); só valem os municípios no formato "Cidade/UF".
+    fetchAllCityNames().then((names) =>
+      setCityNames(names.filter(isCityWithUf))
+    );
   }, []);
 
   const loading = data === null || data.date !== date;
