@@ -95,6 +95,9 @@ export default function DashboardPage() {
   const [to, setTo] = useState(today);
   const [client, setClient] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // Gráfico do painel: cargas por dia ou ranking de clientes.
+  const [chartView, setChartView] = useState<"dia" | "ranking">("dia");
+  const [rankBy, setRankBy] = useState<"count" | "tons">("count");
   const [data, setData] = useState<{
     key: string;
     rows: Load[];
@@ -196,6 +199,26 @@ export default function DashboardPage() {
     }));
   }, [rows, from, to, today, invalidRange]);
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+
+  // Ranking usa o período todo (sem o filtro de cliente), para continuar
+  // útil mesmo depois de escolher um cliente.
+  const ranking = useMemo(() => {
+    const map = new Map<string, { count: number; tons: number }>();
+    for (const r of periodRows) {
+      const name = r.client_name.trim() || "Sem cliente";
+      const c = map.get(name) ?? { count: 0, tons: 0 };
+      c.count++;
+      c.tons += parseTons(r.weight) ?? 0;
+      map.set(name, c);
+    }
+    return Array.from(map, ([name, v]) => ({ name, ...v })).sort(
+      (a, b) =>
+        b[rankBy] - a[rankBy] ||
+        b.count - a.count ||
+        a.name.localeCompare(b.name, "pt-BR")
+    );
+  }, [periodRows, rankBy]);
+  const rankMax = Math.max(1, ...ranking.map((c) => c[rankBy]));
 
   const listRows = useMemo(
     () =>
@@ -438,12 +461,106 @@ export default function DashboardPage() {
             })}
           </div>
 
-          {/* Cargas por dia */}
+          {/* Gráfico: cargas por dia ou ranking de clientes */}
           <section className="mt-6 rounded-xl border border-navy-200 bg-white p-4">
-            <h2 className="text-sm font-medium text-navy-900">
-              Cargas por {buckets[0]?.weekly ? "semana" : "dia"}
-            </h2>
-            {rows.length === 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div
+                role="tablist"
+                aria-label="Tipo de gráfico"
+                className="inline-flex overflow-hidden rounded-lg border border-navy-300"
+              >
+                {(
+                  [
+                    ["dia", `Cargas por ${buckets[0]?.weekly ? "semana" : "dia"}`],
+                    ["ranking", "Ranking de clientes"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={chartView === value}
+                    onClick={() => setChartView(value)}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      chartView === value
+                        ? "bg-brand-100 text-brand-800"
+                        : "text-navy-600 hover:bg-navy-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {chartView === "ranking" && (
+                <div className="flex items-center gap-2 text-xs text-navy-500">
+                  Ordenar por
+                  <div className="inline-flex overflow-hidden rounded-lg border border-navy-300">
+                    {(
+                      [
+                        ["count", "Cargas"],
+                        ["tons", "Toneladas"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={rankBy === value}
+                        onClick={() => setRankBy(value)}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          rankBy === value
+                            ? "bg-brand-100 text-brand-800"
+                            : "text-navy-600 hover:bg-navy-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {chartView === "ranking" ? (
+              ranking.length === 0 ? (
+                <p className="py-8 text-center text-sm text-navy-500">
+                  {loading ? "Carregando..." : "Nenhuma carga no período."}
+                </p>
+              ) : (
+                <ol className="mt-4 max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {ranking.map((c, i) => {
+                    const selected = activeClient === c.name;
+                    return (
+                      <li key={c.name}>
+                        <button
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setClient(selected ? "" : c.name)}
+                          title={selected ? "Mostrar todos os clientes" : `Filtrar por ${c.name}`}
+                          className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-navy-50 ${
+                            selected ? "bg-brand-50 ring-1 ring-brand-300" : ""
+                          } ${activeClient && !selected ? "opacity-60" : ""}`}
+                        >
+                          <span className="w-6 shrink-0 text-right text-xs text-navy-500">
+                            {i + 1}º
+                          </span>
+                          <span className="w-40 shrink-0 truncate font-medium text-navy-900 sm:w-56">
+                            {c.name}
+                          </span>
+                          <span className="h-4 min-w-0 flex-1 overflow-hidden rounded bg-navy-100">
+                            <span
+                              className="block h-full rounded bg-brand-400"
+                              style={{ width: `${Math.max((c[rankBy] / rankMax) * 100, 2)}%` }}
+                            />
+                          </span>
+                          <span className="w-32 shrink-0 text-right text-xs text-navy-700">
+                            {c.count} {c.count === 1 ? "carga" : "cargas"} · {formatTons(c.tons)} t
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )
+            ) : rows.length === 0 ? (
               <p className="py-8 text-center text-sm text-navy-500">
                 {loading ? "Carregando..." : "Nenhuma carga no período."}
               </p>
