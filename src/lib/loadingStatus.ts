@@ -1,10 +1,10 @@
 // Mantido em sincronia com loading_schedules_status_check (migrations 0038 e 0048).
 export const LOADING_STATUSES = [
-  { value: "programado", label: "Programado", badge: "bg-navy-100 text-navy-700" },
-  { value: "lavando", label: "Lavando", badge: "bg-sky-100 text-sky-800" },
-  { value: "carregando", label: "Carregando", badge: "bg-amber-100 text-amber-800" },
-  { value: "em_viagem", label: "Carregado em Viagem", badge: "bg-brand-100 text-brand-800" },
-  { value: "entregue", label: "Entrega Concluída", badge: "bg-teal-100 text-teal-800" },
+  { value: "programado", label: "Programado", badge: "bg-navy-200 text-navy-800" },
+  { value: "lavando", label: "Lavando", badge: "bg-sky-200 text-sky-900" },
+  { value: "carregando", label: "Carregando", badge: "bg-amber-200 text-amber-900" },
+  { value: "em_viagem", label: "Carregado em Viagem", badge: "bg-brand-200 text-brand-900" },
+  { value: "entregue", label: "Entrega Concluída", badge: "bg-teal-200 text-teal-900" },
 ] as const;
 
 export type LoadingStatus = (typeof LOADING_STATUSES)[number]["value"];

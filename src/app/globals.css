@@ -169,10 +169,16 @@ html.dark {
   --color-amber-700: #fbbf24;
   --color-amber-800: #fcd34d;
 
+  --color-amber-200: #3a2c12;
+  --color-amber-900: #fcd34d;
   --color-teal-100: #0f3a36;
+  --color-teal-200: #0f3a36;
   --color-teal-800: #5eead4;
+  --color-teal-900: #5eead4;
   --color-sky-100: #0c2e45;
+  --color-sky-200: #0c2e45;
   --color-sky-800: #7dd3fc;
+  --color-sky-900: #7dd3fc;
 }
 
 html.dark .bg-white {
