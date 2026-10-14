@@ -13,6 +13,7 @@ import {
 } from "@/lib/loadingStatus";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
+import { DestinationsCell, DestinationsInput } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
 
@@ -779,11 +780,10 @@ export default function ProgramacaoPage() {
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-destino-opcional">
                 Destino <span className="text-navy-500">(opcional)</span>
               </label>
-              <input id="prog-destino-opcional"
-                type="text"
+              <DestinationsInput id="prog-destino-opcional"
                 value={form.destination}
-                onChange={(e) => updateForm("destination", e.target.value)}
-                className={inputCls}
+                onChange={(v) => updateForm("destination", v)}
+                inputClassName={inputCls}
                 placeholder="Ex: Ponta Grossa/PR"
               />
             </div>
@@ -963,7 +963,7 @@ export default function ProgramacaoPage() {
                               <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                                 Destino
                               </span>
-                              {l.destination || "—"}
+                              <DestinationsCell value={l.destination} />
                             </div>
                           )}
                         </>
