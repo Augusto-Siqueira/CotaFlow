@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { buttonClasses } from "@/components/Button";
+import { ChecklistSection } from "./ChecklistSection";
 import { DataTable, type Column } from "@/components/DataTable";
 import {
   ORDER_COLUMNS,
@@ -783,6 +784,8 @@ export default function ManutencaoDashboardPage() {
           </section>
         </>
       )}
+
+      <ChecklistSection from={from} to={to} />
     </div>
   );
 }
