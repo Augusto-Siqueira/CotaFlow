@@ -13,7 +13,7 @@ import {
 } from "@/lib/loadingStatus";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
-import { AddressField, type AddressOption } from "@/components/AddressField";
+import { AddressField } from "@/components/AddressField";
 import { fetchAllCityNames } from "@/lib/cities";
 import { DestinationsCell, DestinationsInput } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
@@ -116,9 +116,8 @@ export default function ProgramacaoPage() {
 
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
-  // Sugestões de Origem/Destino: municípios + bases da empresa (igual à cotação).
+  // Sugestões de Origem/Destino: só municípios cadastrados.
   const [cityNames, setCityNames] = useState<string[]>([]);
-  const [baseOptions, setBaseOptions] = useState<AddressOption[]>([]);
   const [tractorPlates, setTractorPlates] = useState<string[]>([]);
   const [trailerPlates, setTrailerPlates] = useState<string[]>([]);
   const [drivers, setDrivers] = useState<{ nickname: string; name: string }[]>([]);
@@ -187,11 +186,6 @@ export default function ProgramacaoPage() {
     }
     loadOptions();
     fetchAllCityNames().then(setCityNames);
-    supabase
-      .from("company_bases")
-      .select("id, name")
-      .order("name")
-      .then(({ data }) => setBaseOptions(data ?? []));
   }, []);
 
   const loading = data === null || data.date !== date;
@@ -784,7 +778,8 @@ export default function ProgramacaoPage() {
                 onValueChange={(v) => updateForm("origin", v)}
                 placeholder="Ex: Palhoça/SC"
                 cities={cityNames}
-                addresses={baseOptions}
+                addresses={[]}
+                hideBasesButton
               />
             </div>
             <div className="lg:col-span-2">
@@ -796,7 +791,6 @@ export default function ProgramacaoPage() {
                 onChange={(v) => updateForm("destination", v)}
                 placeholder="Ex: Ponta Grossa/PR"
                 cities={cityNames}
-                addresses={baseOptions}
               />
             </div>
 

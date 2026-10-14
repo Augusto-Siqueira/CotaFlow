@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AddressField, type AddressOption } from "@/components/AddressField";
+import { AddressField } from "@/components/AddressField";
 
 // Vários destinos ficam no mesmo campo de texto, separados por ";" (nenhum
 // nome de cidade usa esse caractere), então não precisa de coluna nova.
@@ -29,14 +29,12 @@ export function DestinationsInput({
   onChange,
   placeholder,
   cities,
-  addresses,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   cities: string[];
-  addresses: AddressOption[];
 }) {
   const [draft, setDraft] = useState("");
   const list = splitDestinations(value);
@@ -73,7 +71,8 @@ export function DestinationsInput({
           }}
           placeholder={list.length > 0 ? "Outro destino (Enter para adicionar)" : (placeholder ?? "")}
           cities={cities}
-          addresses={addresses}
+          addresses={[]}
+          hideBasesButton
           className="flex-1"
         />
         <button

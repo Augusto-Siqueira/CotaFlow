@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export interface AddressOption {
   id: string;
@@ -28,6 +28,7 @@ export function AddressField({
   onKeyDown,
   onBlur,
   className,
+  hideBasesButton,
 }: {
   id?: string;
   ariaLabel?: string;
@@ -42,7 +43,12 @@ export function AddressField({
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onBlur?: () => void;
   className?: string;
+  // Esconde a seta ▾ (usada para listar as bases cadastradas) quando não há bases.
+  hideBasesButton?: boolean;
 }) {
+  const autoId = useId();
+  const baseId = id ?? autoId;
+  const [active, setActive] = useState(-1);
   const [openMode, setOpenMode] = useState<"closed" | "addresses" | "search">(
     "closed"
   );
@@ -76,7 +82,38 @@ export function AddressField({
   function selectSuggestion(name: string) {
     onValueChange(name);
     setOpenMode("closed");
+    setActive(-1);
     onPick?.(name);
+  }
+
+  const listOpen = openMode !== "closed" && suggestions.length > 0;
+
+  // Setas sobem/descem pela lista, Enter escolhe, Esc fecha.
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (suggestions.length === 0) return;
+      e.preventDefault();
+      if (!listOpen) {
+        setOpenMode(value.trim() ? "search" : "addresses");
+        setActive(0);
+        return;
+      }
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((i) => (i + step + suggestions.length) % suggestions.length);
+      return;
+    }
+    if (e.key === "Enter" && listOpen && active >= 0 && active < suggestions.length) {
+      e.preventDefault();
+      selectSuggestion(suggestions[active]);
+      return;
+    }
+    if (e.key === "Escape" && listOpen) {
+      e.preventDefault();
+      setOpenMode("closed");
+      setActive(-1);
+      return;
+    }
+    onKeyDown?.(e);
   }
 
   return (
@@ -89,12 +126,19 @@ export function AddressField({
           value={value}
           onChange={(e) => {
             onValueChange(e.target.value);
+            setActive(-1);
             setOpenMode(e.target.value.trim() ? "search" : "addresses");
           }}
           onFocus={() =>
             setOpenMode(value.trim() ? "search" : "addresses")
           }
-          onKeyDown={onKeyDown}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+          spellCheck={false}
+          role="combobox"
+          aria-expanded={listOpen}
+          aria-autocomplete="list"
+          aria-activedescendant={active >= 0 && listOpen ? `${baseId}-opt-${active}` : undefined}
           onBlur={() => {
             setTimeout(() => setOpenMode("closed"), 100);
             onBlur?.();
@@ -102,6 +146,7 @@ export function AddressField({
           className="w-full rounded-lg border border-navy-300 px-3 py-2 pr-8 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
           placeholder={placeholder}
         />
+        {!hideBasesButton && (
         <button
           type="button"
           tabIndex={-1}
@@ -114,16 +159,26 @@ export function AddressField({
         >
           ▾
         </button>
+        )}
       </div>
-      {openMode !== "closed" && suggestions.length > 0 && (
-        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-navy-200 bg-white py-1 shadow-lg">
-          {suggestions.map((s) => (
-            <li key={s}>
+      {listOpen && (
+        <ul role="listbox" className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-navy-200 bg-white py-1 shadow-lg">
+          {suggestions.map((s, i) => (
+            <li
+              key={s}
+              id={`${baseId}-opt-${i}`}
+              role="option"
+              aria-selected={i === active}
+              ref={i === active ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+            >
               <button
                 type="button"
+                tabIndex={-1}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectSuggestion(s)}
-                className="block w-full px-3 py-1.5 text-left text-sm text-navy-700 hover:bg-navy-50"
+                className={`block w-full px-3 py-1.5 text-left text-sm text-navy-700 hover:bg-navy-50 ${
+                  i === active ? "bg-navy-100" : ""
+                }`}
               >
                 {s}
               </button>
