@@ -37,6 +37,15 @@ interface Load {
   quotes: { client_quote_number: string | null } | null;
 }
 
+interface DefectInfo {
+  category: string;
+  severity: number;
+  status: string;
+  scheduled_for: string | null;
+}
+
+const SEVERITY_NAME: Record<number, string> = { 1: "pode rodar", 2: "atenção", 3: "parado" };
+
 interface MaintInfo {
   entry_at: string;
   expected_exit_at: string | null;
@@ -141,6 +150,8 @@ export default function ProgramacaoPage() {
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
   const [showMaint, setShowMaint] = useState(true);
+  // Defeitos relatados ainda sem a placa na oficina (triagem ou agendada), por placa.
+  const [defects, setDefects] = useState<Map<string, DefectInfo[]>>(new Map());
   // Placas que estão na oficina agora (tela Manutenção), por placa.
   const [inMaintenance, setInMaintenance] = useState<Map<string, MaintInfo>>(new Map());
   // Sugestões de Origem/Destino: só municípios cadastrados.
@@ -178,6 +189,36 @@ export default function ProgramacaoPage() {
       });
     }
     setInMaintenance(map);
+
+    const { data: reps } = await supabase
+      .from("maintenance_reports")
+      .select("plate, category, severity, status, scheduled_for")
+      .in("status", ["triagem", "agendada"]);
+    const dmap = new Map<string, DefectInfo[]>();
+    for (const r of (reps ?? []) as (DefectInfo & { plate: string })[]) {
+      dmap.set(r.plate, [...(dmap.get(r.plate) ?? []), r]);
+    }
+    setDefects(dmap);
+  }
+
+  // Aviso de defeito relatado: `blocking` = parado (severidade 3), que
+  // bloqueia o início de viagem; o resto só alerta.
+  function defectNotice(plate: string | null, label: string, blocking: boolean): string | null {
+    const list = (plate ? defects.get(plate) : undefined)?.filter((d) =>
+      blocking ? d.severity === 3 : d.severity < 3
+    );
+    if (!plate || !list || list.length === 0) return null;
+    const cats = Array.from(new Set(list.map((d) => d.category))).join(", ");
+    return blocking
+      ? `Placa ${plate} (${label}) com defeito relatado (${cats}): veículo parado, aguardando a manutenção.`
+      : `Placa ${plate} (${label}) com defeito relatado (${cats}, ${SEVERITY_NAME[Math.min(...list.map((d) => d.severity))]}).`;
+  }
+
+  function defectAlerts(cavalo: string | null, carreta: string | null): string[] {
+    return [
+      defectNotice(cavalo, "Cavalo/truck", false),
+      defectNotice(carreta, "Semi-reboque", false),
+    ].filter((m): m is string => Boolean(m));
   }
 
   // Texto do aviso quando a placa está em manutenção (null se não está).
@@ -193,6 +234,8 @@ export default function ProgramacaoPage() {
     return [
       maintenanceNotice(cavalo, "Cavalo/truck"),
       maintenanceNotice(carreta, "Semi-reboque"),
+      defectNotice(cavalo, "Cavalo/truck", true),
+      defectNotice(carreta, "Semi-reboque", true),
     ].filter((m): m is string => Boolean(m));
   }
 
@@ -741,16 +784,17 @@ export default function ProgramacaoPage() {
         </div>
       </div>
 
-      {inMaintenance.size > 0 && (
+      {(inMaintenance.size > 0 || defects.size > 0) && (
         <section
           aria-label="Veículos em manutenção"
           className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 print:hidden"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-medium text-red-800">
-              🔧 Em manutenção agora ({inMaintenance.size}){" "}
+              🔧 Em manutenção agora ({inMaintenance.size})
+              {defects.size > 0 && ` · ${defects.size} com defeito relatado`}{" "}
               <span className="font-normal">
-                — não use estas placas em viagem
+                — placas em manutenção não podem iniciar viagem
               </span>
             </h2>
             <span className="flex items-center gap-2">
@@ -771,6 +815,7 @@ export default function ProgramacaoPage() {
             </span>
           </div>
           {showMaint && (
+            <>
             <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from(inMaintenance, ([plate, info]) => {
                 const returns =
@@ -808,6 +853,49 @@ export default function ProgramacaoPage() {
                 );
               })}
             </ul>
+            {defects.size > 0 && (
+              <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from(defects, ([plate, list]) => {
+                  const worst = Math.max(...list.map((d) => d.severity));
+                  return (
+                    <li
+                      key={`d-${plate}`}
+                      className={`rounded-lg border bg-white px-3 py-2 text-xs text-navy-700 ${
+                        worst === 3 ? "border-red-300" : "border-amber-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold tracking-wide text-navy-900">
+                          {plate}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            worst === 3
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-200 text-amber-900"
+                          }`}
+                        >
+                          {worst === 3 ? "Parado" : worst === 2 ? "Atenção" : "Pode rodar"}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 truncate">
+                        Defeito: {Array.from(new Set(list.map((d) => d.category))).join(", ")}
+                      </div>
+                      {list.some((d) => d.status === "agendada" && d.scheduled_for) && (
+                        <div className="mt-0.5 font-medium text-amber-800">
+                          Entrada na oficina agendada para{" "}
+                          {fmtDateTime(
+                            list.find((d) => d.status === "agendada" && d.scheduled_for)!
+                              .scheduled_for!
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            </>
           )}
         </section>
       )}
@@ -1111,11 +1199,17 @@ export default function ProgramacaoPage() {
                     l.status === "entregue"
                       ? []
                       : maintenanceWarnings(l.plate, l.trailer_plate);
+                  const softAlerts =
+                    l.status === "entregue" ? [] : defectAlerts(l.plate, l.trailer_plate);
                   return (
                   <li
                     key={l.id}
                     className={`px-5 py-3 ${
-                      alerts.length > 0 ? "border-l-4 border-red-500 bg-red-50" : ""
+                      alerts.length > 0
+                        ? "border-l-4 border-red-500 bg-red-50"
+                        : softAlerts.length > 0
+                          ? "border-l-4 border-amber-500 bg-amber-50"
+                          : ""
                     }`}
                   >
                     <div
@@ -1216,6 +1310,13 @@ export default function ProgramacaoPage() {
                         className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-800"
                       >
                         {alerts.map((a) => (
+                          <p key={a}>⚠ {a}</p>
+                        ))}
+                      </div>
+                    )}
+                    {softAlerts.length > 0 && (
+                      <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900">
+                        {softAlerts.map((a) => (
                           <p key={a}>⚠ {a}</p>
                         ))}
                       </div>

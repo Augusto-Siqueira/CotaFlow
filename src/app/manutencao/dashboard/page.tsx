@@ -65,7 +65,8 @@ async function fetchRange(
 const fieldCls =
   "rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
-type View = "placas" | "oficinas";
+type View = "placas" | "oficinas" | "categorias";
+const AVAILABILITY_GOAL = 95;
 type OfficeSort = "count" | "avg";
 
 export default function ManutencaoDashboardPage() {
@@ -85,6 +86,14 @@ export default function ManutencaoDashboardPage() {
   } | null>(null);
   const [openNow, setOpenNow] = useState<number | null>(null);
   const latestKey = useRef("");
+  // Dados extras: ordens que cruzam o período (disponibilidade), defeitos
+  // (reincidência e categorias) e tamanho da frota.
+  const [extra, setExtra] = useState<{
+    key: string;
+    overlap: { plate: string; entry_at: string; exit_at: string | null }[];
+    reports: { plate: string; category: string; reported_at: string }[];
+    fleet: number;
+  } | null>(null);
 
   const key = `${from}|${to}`;
   const invalidRange = from > to;
@@ -96,6 +105,39 @@ export default function ManutencaoDashboardPage() {
       if (latestKey.current !== key) return;
       setData({ key, rows: res.rows, error: res.error });
     });
+  }, [from, to, key, invalidRange]);
+
+  useEffect(() => {
+    if (invalidRange) return;
+    const start = fromIso(from).toISOString();
+    const end = fromIso(addDays(to, 1)).toISOString();
+    const back = new Date(fromIso(from).getTime() - 30 * 86400000).toISOString();
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from("maintenance_orders")
+        .select("plate, entry_at, exit_at")
+        .lt("entry_at", end)
+        .or(`exit_at.is.null,exit_at.gte.${start}`),
+      supabase
+        .from("maintenance_reports")
+        .select("plate, category, reported_at")
+        .gte("reported_at", back)
+        .lt("reported_at", end)
+        .neq("status", "recusada"),
+      supabase.from("fleet_units").select("plate", { count: "exact", head: true }),
+    ]).then(([o, r, f]) => {
+      if (cancelled) return;
+      setExtra({
+        key,
+        overlap: o.data ?? [],
+        reports: r.data ?? [],
+        fleet: f.count ?? 0,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [from, to, key, invalidRange]);
 
   // "Em manutenção agora" não depende do período escolhido.
@@ -207,6 +249,53 @@ export default function ManutencaoDashboardPage() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodRows, activePlate, type, officeSort]);
+
+  // Disponibilidade = 1 − horas paradas na oficina ÷ (frota × horas do período).
+  const availability = useMemo(() => {
+    if (!extra || extra.key !== key || invalidRange) return null;
+    const periodStart = fromIso(from).getTime();
+    const periodEnd = Math.min(fromIso(addDays(to, 1)).getTime(), now);
+    if (periodEnd <= periodStart) return null;
+    const fleet = activePlate ? 1 : extra.fleet;
+    if (!fleet) return null;
+    let ms = 0;
+    for (const o of extra.overlap) {
+      if (activePlate && o.plate !== activePlate) continue;
+      const s = Math.max(new Date(o.entry_at).getTime(), periodStart);
+      const e = Math.min(o.exit_at ? new Date(o.exit_at).getTime() : now, periodEnd);
+      if (e > s) ms += e - s;
+    }
+    return { pct: Math.max(0, (1 - ms / (fleet * (periodEnd - periodStart))) * 100) };
+  }, [extra, key, invalidRange, from, to, now, activePlate]);
+
+  // Reincidência: defeito da mesma placa e categoria já relatado nos 30 dias antes.
+  const defects = useMemo(() => {
+    if (!extra || extra.key !== key || invalidRange) return null;
+    const startMs = fromIso(from).getTime();
+    const endMs = fromIso(addDays(to, 1)).getTime();
+    const t = (r: { reported_at: string }) => new Date(r.reported_at).getTime();
+    const list = extra.reports.filter((r) => !activePlate || r.plate === activePlate);
+    const inPeriod = list.filter((r) => t(r) >= startMs && t(r) < endMs);
+    const repeat = inPeriod.filter((r) =>
+      list.some(
+        (o) =>
+          o !== r &&
+          o.plate === r.plate &&
+          o.category === r.category &&
+          t(o) < t(r) &&
+          t(r) - t(o) <= 30 * 86400000
+      )
+    ).length;
+    const byCategory = new Map<string, number>();
+    for (const r of inPeriod) byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + 1);
+    return {
+      total: inPeriod.length,
+      repeat,
+      categories: Array.from(byCategory, ([name, count]) => ({ name, count })).sort(
+        (a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR")
+      ),
+    };
+  }, [extra, key, invalidRange, from, to, activePlate]);
 
   const plateMax = Math.max(1, ...plateRanking.map((p) => p.ms));
   const officeMax = Math.max(
@@ -418,7 +507,7 @@ export default function ManutencaoDashboardPage() {
             {loading && " · carregando..."}
           </p>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
             <div className="rounded-xl border border-navy-200 bg-white px-4 py-3">
               <div className="text-xs font-medium uppercase text-navy-500">Manutenções</div>
               <div className="mt-1 text-2xl font-semibold text-navy-900">{rows.length}</div>
@@ -465,6 +554,42 @@ export default function ManutencaoDashboardPage() {
                   : "nenhum custo informado"}
               </div>
             </div>
+            <div className="rounded-xl border border-navy-200 bg-white px-4 py-3">
+              <div className="text-xs font-medium uppercase text-navy-500">Disponibilidade</div>
+              <div
+                className={`mt-1 text-2xl font-semibold ${
+                  availability && availability.pct < AVAILABILITY_GOAL
+                    ? "text-amber-700"
+                    : "text-navy-900"
+                }`}
+              >
+                {availability ? `${availability.pct.toFixed(1).replace(".", ",")}%` : "—"}
+              </div>
+              <div className="mt-0.5 text-xs text-navy-500">
+                {activePlate ? `placa ${activePlate}` : "frota inteira"} · meta {AVAILABILITY_GOAL}%
+              </div>
+            </div>
+            <div className="rounded-xl border border-navy-200 bg-white px-4 py-3">
+              <div className="text-xs font-medium uppercase text-navy-500">
+                Reincidência (30 dias)
+              </div>
+              <div
+                className={`mt-1 text-2xl font-semibold ${
+                  defects && defects.total > 0 && defects.repeat / defects.total > 0.08
+                    ? "text-amber-700"
+                    : "text-navy-900"
+                }`}
+              >
+                {defects && defects.total > 0
+                  ? `${Math.round((defects.repeat / defects.total) * 100)}%`
+                  : "—"}
+              </div>
+              <div className="mt-0.5 text-xs text-navy-500">
+                {defects
+                  ? `${defects.repeat} de ${defects.total} defeitos voltaram`
+                  : "calculando..."}
+              </div>
+            </div>
           </div>
 
           <section className="mt-6 rounded-xl border border-navy-200 bg-white p-4">
@@ -492,6 +617,15 @@ export default function ManutencaoDashboardPage() {
                 >
                   Ranking de oficinas
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === "categorias"}
+                  onClick={() => setView("categorias")}
+                  className={tabCls(view === "categorias")}
+                >
+                  Defeitos por categoria
+                </button>
               </div>
               {view === "oficinas" && (
                 <div className="flex items-center gap-2 text-xs text-navy-500">
@@ -518,7 +652,36 @@ export default function ManutencaoDashboardPage() {
               )}
             </div>
 
-            {view === "placas" ? (
+            {view === "categorias" ? (
+              !defects || defects.categories.length === 0 ? (
+                <p className="py-8 text-center text-sm text-navy-500">
+                  Nenhum defeito relatado no período.
+                </p>
+              ) : (
+                <ol className="mt-4 max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {defects.categories.map((c, i) => (
+                    <li
+                      key={c.name}
+                      className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm"
+                    >
+                      <span className="w-6 shrink-0 text-right text-xs text-navy-500">{i + 1}º</span>
+                      <span className="w-28 shrink-0 font-medium text-navy-900">{c.name}</span>
+                      <span className="h-4 min-w-0 flex-1 overflow-hidden rounded bg-navy-100">
+                        <span
+                          className="block h-full rounded bg-amber-400"
+                          style={{
+                            width: `${Math.max((c.count / defects.categories[0].count) * 100, 2)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="w-28 shrink-0 text-right text-xs text-navy-700">
+                        {c.count} {c.count === 1 ? "defeito" : "defeitos"}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )
+            ) : view === "placas" ? (
               plateRanking.length === 0 ? (
                 <p className="py-8 text-center text-sm text-navy-500">
                   {loading ? "Carregando..." : "Nenhuma manutenção no período."}

@@ -88,3 +88,64 @@ export function parseMoney(value: string): number | null {
   const n = Number(normalized.replace(/[^\d.]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
+
+// ---------- Defeitos relatados (v1.06) ----------
+
+export const REPORT_CATEGORIES = [
+  "Freios",
+  "Motor",
+  "Elétrica",
+  "Pneus",
+  "Suspensão",
+  "Cabine",
+  "Carroceria",
+  "Outros",
+] as const;
+
+// 1 = pode rodar, 2 = atenção, 3 = veículo parado (bloqueia viagem).
+export const SEVERITIES = [
+  { value: 1, label: "Pode rodar", hint: "agendar depois", badge: "bg-brand-200 text-brand-900" },
+  { value: 2, label: "Atenção", hint: "ver em breve", badge: "bg-amber-200 text-amber-900" },
+  { value: 3, label: "Parado", hint: "não pode rodar", badge: "bg-red-100 text-red-700" },
+] as const;
+
+export function severityLabel(value: number): string {
+  return SEVERITIES.find((s) => s.value === value)?.label ?? String(value);
+}
+export function severityBadge(value: number): string {
+  return SEVERITIES.find((s) => s.value === value)?.badge ?? "bg-navy-200 text-navy-800";
+}
+
+export const REPORT_STAGES = [
+  { value: "triagem", label: "Triagem", dot: "bg-amber-400" },
+  { value: "agendada", label: "Agendada", dot: "bg-sky-400" },
+  { value: "em_oficina", label: "Em oficina", dot: "bg-red-500" },
+  { value: "concluida", label: "Concluída", dot: "bg-brand-500" },
+] as const;
+
+export function reportStageLabel(value: string): string {
+  if (value === "recusada") return "Recusada";
+  return REPORT_STAGES.find((s) => s.value === value)?.label ?? value;
+}
+
+// Meta de tempo na triagem (horas): depois disso o cartão fica em alerta.
+export const TRIAGE_SLA_HOURS = 4;
+
+export interface MaintenanceReport {
+  id: string;
+  plate: string;
+  category: string;
+  severity: number;
+  description: string;
+  status: string;
+  source: string;
+  reported_at: string;
+  scheduled_for: string | null;
+  workshop_id: string | null;
+  order_id: string | null;
+  stage_since: string;
+  closed_at: string | null;
+}
+
+export const REPORT_COLUMNS =
+  "id, plate, category, severity, description, status, source, reported_at, scheduled_for, workshop_id, order_id, stage_since, closed_at";

@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.05";
+export const APP_VERSION = "1.06";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.06",
+    date: "2026-10-16",
+    notes: [
+      "Manutenção: defeitos relatados com triagem (Triagem, Agendada, Em oficina, Concluída), com categoria, gravidade (Pode rodar, Atenção, Parado) e meta de 4h na triagem.",
+      "Do defeito agendado, a placa dá entrada na oficina com os dados já preenchidos; ao liberar a placa, o defeito conclui sozinho.",
+      "Dashboard de manutenção: disponibilidade da frota (meta 95%), reincidência de defeitos em 30 dias e ranking de defeitos por categoria.",
+      "Programação: placa com defeito Parado fica bloqueada para iniciar viagem; Atenção e Pode rodar geram alerta amarelo na linha da carga e na faixa de manutenção.",
+    ],
+  },
   {
     version: "1.05",
     date: "2026-10-15",
