@@ -4,10 +4,19 @@
 
 const NUMBER = /\d+(?:[.,]\d+)?/;
 
-/** Deixa só o número: "28 ton" → "28", "28.5t" → "28,5", "abc" → "". */
+/**
+ * Deixa só o número, em toneladas, com vírgula:
+ *  "28 ton" → "28", "28.5t" → "28,5", "abc" → "".
+ * Nenhuma carga passa de 1.000 t, então 1000 ou mais só pode ser quilo
+ * digitado sem vírgula: "32560" → "32,56" (32 t e 560 kg).
+ */
 export function normalizeWeight(value: string | null | undefined): string {
   const match = (value ?? "").match(NUMBER);
-  return match ? match[0].replace(".", ",") : "";
+  if (!match) return "";
+  let tons = Number(match[0].replace(",", "."));
+  if (!Number.isFinite(tons)) return "";
+  if (tons >= 1000) tons /= 1000;
+  return String(Math.round(tons * 1000) / 1000).replace(".", ",");
 }
 
 /** Filtro de digitação: só dígitos e uma vírgula ("." vira ","). */
@@ -23,6 +32,6 @@ export function parseTons(value: string | null | undefined): number | null {
   return n ? Number(n.replace(",", ".")) : null;
 }
 
-export function formatTons(tons: number): string {
-  return tons.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+export function formatTons(tons: number, maxDecimals = 1): string {
+  return tons.toLocaleString("pt-BR", { maximumFractionDigits: maxDecimals });
 }

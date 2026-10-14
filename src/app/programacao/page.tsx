@@ -742,6 +742,8 @@ export default function ProgramacaoPage() {
                 inputMode="decimal"
                 value={form.weight}
                 onChange={(e) => updateForm("weight", sanitizeWeightInput(e.target.value))}
+                // Ao sair do campo: "32560" (kg) vira "32,56" (toneladas).
+                onBlur={() => updateForm("weight", normalizeWeight(form.weight))}
                 className={inputCls}
                 placeholder="Ex: 28"
               />
@@ -990,7 +992,7 @@ export default function ProgramacaoPage() {
                         <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                           Peso
                         </span>
-                        {l.weight || "—"}
+                        {normalizeWeight(l.weight) || "—"}
                       </div>
                       <div className="font-medium tracking-wide text-navy-900">
                         <span className="block text-[11px] font-normal uppercase text-navy-500 lg:hidden">

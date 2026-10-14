@@ -279,7 +279,7 @@ export default function DashboardPage() {
       mobile: "field",
       cell: (r) => {
         const t = parseTons(r.weight);
-        return t === null ? "—" : formatTons(t);
+        return t === null ? "—" : formatTons(t, 3);
       },
     },
     { key: "plate", header: "Cavalo", mobile: "field", className: "font-medium", cell: (r) => r.plate || "—" },
