@@ -4,6 +4,10 @@
 //   API_URL=... SERVICE_ROLE_KEY=... node infra/scripts/seed-rehearsal.mjs
 import { createClient } from "@supabase/supabase-js";
 import { writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+
+// Senhas aleatórias, só para os usuários fictícios do ensaio local.
+const rnd = () => "Ens-" + randomBytes(9).toString("base64url");
 
 const url = process.env.API_URL;
 const key = process.env.SERVICE_ROLE_KEY;
@@ -18,10 +22,10 @@ const must = (r, what) => {
 };
 
 const users = {
-  admin: { email: "admin@ensaio.cotaflow.local", password: "Admin-Ensaio-1", role: "admin" },
+  admin: { email: "admin@ensaio.cotaflow.local", password: rnd(), role: "admin" },
   motorista: {
     email: "11122233344@motorista.transbochnia.com.br",
-    password: "Motorista-Ensaio-1",
+    password: rnd(),
     role: "motorista",
   },
 };
