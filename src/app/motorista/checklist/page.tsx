@@ -95,9 +95,12 @@ export default function ChecklistPage() {
     setStep("items");
   }
 
+  // Copia os arquivos AGORA: a lista do campo é "viva" e fica vazia assim que o
+  // campo é limpo (o que acontece logo depois, no onChange).
   function addFile(id: string, list: FileList | null) {
     if (!list) return;
-    setFiles((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), ...Array.from(list)].slice(0, 3) }));
+    const picked = Array.from(list);
+    setFiles((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), ...picked].slice(0, 3) }));
   }
 
   const needsPhoto = (id: string) => photoItems.has(id) && answers[id] && answers[id] !== "na";

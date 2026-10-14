@@ -55,9 +55,12 @@ export default function RelatarDefeitoPage() {
     [plate, otherPlate]
   );
 
+  // Copia os arquivos AGORA: a lista do campo é "viva" e fica vazia assim que o
+  // campo é limpo (o que acontece logo depois, no onChange).
   function addFiles(list: FileList | null) {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)].slice(0, MAX_PHOTOS));
+    const picked = Array.from(list);
+    setFiles((prev) => [...prev, ...picked].slice(0, MAX_PHOTOS));
   }
 
   async function submit(e: React.FormEvent) {
