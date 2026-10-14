@@ -9,6 +9,7 @@ import { buttonClasses } from "@/components/Button";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
 import { SearchSelect } from "@/components/SearchSelect";
+import { photoUrl } from "@/lib/photos";
 import {
   ORDER_COLUMNS,
   REPORT_CATEGORIES,
@@ -152,6 +153,12 @@ export default function ManutencaoPage() {
   const [detailSchedule, setDetailSchedule] = useState("");
   const [detailWorkshop, setDetailWorkshop] = useState("");
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailPhotos, setDetailPhotos] = useState<string[]>([]);
+
+  // Check-list de hoje: motoristas com carga hoje e se já fizeram.
+  const [checklists, setChecklists] = useState<
+    { label: string; hasAccess: boolean; done: boolean; ncs: number }[] | null
+  >(null);
 
   const loadOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -202,17 +209,49 @@ export default function ManutencaoPage() {
     setReports((data as MaintenanceReport[] | null) ?? []);
   }, []);
 
+  const loadChecklists = useCallback(async () => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const [l, d, c] = await Promise.all([
+      supabase.from("loading_schedules").select("driver").eq("schedule_date", localDate(new Date())),
+      supabase.from("drivers").select("name, nickname, user_id"),
+      supabase
+        .from("driver_checklists")
+        .select("user_id, nonconformities")
+        .gte("finished_at", start.toISOString()),
+    ]);
+    const labels = new Set(
+      ((l.data ?? []) as { driver: string | null }[]).map((x) => x.driver).filter(Boolean)
+    );
+    const done = (c.data ?? []) as { user_id: string; nonconformities: number }[];
+    const rows = ((d.data ?? []) as { name: string; nickname: string | null; user_id: string | null }[])
+      .map((dr) => ({ label: dr.nickname?.trim() || dr.name, name: dr.name, user_id: dr.user_id }))
+      .filter((dr) => labels.has(dr.label) || labels.has(dr.name))
+      .map((dr) => {
+        const mine = done.filter((x) => x.user_id === dr.user_id);
+        return {
+          label: dr.label,
+          hasAccess: Boolean(dr.user_id),
+          done: mine.length > 0,
+          ncs: mine.reduce((sum, x) => sum + x.nonconformities, 0),
+        };
+      })
+      .sort((a, b) => Number(a.done) - Number(b.done) || a.label.localeCompare(b.label, "pt-BR"));
+    setChecklists(rows);
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
     loadReports();
+    loadChecklists();
     loadWorkshops();
     supabase
       .from("fleet_units")
       .select("plate, kind")
       .order("plate")
       .then(({ data }) => setFleet((data as FleetUnit[] | null) ?? []));
-  }, [loadOrders, loadReports, loadWorkshops]);
+  }, [loadOrders, loadReports, loadChecklists, loadWorkshops]);
 
   const plateOptions = useMemo(
     () => fleet.map((f) => ({ value: f.plate, hint: KIND_LABEL[f.kind] ?? f.kind })),
@@ -488,6 +527,10 @@ export default function ManutencaoPage() {
     setDetailSchedule(toLocalInput(r.scheduled_for));
     setDetailWorkshop(r.workshop_id ?? "");
     setDetailError(null);
+    setDetailPhotos([]);
+    Promise.all((r.photos ?? []).map((p) => photoUrl(p))).then((urls) =>
+      setDetailPhotos(urls.filter((u): u is string => Boolean(u)))
+    );
   }
 
   async function patchReport(
@@ -1034,6 +1077,44 @@ export default function ManutencaoPage() {
         )}
       </section>
 
+      {checklists !== null && checklists.length > 0 && (
+        <section className="mt-6" aria-label="Check-list de hoje">
+          <h2 className="mb-2 text-sm font-medium text-navy-900">
+            Check-list de hoje{" "}
+            <span className="font-normal text-navy-500">
+              ({checklists.filter((c) => c.done).length} de {checklists.length} motoristas com carga)
+            </span>
+          </h2>
+          <ul className="flex flex-wrap gap-2">
+            {checklists.map((c) => (
+              <li
+                key={c.label}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  c.done
+                    ? c.ncs > 0
+                      ? "bg-amber-200 text-amber-900"
+                      : "bg-brand-200 text-brand-900"
+                    : c.hasAccess
+                      ? "bg-red-100 text-red-700"
+                      : "bg-navy-200 text-navy-700"
+                }`}
+                title={
+                  c.done
+                    ? `${c.ncs} problema(s) relatado(s)`
+                    : c.hasAccess
+                      ? "Ainda não fez o check-list hoje"
+                      : "Sem acesso ao app"
+                }
+              >
+                {c.done ? "✓" : c.hasAccess ? "⚠" : "—"} {c.label}
+                {c.done && c.ncs > 0 ? ` · ${c.ncs} problema(s)` : ""}
+                {!c.done && !c.hasAccess ? " · sem app" : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="mt-6">
         <h2 className="mb-2 text-sm font-medium text-navy-900">
           Em manutenção agora{" "}
@@ -1191,6 +1272,31 @@ export default function ManutencaoPage() {
           <p className="mt-4 whitespace-pre-wrap rounded-lg bg-navy-50 px-3 py-2 text-sm text-navy-800">
             {detail.description}
           </p>
+          {(detail.photos?.length ?? 0) > 0 && (
+            <div className="mt-3">
+              <p className="mb-1 text-xs font-medium text-navy-600">
+                Fotos ({detail.photos!.length})
+              </p>
+              {detailPhotos.length === 0 ? (
+                <p className="text-xs text-navy-500">Carregando fotos...</p>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {detailPhotos.map((u, i) => (
+                    <li key={u}>
+                      <a href={u} target="_blank" rel="noreferrer" title="Abrir a foto">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={u}
+                          alt={`Foto ${i + 1} do defeito`}
+                          className="h-20 w-20 rounded-lg border border-navy-200 object-cover"
+                        />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {canEditMaintenance && (detail.status === "triagem" || detail.status === "agendada") && (
             <div className="mt-4 space-y-3">

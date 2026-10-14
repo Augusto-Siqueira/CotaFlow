@@ -145,7 +145,8 @@ export interface MaintenanceReport {
   order_id: string | null;
   stage_since: string;
   closed_at: string | null;
+  photos: string[] | null;
 }
 
 export const REPORT_COLUMNS =
-  "id, plate, category, severity, description, status, source, reported_at, scheduled_for, workshop_id, order_id, stage_since, closed_at";
+  "id, plate, category, severity, description, status, source, reported_at, scheduled_for, workshop_id, order_id, stage_since, closed_at, photos";

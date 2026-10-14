@@ -11,7 +11,7 @@ import { SidebarMenu, currentPageTitle } from "@/components/SidebarMenu";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const { user, role } = useAuth();
+  const { user, role, isDriver } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
 
@@ -31,7 +31,7 @@ export function SiteHeader() {
     <header className="bg-chrome-900 print:hidden">
       <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          {user && (
+          {user && !isDriver && (
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
@@ -55,7 +55,7 @@ export function SiteHeader() {
             </button>
           )}
           <Link
-            href="/"
+            href={isDriver ? "/motorista" : "/"}
             className="flex items-center gap-2 text-lg font-bold tracking-tight text-white"
           >
             <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
@@ -78,7 +78,11 @@ export function SiteHeader() {
                 ? "Comercial"
                 : role === "logistica"
                   ? "Logística"
-                  : "Somente leitura"}
+                  : role === "manutencao"
+                    ? "Manutenção"
+                    : role === "motorista"
+                      ? "Motorista"
+                      : "Somente leitura"}
             </span>
             <ThemeToggle className="text-chrome-300 hover:text-brand-400" />
             <button
@@ -92,7 +96,7 @@ export function SiteHeader() {
         )}
       </div>
 
-      {user && menuOpen && (
+      {user && !isDriver && menuOpen && (
         <SidebarMenu
           pathname={pathname}
           role={role}

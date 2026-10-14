@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.06";
+export const APP_VERSION = "1.07";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.07",
+    date: "2026-10-17",
+    notes: [
+      "App do motorista (instalável no Android e no iPhone): login com CPF, troca de senha no primeiro acesso e tela com as cargas do dia.",
+      "Check-list diário digital, com itens editáveis pela Manutenção, foto sorteada em 2 itens, hora e posição; cada problema marcado vira um defeito na triagem da manutenção.",
+      "Relato de defeito pelo motorista, com categoria, gravidade e fotos, direto na triagem.",
+      "Manutenção: fotos nos defeitos e painel com quem já fez ou ainda não fez o check-list hoje.",
+      "Segurança: o perfil motorista só vê as próprias cargas, relatos e check-lists; cotações, preços, clientes e CPFs ficam fechados para ele.",
+    ],
+  },
   {
     version: "1.06",
     date: "2026-10-16",

@@ -11,6 +11,8 @@ interface AuthState {
   role: string | null;
   canEditSchedule: boolean;
   canEditMaintenance: boolean;
+  isDriver: boolean;
+  mustChangePassword: boolean;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -20,6 +22,8 @@ const AuthContext = createContext<AuthState>({
   role: null,
   canEditSchedule: false,
   canEditMaintenance: false,
+  isDriver: false,
+  mustChangePassword: false,
 });
 
 // O perfil vem de app_metadata.role, que só pode ser alterado pelo painel do
@@ -36,6 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role: null,
     canEditSchedule: false,
     canEditMaintenance: false,
+    isDriver: false,
+    mustChangePassword: false,
   });
 
   useEffect(() => {
@@ -48,6 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         canEditSchedule: role === "admin" || role === "logistica",
         canEditMaintenance: role === "admin" || role === "manutencao",
+        isDriver: role === "motorista",
+        mustChangePassword: user?.user_metadata?.must_change_password === true,
       });
     }
 

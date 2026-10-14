@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { loginToEmail } from "@/lib/driver";
 import { CaptchaWidget, type CaptchaRef } from "@/components/CaptchaWidget";
 
 export function LoginForm() {
@@ -19,7 +20,7 @@ export function LoginForm() {
     setSubmitting(true);
 
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: loginToEmail(email),
       password,
       options: { captchaToken: captchaToken ?? undefined },
     });
@@ -48,12 +49,13 @@ export function LoginForm() {
           htmlFor="email"
           className="block text-sm font-medium text-navy-700"
         >
-          E-mail
+          E-mail ou CPF
         </label>
         <input
           id="email"
-          type="email"
-          autoComplete="email"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}

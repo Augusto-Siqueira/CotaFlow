@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
+import { RoleRedirect } from "@/components/RoleRedirect";
 import { AuthProvider } from "@/lib/auth";
 import { FeedbackProvider } from "@/components/Feedback";
 import { THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
@@ -14,7 +15,10 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "CotaFlow",
   description: "Plataforma de cotação de frete rodoviário",
+  appleWebApp: { capable: true, title: "CotaFlow", statusBarStyle: "black-translucent" },
 };
+
+export const viewport: Viewport = { themeColor: "#181848" };
 
 export default function RootLayout({
   children,
@@ -34,6 +38,7 @@ export default function RootLayout({
         <FeedbackProvider>
           <AuthProvider>
             <SiteHeader />
+            <RoleRedirect />
             <main className="flex flex-1 flex-col">{children}</main>
           </AuthProvider>
         </FeedbackProvider>
