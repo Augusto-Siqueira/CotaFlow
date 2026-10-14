@@ -137,6 +137,7 @@ export function AddressField({
           spellCheck={false}
           role="combobox"
           aria-expanded={listOpen}
+          aria-controls={`${baseId}-list`}
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 && listOpen ? `${baseId}-opt-${active}` : undefined}
           onBlur={() => {
@@ -162,7 +163,7 @@ export function AddressField({
         )}
       </div>
       {listOpen && (
-        <ul role="listbox" className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-navy-200 bg-white py-1 shadow-lg">
+        <ul id={`${baseId}-list`} role="listbox" className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-navy-200 bg-white py-1 shadow-lg">
           {suggestions.map((s, i) => (
             <li
               key={s}

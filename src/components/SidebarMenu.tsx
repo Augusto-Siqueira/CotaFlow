@@ -41,6 +41,15 @@ export const NAV: NavEntry[] = [
     ],
   },
   {
+    key: "manutencao",
+    label: "Manutenção",
+    icon: "M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z",
+    items: [
+      { href: "/manutencao", label: "Lançamentos" },
+      { href: "/manutencao/dashboard", label: "Dashboard" },
+    ],
+  },
+  {
     key: "cadastros",
     label: "Cadastros",
     icon: "M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21c0-4 4-6 8-6s8 2 8 6",
@@ -180,7 +189,10 @@ export function SidebarMenu({
 
         <nav className="flex-1 px-3 py-3" aria-label="Principal">
           <ul className="flex flex-col gap-1">
-            {NAV.map((entry) => {
+            {(role === "manutencao"
+              ? NAV.filter((e) => e.key === "inicio" || e.key === "manutencao")
+              : NAV
+            ).map((entry) => {
               if (entry.href) {
                 return (
                   <li key={entry.key}>

@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.04";
+export const APP_VERSION = "1.05";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.05",
+    date: "2026-10-15",
+    notes: [
+      "Nova área de Manutenção (perfil próprio): lança a entrada da placa na oficina, com data e hora (pode ser retroativa), oficina, tipo de serviço (preventiva ou corretiva), serviço, previsão de saída, quilometragem, custo e observações, e libera a placa quando ela sai.",
+      "Dashboard de manutenção: histórico por período, placa, oficina e tipo; tempo parado por placa; ranking de oficinas; custo e placas em manutenção agora.",
+      "Programação integrada: carga com placa em manutenção fica em vermelho com alerta; Lavando, Carregando e Carregado em Viagem ficam bloqueados até a placa ser liberada. Ao lançar a entrada, o sistema avisa quais cargas programadas usam a placa.",
+    ],
+  },
   {
     version: "1.04",
     date: "2026-10-14",

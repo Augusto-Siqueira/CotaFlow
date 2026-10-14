@@ -10,6 +10,7 @@ interface AuthState {
   isAdmin: boolean;
   role: string | null;
   canEditSchedule: boolean;
+  canEditMaintenance: boolean;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthState>({
   isAdmin: false,
   role: null,
   canEditSchedule: false,
+  canEditMaintenance: false,
 });
 
 // O perfil vem de app_metadata.role, que só pode ser alterado pelo painel do
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin: false,
     role: null,
     canEditSchedule: false,
+    canEditMaintenance: false,
   });
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin: role === "admin",
         role,
         canEditSchedule: role === "admin" || role === "logistica",
+        canEditMaintenance: role === "admin" || role === "manutencao",
       });
     }
 

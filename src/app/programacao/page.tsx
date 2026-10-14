@@ -37,6 +37,21 @@ interface Load {
   quotes: { client_quote_number: string | null } | null;
 }
 
+interface MaintInfo {
+  entry_at: string;
+  expected_exit_at: string | null;
+  workshop: string;
+}
+
+function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // Status que só podem ser usados com a viagem anterior da placa concluída.
 const RESTRICTED_STATUSES = new Set(["lavando", "carregando", "em_viagem"]);
 
@@ -123,6 +138,8 @@ export default function ProgramacaoPage() {
 
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
+  // Placas que estão na oficina agora (tela Manutenção), por placa.
+  const [inMaintenance, setInMaintenance] = useState<Map<string, MaintInfo>>(new Map());
   // Sugestões de Origem/Destino: só municípios cadastrados.
   const [cityNames, setCityNames] = useState<string[]>([]);
   const [tractorPlates, setTractorPlates] = useState<string[]>([]);
@@ -135,6 +152,43 @@ export default function ProgramacaoPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  async function loadMaintenance() {
+    const { data } = await supabase
+      .from("maintenance_orders")
+      .select("plate, entry_at, expected_exit_at, maintenance_workshops(name)")
+      .is("exit_at", null);
+    const map = new Map<string, MaintInfo>();
+    for (const o of (data ?? []) as unknown as {
+      plate: string;
+      entry_at: string;
+      expected_exit_at: string | null;
+      maintenance_workshops: { name: string } | null;
+    }[]) {
+      map.set(o.plate, {
+        entry_at: o.entry_at,
+        expected_exit_at: o.expected_exit_at,
+        workshop: o.maintenance_workshops?.name ?? "oficina",
+      });
+    }
+    setInMaintenance(map);
+  }
+
+  // Texto do aviso quando a placa está em manutenção (null se não está).
+  function maintenanceNotice(plate: string | null, label: string): string | null {
+    const info = plate ? inMaintenance.get(plate) : undefined;
+    if (!plate || !info) return null;
+    return `Placa ${plate} (${label}) em manutenção desde ${fmtDateTime(info.entry_at)} (${info.workshop})${
+      info.expected_exit_at ? `, previsão de saída ${fmtDateTime(info.expected_exit_at)}` : ""
+    }.`;
+  }
+
+  function maintenanceWarnings(cavalo: string | null, carreta: string | null): string[] {
+    return [
+      maintenanceNotice(cavalo, "Cavalo/truck"),
+      maintenanceNotice(carreta, "Semi-reboque"),
+    ].filter((m): m is string => Boolean(m));
+  }
+
   async function fetchRows(d: string) {
     const { data: rows, error } = await supabase
       .from("loading_schedules")
@@ -145,6 +199,7 @@ export default function ProgramacaoPage() {
       .order("loading_time", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
 
+    loadMaintenance();
     if (d !== latestDate.current) return;
     setData({
       date: d,
@@ -155,7 +210,9 @@ export default function ProgramacaoPage() {
 
   useEffect(() => {
     latestDate.current = date;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRows(date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
   useEffect(() => {
@@ -396,9 +453,12 @@ export default function ProgramacaoPage() {
         payload.schedule_date,
         editingId
       );
-      if (open.length > 0) {
+      const maint = maintenanceWarnings(payload.plate, payload.trailer_plate).map(
+        (m) => `${m} Só é possível lançar como Programado até a placa ser liberada.`
+      );
+      if (open.length + maint.length > 0) {
         setSaving(false);
-        setFormError(open.join(" "));
+        setFormError([...maint, ...open].join(" "));
         return;
       }
     }
@@ -433,8 +493,11 @@ export default function ProgramacaoPage() {
         load.schedule_date,
         load.id
       );
-      if (open.length > 0) {
-        toastError(open.join(" "));
+      const maint = maintenanceWarnings(load.plate, load.trailer_plate).map(
+        (m) => `${m} Libere a placa na Manutenção antes de iniciar a viagem.`
+      );
+      if (open.length + maint.length > 0) {
+        toastError([...maint, ...open].join(" "));
         return;
       }
     }
@@ -764,6 +827,11 @@ export default function ProgramacaoPage() {
                   Placa não cadastrada na frota.
                 </p>
               )}
+              {fieldChecks.plate && inMaintenance.has(fieldChecks.plate) && (
+                <p className="mt-1 text-xs font-medium text-red-600">
+                  ⚠ Em manutenção desde {fmtDateTime(inMaintenance.get(fieldChecks.plate)!.entry_at)}. Só Programado.
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-placa-do-semi-reboque">
@@ -779,6 +847,11 @@ export default function ProgramacaoPage() {
               {fieldChecks.trailer_plate === null && (
                 <p className="mt-1 text-xs text-red-600">
                   Placa não cadastrada na frota.
+                </p>
+              )}
+              {fieldChecks.trailer_plate && inMaintenance.has(fieldChecks.trailer_plate) && (
+                <p className="mt-1 text-xs font-medium text-red-600">
+                  ⚠ Em manutenção desde {fmtDateTime(inMaintenance.get(fieldChecks.trailer_plate)!.entry_at)}. Só Programado.
                 </p>
               )}
             </div>
@@ -955,8 +1028,18 @@ export default function ProgramacaoPage() {
               </div>
 
               <ul className="divide-y divide-navy-100">
-                {loads.map((l) => (
-                  <li key={l.id} className="px-5 py-3">
+                {loads.map((l) => {
+                  const alerts =
+                    l.status === "entregue"
+                      ? []
+                      : maintenanceWarnings(l.plate, l.trailer_plate);
+                  return (
+                  <li
+                    key={l.id}
+                    className={`px-5 py-3 ${
+                      alerts.length > 0 ? "border-l-4 border-red-500 bg-red-50" : ""
+                    }`}
+                  >
                     <div
                       style={{ "--cols": cols.replaceAll("_", " ") } as React.CSSProperties}
                       className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm lg:items-center lg:gap-3 lg:[grid-template-columns:var(--cols)]"
@@ -1049,6 +1132,17 @@ export default function ProgramacaoPage() {
                       </div>
                     </div>
 
+                    {alerts.length > 0 && (
+                      <div
+                        role="alert"
+                        className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-800"
+                      >
+                        {alerts.map((a) => (
+                          <p key={a}>⚠ {a}</p>
+                        ))}
+                      </div>
+                    )}
+
                     {(l.quote_id || canEditSchedule) && (
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                         {l.quote_id && (
@@ -1082,7 +1176,8 @@ export default function ProgramacaoPage() {
                       </div>
                     )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </section>
             );
