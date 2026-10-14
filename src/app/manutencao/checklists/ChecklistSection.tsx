@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/maintenance";
 import {
   FAST_MINUTES,
   checklistMinutes,
+  expectedDays,
   fetchChecklists,
   fetchDrivers,
   fetchLoadDays,
@@ -89,8 +90,6 @@ export function ChecklistSection({ from, to }: { from: string; to: string }) {
   }, []);
 
   const loading = !invalid && (data === null || data.key !== key);
-  const today = localDate(new Date());
-
   const driverByUser = useMemo(() => {
     const m = new Map<string, ChecklistDriver>();
     for (const d of data?.drivers ?? []) if (d.userId) m.set(d.userId, d);
@@ -101,15 +100,13 @@ export function ChecklistSection({ from, to }: { from: string; to: string }) {
     if (!data || data.key !== key) return [];
     return data.drivers
       .map((d) => {
-        // Dias (até hoje) em que o motorista tinha carga.
-        const expected = new Set(
+        // Obrigatório todo dia (domingo só com carga), desde que ganhou acesso.
+        const loadDays = new Set(
           data.loads
-            .filter(
-              (l) =>
-                l.schedule_date <= today && (l.driver === d.label || l.driver === d.name)
-            )
+            .filter((l) => l.driver === d.label || l.driver === d.name)
             .map((l) => l.schedule_date)
         );
+        const expected = expectedDays(d, loadDays, from, to);
         const mine = data.lists.filter((c) => d.userId !== null && c.user_id === d.userId);
         const doneDays = new Set(mine.map((c) => localDate(new Date(c.finished_at))));
         let expectedDone = 0;
@@ -123,14 +120,14 @@ export function ChecklistSection({ from, to }: { from: string; to: string }) {
           last: mine[0]?.finished_at ?? null,
         };
       })
-      .filter((s) => s.expectedDays > 0 || s.total > 0)
+      .filter((s) => s.hasAccess || s.total > 0)
       .sort(
         (a, b) =>
           (a.expectedDays ? a.doneDays / a.expectedDays : 1) -
             (b.expectedDays ? b.doneDays / b.expectedDays : 1) ||
           a.label.localeCompare(b.label, "pt-BR")
       );
-  }, [data, key, today]);
+  }, [data, key, from, to]);
 
   const adherence = useMemo(() => {
     const withApp = stats.filter((s) => s.hasAccess);
@@ -260,7 +257,8 @@ export function ChecklistSection({ from, to }: { from: string; to: string }) {
     <section className="mt-8" aria-label="Check-lists dos motoristas">
       <h2 className="text-base font-semibold text-navy-900">Check-lists dos motoristas</h2>
       <p className="mt-0.5 text-xs text-navy-500">
-        Aderência = dias com carga em que o motorista fez o check-list (só quem tem acesso ao app).
+        O check-list é obrigatório todo dia para todo motorista com acesso ao app, tenha ou não
+        carga (domingo só conta se houver carga).
       </p>
 
       <div className="mt-3">
@@ -279,10 +277,10 @@ export function ChecklistSection({ from, to }: { from: string; to: string }) {
           </div>
           <div className="mt-0.5 text-xs text-navy-500">
             {adherence
-              ? `${adherence.done} de ${adherence.expected} dias com carga`
+              ? `${adherence.done} de ${adherence.expected} dias esperados`
               : loading
                 ? "calculando..."
-                : "sem dias com carga no período"}
+                : "sem dias esperados no período"}
           </div>
         </div>
         <div className="rounded-xl border border-navy-200 bg-white px-4 py-3">
@@ -360,7 +358,7 @@ export function ChecklistSection({ from, to }: { from: string; to: string }) {
         {tab === "motorista" ? (
           stats.length === 0 ? (
             <p className="py-8 text-center text-sm text-navy-500">
-              {loading ? "Carregando..." : "Nenhum motorista com carga ou check-list no período."}
+              {loading ? "Carregando..." : "Nenhum motorista com acesso ao app ou check-list no período."}
             </p>
           ) : (
             <ul className="mt-3 max-h-96 space-y-1 overflow-y-auto pr-1">

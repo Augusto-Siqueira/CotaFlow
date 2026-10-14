@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { buttonClasses } from "@/components/Button";
-import { ChecklistSection } from "./ChecklistSection";
 import { DataTable, type Column } from "@/components/DataTable";
 import {
   ORDER_COLUMNS,
@@ -785,7 +784,13 @@ export default function ManutencaoDashboardPage() {
         </>
       )}
 
-      <ChecklistSection from={from} to={to} />
+      <p className="mt-8 text-sm text-navy-500">
+        Os check-lists dos motoristas têm tela própria:{" "}
+        <Link href="/manutencao/checklists" className="font-medium text-brand-700 underline">
+          abrir Check-lists
+        </Link>
+        .
+      </p>
     </div>
   );
 }

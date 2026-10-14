@@ -47,6 +47,7 @@ export const NAV: NavEntry[] = [
     items: [
       { href: "/manutencao", label: "Lançamentos" },
       { href: "/manutencao/dashboard", label: "Dashboard" },
+      { href: "/manutencao/checklists", label: "Check-lists" },
     ],
   },
   {

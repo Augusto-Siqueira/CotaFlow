@@ -16,7 +16,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "App do motorista (instalável no Android e no iPhone): login com CPF, troca de senha no primeiro acesso e tela com as cargas do dia.",
       "Check-list diário digital, com itens editáveis pela Manutenção, foto sorteada em 2 itens, hora e posição; cada problema marcado vira um defeito na triagem da manutenção.",
       "Relato de defeito pelo motorista, com categoria, gravidade e fotos, direto na triagem.",
-      "Dashboard de manutenção: check-lists dos motoristas com alerta de quem ainda não fez hoje, aderência, ranking por motorista e histórico com detalhe, fotos e local; sinaliza check-list feito rápido demais.",
+      "Tela própria de Check-lists dentro de Manutenção: o check-list é obrigatório todo dia para todo motorista com acesso ao app (tenha ou não carga), com alerta de quem não fez hoje, aderência, ranking por motorista e histórico com detalhe, fotos e local; sinaliza check-list feito rápido demais.",
       "Manutenção: fotos nos defeitos.",
       "Segurança: o perfil motorista só vê as próprias cargas, relatos e check-lists; cotações, preços, clientes e CPFs ficam fechados para ele.",
     ],
