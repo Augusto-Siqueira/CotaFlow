@@ -41,6 +41,8 @@ interface MaintInfo {
   entry_at: string;
   expected_exit_at: string | null;
   workshop: string;
+  service: string;
+  service_type: string;
 }
 
 function fmtDateTime(iso: string): string {
@@ -138,6 +140,7 @@ export default function ProgramacaoPage() {
 
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
+  const [showMaint, setShowMaint] = useState(true);
   // Placas que estão na oficina agora (tela Manutenção), por placa.
   const [inMaintenance, setInMaintenance] = useState<Map<string, MaintInfo>>(new Map());
   // Sugestões de Origem/Destino: só municípios cadastrados.
@@ -155,19 +158,23 @@ export default function ProgramacaoPage() {
   async function loadMaintenance() {
     const { data } = await supabase
       .from("maintenance_orders")
-      .select("plate, entry_at, expected_exit_at, maintenance_workshops(name)")
+      .select("plate, entry_at, expected_exit_at, service, service_type, maintenance_workshops(name)")
       .is("exit_at", null);
     const map = new Map<string, MaintInfo>();
     for (const o of (data ?? []) as unknown as {
       plate: string;
       entry_at: string;
       expected_exit_at: string | null;
+      service: string;
+      service_type: string;
       maintenance_workshops: { name: string } | null;
     }[]) {
       map.set(o.plate, {
         entry_at: o.entry_at,
         expected_exit_at: o.expected_exit_at,
         workshop: o.maintenance_workshops?.name ?? "oficina",
+        service: o.service,
+        service_type: o.service_type,
       });
     }
     setInMaintenance(map);
@@ -733,6 +740,77 @@ export default function ProgramacaoPage() {
           })}
         </div>
       </div>
+
+      {inMaintenance.size > 0 && (
+        <section
+          aria-label="Veículos em manutenção"
+          className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 print:hidden"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-medium text-red-800">
+              🔧 Em manutenção agora ({inMaintenance.size}){" "}
+              <span className="font-normal">
+                — não use estas placas em viagem
+              </span>
+            </h2>
+            <span className="flex items-center gap-2">
+              <Link
+                href="/manutencao"
+                className="text-xs font-medium text-red-800 underline"
+              >
+                Ver manutenção
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowMaint((v) => !v)}
+                aria-expanded={showMaint}
+                className={buttonClasses("secondary", "sm")}
+              >
+                {showMaint ? "Recolher" : "Mostrar"}
+              </button>
+            </span>
+          </div>
+          {showMaint && (
+            <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from(inMaintenance, ([plate, info]) => {
+                const returns =
+                  info.expected_exit_at !== null &&
+                  toIsoDate(new Date(info.expected_exit_at)) <= date;
+                return (
+                  <li
+                    key={plate}
+                    className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-navy-700"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold tracking-wide text-navy-900">
+                        {plate}
+                      </span>
+                      <span className="text-[11px] uppercase text-navy-500">
+                        {info.service_type}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 truncate">
+                      {info.workshop} · {info.service}
+                    </div>
+                    <div className="mt-0.5">Entrou em {fmtDateTime(info.entry_at)}</div>
+                    <div
+                      className={`mt-0.5 font-medium ${
+                        returns ? "text-amber-700" : "text-red-700"
+                      }`}
+                    >
+                      {info.expected_exit_at
+                        ? `Previsão de saída: ${fmtDateTime(info.expected_exit_at)}${
+                            returns ? " (deve voltar até este dia)" : ""
+                          }`
+                        : "Sem previsão de saída"}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
 
       {canEditSchedule && showForm && (
         <form
