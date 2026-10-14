@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { CaptchaWidget, type CaptchaRef } from "@/components/CaptchaWidget";
+import { CAPTCHA_ENABLED, CaptchaWidget, type CaptchaRef } from "@/components/CaptchaWidget";
 import { useAuth } from "@/lib/auth";
 import { useFeedback } from "@/components/Feedback";
 import { Modal } from "@/components/Modal";
@@ -176,7 +176,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={saving || !captchaToken}
+              disabled={saving || (CAPTCHA_ENABLED && !captchaToken)}
               className="flex-1 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? "Salvando..." : "Trocar senha"}

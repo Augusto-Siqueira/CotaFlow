@@ -9,6 +9,11 @@ const SITE_KEY =
 
 export type CaptchaRef = TurnstileInstance;
 
+// Só para ENSAIO/teste local: NEXT_PUBLIC_CAPTCHA_DISABLED=1 esconde o widget
+// e não exige o token no site. Em produção fica desligado, e quem barra de
+// verdade é o servidor de login (captcha ligado lá), então não enfraquece nada.
+export const CAPTCHA_ENABLED = process.env.NEXT_PUBLIC_CAPTCHA_DISABLED !== "1";
+
 /**
  * Verificação anti-robô (Cloudflare Turnstile). O token gerado vai em
  * `options.captchaToken` do `signInWithPassword`. Cada token vale uma vez só:
@@ -18,6 +23,7 @@ export const CaptchaWidget = forwardRef<
   TurnstileInstance,
   { onToken: (token: string | null) => void }
 >(function CaptchaWidget({ onToken }, ref) {
+  if (!CAPTCHA_ENABLED) return null;
   return (
     <Turnstile
       ref={ref}

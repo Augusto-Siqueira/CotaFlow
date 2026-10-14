@@ -1,0 +1,46 @@
+# Gateway: um endereço só para o site, como era no Supabase.
+# Remove o CORS que cada serviço devolve e aplica o nosso, para não duplicar
+# o cabeçalho (o navegador rejeita resposta com dois Access-Control-Allow-Origin).
+:8000 {
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+		header Access-Control-Allow-Headers "*"
+		header Access-Control-Max-Age "86400"
+		respond 204
+	}
+
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Expose-Headers "*"
+	}
+
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000 {
+			header_down -Access-Control-Allow-Origin
+			header_down -Access-Control-Allow-Credentials
+			header_down -Access-Control-Expose-Headers
+		}
+	}
+
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999 {
+			header_down -Access-Control-Allow-Origin
+			header_down -Access-Control-Allow-Credentials
+			header_down -Access-Control-Expose-Headers
+		}
+	}
+
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000 {
+			header_down -Access-Control-Allow-Origin
+			header_down -Access-Control-Allow-Credentials
+			header_down -Access-Control-Expose-Headers
+		}
+	}
+
+	handle /health {
+		respond "ok" 200
+	}
+}

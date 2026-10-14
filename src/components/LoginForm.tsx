@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { loginToEmail } from "@/lib/driver";
-import { CaptchaWidget, type CaptchaRef } from "@/components/CaptchaWidget";
+import { CAPTCHA_ENABLED, CaptchaWidget, type CaptchaRef } from "@/components/CaptchaWidget";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -126,7 +126,7 @@ export function LoginForm() {
 
       <button
         type="submit"
-        disabled={submitting || !captchaToken}
+        disabled={submitting || (CAPTCHA_ENABLED && !captchaToken)}
         className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? "Entrando..." : "Entrar"}
