@@ -13,6 +13,8 @@ import {
 } from "@/lib/loadingStatus";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
+import { AddressField, type AddressOption } from "@/components/AddressField";
+import { fetchAllCityNames } from "@/lib/cities";
 import { DestinationsCell, DestinationsInput } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
@@ -114,6 +116,9 @@ export default function ProgramacaoPage() {
 
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
+  // Sugestões de Origem/Destino: municípios + bases da empresa (igual à cotação).
+  const [cityNames, setCityNames] = useState<string[]>([]);
+  const [baseOptions, setBaseOptions] = useState<AddressOption[]>([]);
   const [tractorPlates, setTractorPlates] = useState<string[]>([]);
   const [trailerPlates, setTrailerPlates] = useState<string[]>([]);
   const [drivers, setDrivers] = useState<{ nickname: string; name: string }[]>([]);
@@ -181,6 +186,12 @@ export default function ProgramacaoPage() {
       );
     }
     loadOptions();
+    fetchAllCityNames().then(setCityNames);
+    supabase
+      .from("company_bases")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => setBaseOptions(data ?? []));
   }, []);
 
   const loading = data === null || data.date !== date;
@@ -768,12 +779,12 @@ export default function ProgramacaoPage() {
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-origem-opcional">
                 Origem <span className="text-navy-500">(opcional)</span>
               </label>
-              <input id="prog-origem-opcional"
-                type="text"
+              <AddressField id="prog-origem-opcional"
                 value={form.origin}
-                onChange={(e) => updateForm("origin", e.target.value)}
-                className={inputCls}
+                onValueChange={(v) => updateForm("origin", v)}
                 placeholder="Ex: Palhoça/SC"
+                cities={cityNames}
+                addresses={baseOptions}
               />
             </div>
             <div className="lg:col-span-2">
@@ -783,8 +794,9 @@ export default function ProgramacaoPage() {
               <DestinationsInput id="prog-destino-opcional"
                 value={form.destination}
                 onChange={(v) => updateForm("destination", v)}
-                inputClassName={inputCls}
                 placeholder="Ex: Ponta Grossa/PR"
+                cities={cityNames}
+                addresses={baseOptions}
               />
             </div>
 

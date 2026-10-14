@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AddressField, type AddressOption } from "@/components/AddressField";
 
 // Vários destinos ficam no mesmo campo de texto, separados por ";" (nenhum
 // nome de cidade usa esse caractere), então não precisa de coluna nova.
@@ -26,20 +27,22 @@ export function DestinationsInput({
   id,
   value,
   onChange,
-  inputClassName,
   placeholder,
+  cities,
+  addresses,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
-  inputClassName: string;
   placeholder?: string;
+  cities: string[];
+  addresses: AddressOption[];
 }) {
   const [draft, setDraft] = useState("");
   const list = splitDestinations(value);
 
-  function commit() {
-    const items = splitDestinations(draft);
+  function commit(text: string = draft) {
+    const items = splitDestinations(text);
     setDraft("");
     if (items.length === 0) return;
     const next = [...list];
@@ -56,25 +59,27 @@ export function DestinationsInput({
   return (
     <div>
       <div className="flex gap-2">
-        <input
+        <AddressField
           id={id}
-          type="text"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
+          onValueChange={setDraft}
+          onPick={(name) => commit(name)}
+          onBlur={() => commit()}
           onKeyDown={(e) => {
             if (e.key === "Enter" && draft.trim()) {
               e.preventDefault();
               commit();
             }
           }}
-          className={inputClassName}
-          placeholder={list.length > 0 ? "Outro destino (Enter para adicionar)" : placeholder}
+          placeholder={list.length > 0 ? "Outro destino (Enter para adicionar)" : (placeholder ?? "")}
+          cities={cities}
+          addresses={addresses}
+          className="flex-1"
         />
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={commit}
+          onClick={() => commit()}
           disabled={!draft.trim()}
           className="shrink-0 rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700"
         >
