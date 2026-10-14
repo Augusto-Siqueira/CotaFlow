@@ -14,6 +14,7 @@ import {
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
+import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf } from "@/lib/cities";
 import { DestinationsCell, DestinationsInput } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
@@ -105,6 +106,12 @@ export default function ProgramacaoPage() {
   const today = toIsoDate(new Date());
 
   const [date, setDate] = useState(today);
+  // Link vindo do dashboard: /programacao?date=AAAA-MM-DD abre aquele dia.
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("date");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setDate(d);
+  }, []);
   // Status escolhido nos contadores do topo ("" = todos).
   const [statusFilter, setStatusFilter] = useState("");
   const [data, setData] = useState<{
@@ -267,7 +274,7 @@ export default function ProgramacaoPage() {
       cargo: load.cargo,
       origin: load.origin ?? "",
       destination: load.destination ?? "",
-      weight: load.weight ?? "",
+      weight: normalizeWeight(load.weight),
       plate: load.plate ?? "",
       trailer_plate: load.trailer_plate ?? "",
       driver: load.driver ?? "",
@@ -359,7 +366,7 @@ export default function ProgramacaoPage() {
       cargo: form.cargo.trim(),
       origin: form.origin.trim() || null,
       destination: form.destination.trim() || null,
-      weight: form.weight.trim() || null,
+      weight: normalizeWeight(form.weight) || null,
       plate: fieldChecks.plate || null,
       trailer_plate: fieldChecks.trailer_plate || null,
       driver: fieldChecks.driver || null,
@@ -728,14 +735,15 @@ export default function ProgramacaoPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-peso">
-                Peso
+                Peso <span className="text-navy-500">(ton)</span>
               </label>
               <input id="prog-peso"
                 type="text"
+                inputMode="decimal"
                 value={form.weight}
-                onChange={(e) => updateForm("weight", e.target.value)}
+                onChange={(e) => updateForm("weight", sanitizeWeightInput(e.target.value))}
                 className={inputCls}
-                placeholder="Ex: 28 ton"
+                placeholder="Ex: 28"
               />
             </div>
             <div>

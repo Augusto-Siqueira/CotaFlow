@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.03";
+export const APP_VERSION = "1.04";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.04",
+    date: "2026-10-14",
+    notes: [
+      "Novo Dashboard da programação: filtra por período e cliente, mostra as cargas por status (clique num status para ver só aquelas cargas), total de toneladas, cargas por dia e cargas atrasadas.",
+      "Programação: bloqueio de placas com viagem em aberto (só Programado é liberado; Lavando, Carregando e Carregado em Viagem exigem a viagem anterior concluída).",
+      "Programação: vários destinos por carregamento, exibidos como Diversos; sugestão de cidades em Origem e Destino com navegação pelo teclado.",
+      "Programação: os status do topo são clicáveis e filtram a lista; peso passa a ser guardado só em toneladas (número).",
+      "Cidades: a tabela de cidades guarda só Cidade/UF.",
+      "Login e troca de senha com verificação anti-robô (Cloudflare Turnstile).",
+      "Botões de Editar e Excluir animados no modo escuro; cursor de mão em tudo que é clicável.",
+    ],
+  },
   {
     version: "1.03",
     date: "2026-10-07",
