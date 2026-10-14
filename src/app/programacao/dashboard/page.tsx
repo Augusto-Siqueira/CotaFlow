@@ -32,6 +32,7 @@ const COLUMNS =
   "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status";
 const PAGE = 1000;
 const LATE = "atrasadas";
+const NOT_DEPARTED = new Set(["programado", "lavando", "carregando"]);
 
 // ---------- datas (sempre no calendário local, como "YYYY-MM-DD") ----------
 
@@ -139,7 +140,10 @@ export default function DashboardPage() {
     [periodRows, activeClient]
   );
 
-  const isLate = (r: Load) => r.status !== "entregue" && r.schedule_date < today;
+  // Atrasada = dia já passou e a carga ainda não saiu (Programado, Lavando ou
+  // Carregando). Em viagem ou entregue não é atraso.
+  const isLate = (r: Load) =>
+    r.schedule_date < today && NOT_DEPARTED.has(r.status);
 
   const stats = useMemo(() => {
     let tons = 0;
@@ -396,7 +400,7 @@ export default function DashboardPage() {
               type="button"
               aria-pressed={statusFilter === LATE}
               onClick={() => setStatusFilter(statusFilter === LATE ? "" : LATE)}
-              title="Cargas de dias anteriores que ainda não tiveram a entrega concluída"
+              title="Cargas de dias anteriores que ainda não saíram (Programado, Lavando ou Carregando)"
               className={`${cardBase} ${
                 stats.late.count > 0
                   ? "border-red-300 bg-red-50 text-red-800"
@@ -407,7 +411,7 @@ export default function DashboardPage() {
               <div className="mt-1 text-2xl font-semibold">{stats.late.count}</div>
               <div className="mt-0.5 text-xs">
                 {stats.late.count > 0
-                  ? `${formatTons(stats.late.tons)} t sem entrega concluída`
+                  ? `${formatTons(stats.late.tons)} t que ainda não saíram`
                   : "Nenhuma carga atrasada"}
               </div>
             </button>
