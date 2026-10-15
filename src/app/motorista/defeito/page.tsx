@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { REPORT_CATEGORIES, SEVERITIES } from "@/lib/maintenance";
 import { uploadPhoto } from "@/lib/photos";
+import { SearchSelect, type SearchOption } from "@/components/SearchSelect";
 
 const MAX_PHOTOS = 3;
 
@@ -17,9 +18,9 @@ function localDate(d: Date): string {
 
 export default function RelatarDefeitoPage() {
   const { user, isDriver, loading: authLoading } = useAuth();
-  const [plates, setPlates] = useState<{ plate: string; label: string }[]>([]);
+  // Placas de hoje primeiro (com o papel na carga), depois o resto da frota.
+  const [plateOptions, setPlateOptions] = useState<SearchOption[]>([]);
   const [plate, setPlate] = useState("");
-  const [otherPlate, setOtherPlate] = useState("");
   const [category, setCategory] = useState("Freios");
   const [severity, setSeverity] = useState(2);
   const [description, setDescription] = useState("");
@@ -30,31 +31,32 @@ export default function RelatarDefeitoPage() {
 
   useEffect(() => {
     if (!user || !isDriver) return;
-    supabase
-      .from("loading_schedules")
-      .select("plate, trailer_plate")
-      .eq("schedule_date", localDate(new Date()))
-      .then(({ data }) => {
-        const list: { plate: string; label: string }[] = [];
-        for (const l of (data ?? []) as { plate: string | null; trailer_plate: string | null }[]) {
-          if (l.plate && !list.some((p) => p.plate === l.plate))
-            list.push({ plate: l.plate, label: `${l.plate} (cavalo)` });
-          if (l.trailer_plate && !list.some((p) => p.plate === l.trailer_plate))
-            list.push({ plate: l.trailer_plate, label: `${l.trailer_plate} (carreta)` });
-        }
-        setPlates(list);
-        if (list[0]) setPlate((cur) => cur || list[0].plate);
-        else setPlate("outra");
-      });
+    Promise.all([
+      supabase
+        .from("loading_schedules")
+        .select("plate, trailer_plate")
+        .eq("schedule_date", localDate(new Date())),
+      supabase.rpc("fleet_plates"),
+    ]).then(([today, fleet]) => {
+      const opts: SearchOption[] = [];
+      const add = (p: string | null, hint: string) => {
+        if (p && !opts.some((o) => o.value === p)) opts.push({ value: p, hint });
+      };
+      for (const l of (today.data ?? []) as { plate: string | null; trailer_plate: string | null }[]) {
+        add(l.plate, "Cavalo da carga de hoje");
+        add(l.trailer_plate, "Carreta da carga de hoje");
+      }
+      for (const f of (fleet.data ?? []) as { plate: string; kind: string }[]) {
+        add(f.plate, f.kind === "semirreboque" ? "Semi-reboque" : "Cavalo/truck");
+      }
+      setPlateOptions(opts);
+      if (opts[0]) setPlate((cur) => cur || opts[0].value);
+    });
   }, [user, isDriver]);
 
-  const chosenPlate = useMemo(
-    () =>
-      plate === "outra"
-        ? otherPlate.trim().replace(/[\s-]/g, "").toUpperCase()
-        : plate,
-    [plate, otherPlate]
-  );
+  const chosenPlate = useMemo(() => plate.trim().replace(/[\s-]/g, "").toUpperCase(), [plate]);
+  const knownPlate =
+    plateOptions.length === 0 || plateOptions.some((o) => o.value === chosenPlate);
 
   // Copia os arquivos AGORA: a lista do campo é "viva" e fica vazia assim que o
   // campo é limpo (o que acontece logo depois, no onChange).
@@ -69,6 +71,10 @@ export default function RelatarDefeitoPage() {
     if (!user) return;
     if (!chosenPlate) {
       setError("Informe a placa do veículo.");
+      return;
+    }
+    if (!knownPlate) {
+      setError(`A placa ${chosenPlate} não está cadastrada na frota. Escolha uma da lista.`);
       return;
     }
     if (description.trim().length < 5) {
@@ -145,28 +151,16 @@ export default function RelatarDefeitoPage() {
           <label className={labelCls} htmlFor="d-plate">
             Veículo
           </label>
-          <select
+          <SearchSelect
             id="d-plate"
             value={plate}
-            onChange={(e) => setPlate(e.target.value)}
-            className={fieldCls}
-          >
-            {plates.map((p) => (
-              <option key={p.plate} value={p.plate}>
-                {p.label}
-              </option>
-            ))}
-            <option value="outra">Outra placa...</option>
-          </select>
-          {plate === "outra" && (
-            <input
-              type="text"
-              aria-label="Placa"
-              value={otherPlate}
-              onChange={(e) => setOtherPlate(e.target.value)}
-              className={`${fieldCls} mt-2 uppercase tracking-wide`}
-              placeholder="ABC1D23"
-            />
+            onChange={(v) => setPlate(v.toUpperCase())}
+            options={plateOptions}
+            placeholder="Digite a placa"
+            className={`${fieldCls} uppercase tracking-wide`}
+          />
+          {chosenPlate.length >= 7 && !knownPlate && (
+            <p className="mt-1 text-xs text-red-600">Placa não cadastrada. Escolha uma da lista.</p>
           )}
         </div>
 
