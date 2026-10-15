@@ -1453,7 +1453,7 @@ export default function ProgramacaoPage() {
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                         {l.quote_id && (
                           <Link
-                            href={`/quotes/${l.quote_id}`}
+                            href={`/quotes/${l.quote_id}?from=programacao&date=${date}`}
                             className={buttonClasses("soft", "sm")}
                           >
                             {l.quotes?.client_quote_number?.trim()

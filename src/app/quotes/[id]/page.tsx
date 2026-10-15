@@ -77,10 +77,21 @@ interface QuoteStop {
 
 export default async function QuoteDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string; date?: string }>;
 }) {
   const { id } = await params;
+  // Aberta pela Programação: o Voltar retorna ao mesmo dia de lá.
+  const { from, date } = await searchParams;
+  const backHref =
+    from === "programacao"
+      ? date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? `/programacao?date=${date}`
+        : "/programacao"
+      : "/quotes";
+  const backLabel = from === "programacao" ? "Programação" : "Cotações";
   const supabase = await createSupabaseServer();
 
   const { data, error } = await supabase
@@ -160,7 +171,7 @@ export default async function QuoteDetailPage({
     <div className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <ButtonLink href="/quotes" variant="secondary" size="sm" aria-label="Voltar para Cotações">Voltar</ButtonLink>
+          <ButtonLink href={backHref} variant="secondary" size="sm" aria-label={`Voltar para ${backLabel}`}>Voltar</ButtonLink>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
             Cotação #{quote.id.slice(0, 8).toUpperCase()}
           </h1>
