@@ -7,6 +7,7 @@
 //
 // (a partir da raiz do projeto; sem as variáveis, lê infra/.env)
 import { createClient } from "@supabase/supabase-js";
+import { createHmac } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,8 +24,14 @@ if (existsSync(envFile)) {
 const API_URL = process.env.API_URL || fromFile.PUBLIC_API_URL;
 const ANON = process.env.ANON_KEY || fromFile.ANON_KEY;
 const SERVICE = process.env.SERVICE_ROLE_KEY || fromFile.SERVICE_ROLE_KEY;
+const MINT = process.env.MINT === "1";
+const JWT_SECRET = process.env.JWT_SECRET || fromFile.JWT_SECRET;
 if (!API_URL || !ANON || !SERVICE) {
   console.error("Faltam API_URL, ANON_KEY ou SERVICE_ROLE_KEY.");
+  process.exit(2);
+}
+if (MINT && !JWT_SECRET) {
+  console.error("MINT=1 exige JWT_SECRET.");
   process.exit(2);
 }
 
@@ -54,6 +61,20 @@ async function makeUser(label, role, extraMeta = {}) {
   });
   if (error) throw new Error(`createUser ${label}: ${error.message}`);
   created.users.push(data.user.id);
+  if (MINT) {
+    // Token assinado aqui, igual ao que o servidor de login emitiria.
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      aud: "authenticated", role: "authenticated", sub: data.user.id, email,
+      app_metadata: role ? { role } : {}, user_metadata: extraMeta,
+      iat: now, exp: now + 3600,
+    };
+    const body = `${b64({ alg: "HS256", typ: "JWT" })}.${b64(payload)}`;
+    const token = `${body}.${createHmac("sha256", JWT_SECRET).update(body).digest("base64url")}`;
+    const c = createClient(API_URL, ANON, { ...opts, global: { headers: { Authorization: `Bearer ${token}` } } });
+    return { id: data.user.id, email, client: c };
+  }
   const c = createClient(API_URL, ANON, opts);
   const { error: e2 } = await c.auth.signInWithPassword({ email, password: PASSWORD });
   if (e2) throw new Error(`login ${label}: ${e2.message}`);
@@ -70,7 +91,7 @@ try {
     outro: await makeUser("outro", "motorista"),
     leitura: await makeUser("leitura", null),
   };
-  check("login de todos os perfis (e-mail + senha)", true);
+  check(MINT ? "tokens de todos os perfis gerados (modo MINT)" : "login de todos os perfis (e-mail + senha)", true);
 
   const plate = `T${tag.slice(2, 8).toUpperCase().replace(/[^A-Z0-9]/g, "X")}`.slice(0, 7).padEnd(7, "0");
   const { error: fe } = await admin.from("fleet_units").insert({ plate, kind: "cavalo" });
@@ -131,8 +152,12 @@ try {
     const anon = createClient(API_URL, ANON, opts);
     const r = await anon.from("clients").select("id");
     check("sem login NÃO lê clientes", !!r.error || (r.data ?? []).length === 0);
-    const s = await anon.auth.signUp({ email: `${tag}-novo@teste.cotaflow.local`, password: PASSWORD });
-    check("cadastro aberto está DESLIGADO (signup recusado)", !!s.error, "signup foi aceito!");
+    if (MINT) {
+      console.log("PULADO  cadastro aberto desligado (com anti-robô ligado o teste não é conclusivo; conferir no servidor de login)");
+    } else {
+      const s = await anon.auth.signUp({ email: `${tag}-novo@teste.cotaflow.local`, password: PASSWORD });
+      check("cadastro aberto está DESLIGADO (signup recusado)", !!s.error, "signup foi aceito!");
+    }
   }
 
   // ---------- motorista: o que NÃO pode ----------
@@ -229,7 +254,9 @@ try {
   }
 
   // ---------- senha: troca obrigatória no 1º acesso ----------
-  {
+  if (MINT) {
+    console.log("PULADO  troca de senha no 1º acesso (depende do login real)");
+  } else {
     const { data } = await u.motorista.client.auth.getUser();
     check("flag de troca de senha chega no token (must_change_password)", data.user?.user_metadata?.must_change_password === true);
     const ch = await u.motorista.client.auth.updateUser({ password: PASSWORD + "x", data: { must_change_password: false } });

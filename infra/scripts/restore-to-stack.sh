@@ -41,8 +41,18 @@ echo "Destino: banco em ${DB_HOST}:${DB_PORT} (conexão: ${SSL}) · API em ${PUB
 "${CLIENT[@]}" psql "$DB_URL" -At -c "select 'conexão ok: ' || current_user" >/dev/null \
   || { echo "Não consegui conectar ao banco de destino. Confira DB_HOST, DB_PORT e a senha."; exit 1; }
 
+# Reaplicar as migrations num destino que JÁ tem a estrutura é perigoso: as
+# migrations antigas recriam regras "liberadas para todos" (allow_all) e a
+# execução pára antes das que as removem. Por isso, se o destino já tem as
+# tabelas, as migrations são puladas (FORCE_MIGRATIONS=1 só se tiver certeza).
+HAS_SCHEMA="$("${CLIENT[@]}" psql "$DB_URL" -At -c "select to_regclass('public.clients') is not null")"
+if [ "$HAS_SCHEMA" = "t" ] && [ "${SKIP_MIGRATIONS:-}" != "1" ] && [ "${FORCE_MIGRATIONS:-}" != "1" ]; then
+  echo "Aviso: o destino já tem a estrutura; as migrations serão PULADAS (segurança)."
+  SKIP_MIGRATIONS=1
+fi
+
 if [ "${SKIP_MIGRATIONS:-}" = "1" ]; then
-  echo "1/6 Migrations: puladas (SKIP_MIGRATIONS=1)"
+  echo "1/6 Migrations: puladas"
 else
   echo "1/6 Migrations (estrutura do banco)…"
   for f in $(ls ../supabase/migrations/*.sql | sort); do
