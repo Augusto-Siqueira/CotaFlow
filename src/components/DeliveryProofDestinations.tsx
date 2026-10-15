@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { photoUrl } from "@/lib/photos";
-import { buildOutlookComposeUrl, formatKg } from "@/lib/deliveryProof";
+import { buildProofEmail, formatKg } from "@/lib/deliveryProof";
 import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
@@ -174,18 +174,23 @@ function ProofModal({
     onClose();
   }
 
-  function sendByEmail() {
+  async function sendByEmail() {
     if (!proof) return;
-    const { url, omittedPhotos } = buildOutlookComposeUrl(
-      { ...proof, destination },
-      mailLinks
-    );
-    setMailNote(
-      omittedPhotos > 0
-        ? `${omittedPhotos} foto(s) não couberam no e-mail como link: baixe e anexe manualmente.`
-        : null
-    );
-    window.open(url, "_blank", "noopener");
+    const mail = buildProofEmail({ ...proof, destination }, mailLinks);
+    // Copia o corpo formatado (link clicável) e abre o e-mail novo só com o
+    // assunto: o usuário cola o corpo com Ctrl+V.
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([mail.html], { type: "text/html" }),
+          "text/plain": new Blob([mail.text], { type: "text/plain" }),
+        }),
+      ]);
+      setMailNote("Texto do e-mail copiado. No Outlook, clique no corpo da mensagem e cole (Ctrl+V).");
+    } catch {
+      setMailNote("Não foi possível copiar o texto automaticamente. Copie os dados desta janela e cole no e-mail.");
+    }
+    window.open(mail.composeUrl, "_blank", "noopener");
   }
 
   const diff = proof ? Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg) : 0;
@@ -250,7 +255,7 @@ function ProofModal({
         </>
       )}
       {mailNote && (
-        <div role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div role="status" className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">
           {mailNote}
         </div>
       )}
@@ -273,7 +278,7 @@ function ProofModal({
               type="button"
               onClick={sendByEmail}
               disabled={mailLinks.length === 0}
-              title="Abre um e-mail novo no Outlook na web, já preenchido"
+              title="Copia o texto e abre um e-mail novo no Outlook na web"
               className={buttonClasses("soft")}
             >
               Enviar por e-mail

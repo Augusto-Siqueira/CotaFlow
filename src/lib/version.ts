@@ -15,7 +15,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     notes: [
       "Comprovante de entrega no app do motorista: para cada destino da carga, ele lança nome do cliente, nota fiscal, CTE, peso da NF e peso descarregado (em kg) e envia a foto do canhoto e do ticket de pesagem (obrigatória).",
       "Programação: cada destino é clicável e abre o comprovante enviado, com os dados, a diferença de peso e as fotos; destinos com comprovante ficam marcados com ✓. Quem edita a programação pode apagar um comprovante lançado errado.",
-      "Comprovante: botão Enviar por e-mail abre um e-mail novo no Outlook na web, com assunto no padrão CANHOTO CTE (número do CTE) e os dados e links das fotos (válidos por 7 dias).",
+      "Comprovante: botão Enviar por e-mail copia o texto (dados e Link da imagem clicáveis, válidos por 7 dias) e abre um e-mail novo no Outlook na web com assunto no padrão CANHOTO CTE (número do CTE); basta colar no corpo.",
       "Acesso dos motoristas: login com o CPF e senha inicial fixa (6 primeiros dígitos do CPF), sem troca obrigatória.",
     ],
   },

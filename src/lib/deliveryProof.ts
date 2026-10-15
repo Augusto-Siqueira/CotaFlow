@@ -16,9 +16,6 @@ export function formatKg(kg: number): string {
   return Number(kg).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }
 
-// Tamanho máximo do endereço do Outlook (navegadores e o Outlook cortam acima disso).
-const MAX_MAIL_URL = 1950;
-
 export interface ProofMailData {
   destination: string;
   client_name: string;
@@ -28,57 +25,57 @@ export interface ProofMailData {
   unloaded_weight_kg: number;
 }
 
+const esc = (t: string) =>
+  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 /**
- * Endereço que abre um e-mail novo, já preenchido, no Outlook na web (conta
- * Microsoft 365). Não anexa arquivos: as fotos vão como links no texto, quantas
- * couberem no limite do endereço. Devolve também quantas ficaram de fora.
+ * E-mail do comprovante. O Outlook na web não aceita HTML pelo endereço de
+ * "novo e-mail", então o corpo (`html`, com as fotos como texto clicável
+ * "Link da imagem N") é copiado para a área de transferência e o usuário cola
+ * no corpo; só o assunto vai pelo endereço (`composeUrl`). `text` é o mesmo
+ * corpo sem formatação, para quando a cópia rica não for possível.
  */
-export function buildOutlookComposeUrl(
-  proof: ProofMailData,
-  photoLinks: string[]
-): { url: string; omittedPhotos: number } {
+export function buildProofEmail(proof: ProofMailData, photoLinks: string[]) {
   const diff = Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg);
-  const esc = (t: string) =>
-    t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const head = [
-    "Prezados,",
-    "",
-    "Segue o comprovante de entrega:",
-    "",
-    `Cliente: ${esc(proof.client_name)}`,
-    `Destino: ${esc(proof.destination || "—")}`,
-    `Nota fiscal: ${esc(proof.invoice_number)}`,
-    ...(proof.cte_number ? [`CTE: ${esc(proof.cte_number)}`] : []),
-    `Peso da NF: ${formatKg(proof.invoice_weight_kg)} kg`,
-    `Peso descarregado: ${formatKg(proof.unloaded_weight_kg)} kg`,
-    `Diferença: ${diff > 0 ? "+" : ""}${formatKg(diff)} kg`,
+  const rows: [string, string][] = [
+    ["Cliente", proof.client_name],
+    ["Destino", proof.destination || "—"],
+    ["Nota fiscal", proof.invoice_number],
+    ...(proof.cte_number ? ([["CTE", proof.cte_number]] as [string, string][]) : []),
+    ["Peso da NF", `${formatKg(proof.invoice_weight_kg)} kg`],
+    ["Peso descarregado", `${formatKg(proof.unloaded_weight_kg)} kg`],
+    ["Diferença", `${diff > 0 ? "+" : ""}${formatKg(diff)} kg`],
   ];
-  const tail = ["", "Atenciosamente,"];
   // Assunto no padrão usado pela empresa: "CANHOTO CTE 132275".
   const subject = proof.cte_number
     ? `CANHOTO CTE ${proof.cte_number}`
     : `CANHOTO NF ${proof.invoice_number}`;
 
-  // Corpo em HTML: cada foto vira o texto clicável "Link da imagem N".
-  const make = (links: string[]) => {
-    const lines = [...head];
-    if (links.length > 0) {
-      lines.push("", "Fotos do canhoto e do ticket de pesagem (links válidos por 7 dias):");
-      links.forEach((l, i) => lines.push(`<a href="${esc(l)}">Link da imagem ${i + 1}</a>`));
-    }
-    lines.push(...tail);
-    return (
-      "https://outlook.office.com/mail/deeplink/compose" +
-      `?subject=${encodeURIComponent(subject)}` +
-      `&body=${encodeURIComponent(lines.join("<br>"))}`
-    );
-  };
+  const intro = "Segue o comprovante de entrega:";
+  const photosTitle = "Fotos do canhoto e do ticket de pesagem (links válidos por 7 dias):";
+  const html =
+    `<div>Prezados,<br><br>${intro}<br><br>` +
+    rows.map(([k, v]) => `${k}: ${esc(v)}`).join("<br>") +
+    (photoLinks.length > 0
+      ? `<br><br>${photosTitle}<br>` +
+        photoLinks.map((l, i) => `<a href="${esc(l)}">Link da imagem ${i + 1}</a>`).join("<br>")
+      : "") +
+    "<br><br>Atenciosamente,</div>";
+  const text = [
+    "Prezados,",
+    "",
+    intro,
+    "",
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    ...(photoLinks.length > 0
+      ? ["", photosTitle, ...photoLinks.map((l, i) => `Imagem ${i + 1}: ${l}`)]
+      : []),
+    "",
+    "Atenciosamente,",
+  ].join("\n");
 
-  let used = [...photoLinks];
-  let url = make(used);
-  while (url.length > MAX_MAIL_URL && used.length > 0) {
-    used = used.slice(0, -1);
-    url = make(used);
-  }
-  return { url, omittedPhotos: photoLinks.length - used.length };
+  const composeUrl =
+    "https://outlook.office.com/mail/deeplink/compose" +
+    `?subject=${encodeURIComponent(subject)}`;
+  return { subject, html, text, composeUrl };
 }
