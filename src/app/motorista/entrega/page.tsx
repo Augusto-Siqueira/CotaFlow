@@ -20,7 +20,14 @@ interface Load {
   destination: string | null;
   plate: string | null;
   status: string;
-  notes: string | null;
+}
+
+interface LoadNote {
+  id: string;
+  schedule_id: string;
+  body: string;
+  source: string;
+  created_at: string;
 }
 
 interface Proof {
@@ -46,6 +53,7 @@ export default function ComprovanteEntregaPage() {
   const { user, isDriver, loading: authLoading } = useAuth();
   const [loads, setLoads] = useState<Load[] | null>(null);
   const [proofs, setProofs] = useState<Proof[]>([]);
+  const [loadNotes, setLoadNotes] = useState<LoadNote[]>([]);
   const [error, setError] = useState<string | null>(null);
   // "<id da carga>|<destino>" do formulário aberto.
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -57,7 +65,7 @@ export default function ComprovanteEntregaPage() {
     const [l, p] = await Promise.all([
       supabase
         .from("loading_schedules")
-        .select("id, schedule_date, client_name, cargo, origin, destination, plate, status, notes")
+        .select("id, schedule_date, client_name, cargo, origin, destination, plate, status")
         .or(`schedule_date.eq.${today},and(schedule_date.lt.${today},status.neq.entregue)`)
         .order("schedule_date", { ascending: false })
         .order("loading_time", { ascending: true, nullsFirst: false }),
@@ -66,7 +74,17 @@ export default function ComprovanteEntregaPage() {
         .select("schedule_id, destination, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg"),
     ]);
     if (l.error) setError(l.error.message);
-    setLoads((l.data as Load[] | null) ?? []);
+    const list = (l.data as Load[] | null) ?? [];
+    const ids = list.map((x) => x.id);
+    const n = ids.length
+      ? await supabase
+          .from("loading_schedule_notes")
+          .select("id, schedule_id, body, source, created_at")
+          .in("schedule_id", ids)
+          .order("created_at")
+      : { data: [] };
+    setLoadNotes((n.data as LoadNote[] | null) ?? []);
+    setLoads(list);
     setProofs((p.data as Proof[] | null) ?? []);
   }, []);
 
@@ -121,12 +139,23 @@ export default function ComprovanteEntregaPage() {
                   </span>
                 </div>
 
-                {l.notes?.trim() && (
-                  <div className="mt-3 whitespace-pre-line rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {loadNotes.some((n) => n.schedule_id === l.id) && (
+                  <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                     <span className="block text-[11px] font-medium uppercase text-amber-800">
                       Observações
                     </span>
-                    {l.notes}
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                      {loadNotes
+                        .filter((n) => n.schedule_id === l.id)
+                        .map((n) => (
+                          <li key={n.id} className="whitespace-pre-line">
+                            {n.body}
+                            {n.source === "motorista" && (
+                              <span className="text-xs text-amber-700"> (você)</span>
+                            )}
+                          </li>
+                        ))}
+                    </ul>
                   </div>
                 )}
                 <ul className="mt-3 space-y-2">

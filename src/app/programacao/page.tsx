@@ -36,7 +36,28 @@ interface Load {
   status: string;
   quote_id: string | null;
   quotes: { client_quote_number: string | null } | null;
-  notes: string | null;
+}
+
+// Observação da carga: cada uma é um tópico (equipe ou motorista).
+interface ScheduleNote {
+  id: string;
+  schedule_id: string;
+  body: string;
+  source: "equipe" | "motorista";
+  destination: string | null;
+  created_at: string;
+}
+
+function noteMeta(n: ScheduleNote): string {
+  const who =
+    n.source === "motorista"
+      ? `Motorista${n.destination ? ` (${n.destination})` : ""}`
+      : "Equipe";
+  const when = new Date(n.created_at).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  return `${who} · ${when}`;
 }
 
 interface DefectInfo {
@@ -151,6 +172,7 @@ export default function ProgramacaoPage() {
 
   // Destinos que já têm comprovante do motorista, por carga.
   const [proofMap, setProofMap] = useState<Map<string, string[]>>(new Map());
+  const [noteMap, setNoteMap] = useState<Map<string, ScheduleNote[]>>(new Map());
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
   const [showMaint, setShowMaint] = useState(true);
@@ -282,7 +304,7 @@ export default function ProgramacaoPage() {
     const { data: rows, error } = await supabase
       .from("loading_schedules")
       .select(
-        "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status, quote_id, quotes(client_quote_number), notes"
+        "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status, quote_id, quotes(client_quote_number)"
       )
       .eq("schedule_date", d)
       .order("loading_time", { ascending: true, nullsFirst: false })
@@ -294,7 +316,19 @@ export default function ProgramacaoPage() {
     const { data: proofRows } = ids.length
       ? await supabase.from("delivery_proofs").select("schedule_id, destination").in("schedule_id", ids)
       : { data: [] };
+    const { data: noteRows } = ids.length
+      ? await supabase
+          .from("loading_schedule_notes")
+          .select("id, schedule_id, body, source, destination, created_at")
+          .in("schedule_id", ids)
+          .order("created_at")
+      : { data: [] };
     if (d !== latestDate.current) return;
+    const nm = new Map<string, ScheduleNote[]>();
+    for (const n of (noteRows as ScheduleNote[] | null) ?? []) {
+      nm.set(n.schedule_id, [...(nm.get(n.schedule_id) ?? []), n]);
+    }
+    setNoteMap(nm);
     const pm = new Map<string, string[]>();
     for (const p of (proofRows as { schedule_id: string; destination: string }[] | null) ?? []) {
       pm.set(p.schedule_id, [...(pm.get(p.schedule_id) ?? []), p.destination]);
@@ -307,27 +341,35 @@ export default function ProgramacaoPage() {
     });
   }
 
-  // Observações da carga (janela própria).
+  // Observações da carga (janela própria): lista de tópicos + novo tópico.
   const [notesFor, setNotesFor] = useState<Load | null>(null);
   const [notesText, setNotesText] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
   function openNotes(l: Load) {
     setNotesFor(l);
-    setNotesText(l.notes ?? "");
+    setNotesText("");
   }
-  async function saveNotes() {
-    if (!notesFor) return;
+  async function addNote() {
+    if (!notesFor || !notesText.trim()) return;
     setNotesSaving(true);
     const { error } = await supabase
-      .from("loading_schedules")
-      .update({ notes: notesText.trim() || null })
-      .eq("id", notesFor.id);
+      .from("loading_schedule_notes")
+      .insert({ schedule_id: notesFor.id, body: notesText.trim() });
     setNotesSaving(false);
     if (error) {
       toastError(`Não foi possível salvar a observação (${error.message}).`);
       return;
     }
-    setNotesFor(null);
+    setNotesText("");
+    await fetchRows(date);
+  }
+  async function deleteNote(n: ScheduleNote) {
+    if (!(await askConfirm("Excluir esta observação?"))) return;
+    const { error } = await supabase.from("loading_schedule_notes").delete().eq("id", n.id);
+    if (error) {
+      toastError(`Não foi possível excluir a observação (${error.message}).`);
+      return;
+    }
     await fetchRows(date);
   }
 
@@ -1474,15 +1516,18 @@ export default function ProgramacaoPage() {
                       </div>
                     )}
 
-                    {l.notes?.trim() && (
+                    {(noteMap.get(l.id)?.length ?? 0) > 0 && (
                       <p
                         className="mt-2 truncate text-xs text-navy-500"
-                        title={l.notes}
+                        title={noteMap.get(l.id)!.map((n) => `• ${n.body}`).join("\n")}
                       >
-                        <span className="font-medium text-navy-600">Obs.:</span> {l.notes}
+                        <span className="font-medium text-navy-600">
+                          Obs.{noteMap.get(l.id)!.length > 1 ? ` (${noteMap.get(l.id)!.length})` : ""}:
+                        </span>{" "}
+                        {noteMap.get(l.id)!.at(-1)!.body}
                       </p>
                     )}
-                    {(l.quote_id || canEditSchedule || l.notes?.trim()) && (
+                    {(l.quote_id || canEditSchedule || (noteMap.get(l.id)?.length ?? 0) > 0) && (
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                         {l.quote_id && (
                           <Link
@@ -1494,7 +1539,7 @@ export default function ProgramacaoPage() {
                               : "Ver cotação"}
                           </Link>
                         )}
-                        {!canEditSchedule && l.notes?.trim() && (
+                        {!canEditSchedule && (noteMap.get(l.id)?.length ?? 0) > 0 && (
                           <button
                             type="button"
                             onClick={() => openNotes(l)}
@@ -1549,30 +1594,63 @@ export default function ProgramacaoPage() {
             {notesFor.cargo} · {notesFor.client_name}
             {notesFor.plate ? ` · ${notesFor.plate}` : ""}
           </p>
-          <label htmlFor="prog-notes" className="sr-only">
-            Observações da carga
-          </label>
-          <textarea
-            id="prog-notes"
-            rows={6}
-            value={notesText}
-            onChange={(e) => setNotesText(e.target.value)}
-            readOnly={!canEditSchedule}
-            placeholder="Ex.: descarga só após as 14h; levar EPI completo"
-            className="mt-4 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-          />
+          {(noteMap.get(notesFor.id) ?? []).length === 0 ? (
+            <p className="mt-4 text-sm text-navy-500">Nenhuma observação ainda.</p>
+          ) : (
+            <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+              {(noteMap.get(notesFor.id) ?? []).map((n) => (
+                <li
+                  key={n.id}
+                  className={`rounded-lg border px-3 py-2 ${
+                    n.source === "motorista"
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-navy-200 bg-navy-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[11px] font-medium text-navy-500">{noteMeta(n)}</span>
+                    {canEditSchedule && (
+                      <button
+                        type="button"
+                        onClick={() => deleteNote(n)}
+                        className={buttonClasses("danger", "sm")}
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 whitespace-pre-line text-sm text-navy-900">{n.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {canEditSchedule && (
+            <>
+              <label htmlFor="prog-notes" className="mt-4 block text-sm font-medium text-navy-700">
+                Nova observação
+              </label>
+              <textarea
+                id="prog-notes"
+                rows={3}
+                value={notesText}
+                onChange={(e) => setNotesText(e.target.value)}
+                placeholder="Ex.: descarga só após as 14h; levar EPI completo"
+                className="mt-1 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              />
+            </>
+          )}
           <div className="mt-4 flex justify-end gap-2">
             <button type="button" onClick={() => setNotesFor(null)} className={buttonClasses("secondary")}>
-              {canEditSchedule ? "Cancelar" : "Fechar"}
+              Fechar
             </button>
             {canEditSchedule && (
               <button
                 type="button"
-                onClick={saveNotes}
-                disabled={notesSaving}
+                onClick={addNote}
+                disabled={notesSaving || !notesText.trim()}
                 className={buttonClasses("primary")}
               >
-                {notesSaving ? "Salvando..." : "Salvar"}
+                {notesSaving ? "Salvando..." : "Adicionar"}
               </button>
             )}
           </div>
