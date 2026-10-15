@@ -36,6 +36,7 @@ interface Load {
   status: string;
   quote_id: string | null;
   quotes: { client_quote_number: string | null } | null;
+  notes: string | null;
 }
 
 interface DefectInfo {
@@ -281,7 +282,7 @@ export default function ProgramacaoPage() {
     const { data: rows, error } = await supabase
       .from("loading_schedules")
       .select(
-        "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status, quote_id, quotes(client_quote_number)"
+        "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status, quote_id, quotes(client_quote_number), notes"
       )
       .eq("schedule_date", d)
       .order("loading_time", { ascending: true, nullsFirst: false })
@@ -304,6 +305,30 @@ export default function ProgramacaoPage() {
       rows: (rows as Load[] | null) ?? [],
       error: error?.message ?? null,
     });
+  }
+
+  // Observações da carga (janela própria).
+  const [notesFor, setNotesFor] = useState<Load | null>(null);
+  const [notesText, setNotesText] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+  function openNotes(l: Load) {
+    setNotesFor(l);
+    setNotesText(l.notes ?? "");
+  }
+  async function saveNotes() {
+    if (!notesFor) return;
+    setNotesSaving(true);
+    const { error } = await supabase
+      .from("loading_schedules")
+      .update({ notes: notesText.trim() || null })
+      .eq("id", notesFor.id);
+    setNotesSaving(false);
+    if (error) {
+      toastError(`Não foi possível salvar a observação (${error.message}).`);
+      return;
+    }
+    setNotesFor(null);
+    await fetchRows(date);
   }
 
   async function reloadRows() {
@@ -1449,7 +1474,15 @@ export default function ProgramacaoPage() {
                       </div>
                     )}
 
-                    {(l.quote_id || canEditSchedule) && (
+                    {l.notes?.trim() && (
+                      <p
+                        className="mt-2 truncate text-xs text-navy-500"
+                        title={l.notes}
+                      >
+                        <span className="font-medium text-navy-600">Obs.:</span> {l.notes}
+                      </p>
+                    )}
+                    {(l.quote_id || canEditSchedule || l.notes?.trim()) && (
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                         {l.quote_id && (
                           <Link
@@ -1461,6 +1494,15 @@ export default function ProgramacaoPage() {
                               : "Ver cotação"}
                           </Link>
                         )}
+                        {!canEditSchedule && l.notes?.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => openNotes(l)}
+                            className={`${buttonClasses("secondary", "sm")} print:hidden`}
+                          >
+                            Observações
+                          </button>
+                        )}
                         {canEditSchedule && (
                           <span className="flex items-center gap-4 print:hidden">
                             <button
@@ -1469,6 +1511,13 @@ export default function ProgramacaoPage() {
                               className={buttonClasses("soft", "sm")}
                             >
                               Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openNotes(l)}
+                              className={buttonClasses("secondary", "sm")}
+                            >
+                              Observações
                             </button>
                             <button
                               type="button"
@@ -1490,6 +1539,45 @@ export default function ProgramacaoPage() {
           })
         )}
       </div>
+
+      {notesFor && (
+        <Modal onClose={() => setNotesFor(null)} labelledBy="notes-modal-title" className="max-w-lg">
+          <h2 id="notes-modal-title" className="text-base font-medium text-navy-900">
+            Observações
+          </h2>
+          <p className="mt-1 text-sm text-navy-500">
+            {notesFor.cargo} · {notesFor.client_name}
+            {notesFor.plate ? ` · ${notesFor.plate}` : ""}
+          </p>
+          <label htmlFor="prog-notes" className="sr-only">
+            Observações da carga
+          </label>
+          <textarea
+            id="prog-notes"
+            rows={6}
+            value={notesText}
+            onChange={(e) => setNotesText(e.target.value)}
+            readOnly={!canEditSchedule}
+            placeholder="Ex.: descarga só após as 14h; levar EPI completo"
+            className="mt-4 w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          />
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setNotesFor(null)} className={buttonClasses("secondary")}>
+              {canEditSchedule ? "Cancelar" : "Fechar"}
+            </button>
+            {canEditSchedule && (
+              <button
+                type="button"
+                onClick={saveNotes}
+                disabled={notesSaving}
+                className={buttonClasses("primary")}
+              >
+                {notesSaving ? "Salvando..." : "Salvar"}
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {canEditSchedule && showDup && (
         <Modal onClose={() => setShowDup(false)} labelledBy="dup-modal-title" className="max-w-lg">
