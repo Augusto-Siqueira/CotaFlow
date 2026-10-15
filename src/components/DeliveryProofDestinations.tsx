@@ -38,32 +38,61 @@ export function DeliveryProofDestinations({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const dests = splitDestinations(destination);
   if (dests.length === 0) return <>—</>;
+
+  const done = dests.filter((d) => proofDestinations.includes(d)).length;
+  const chip = (d: string) => {
+    const has = proofDestinations.includes(d);
+    return (
+      <button
+        key={d}
+        type="button"
+        onClick={() => setOpen(d)}
+        title={has ? "Ver comprovante de entrega" : "Sem comprovante do motorista ainda"}
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-left text-xs font-medium hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 ${
+          has ? "border-teal-300 bg-teal-50 text-teal-800" : "border-navy-300 text-navy-700"
+        }`}
+      >
+        {d}
+        <span className="text-[10px] font-normal">{has ? "✓ comprovante" : "sem comprovante"}</span>
+      </button>
+    );
+  };
 
   return (
     <>
       <span className="hidden print:inline">{dests.join(", ")}</span>
-      <span className="flex flex-wrap gap-1.5 print:hidden">
-        {dests.map((d) => {
-          const has = proofDestinations.includes(d);
-          return (
+      <span className="print:hidden">
+        {dests.length === 1 ? (
+          chip(dests[0])
+        ) : (
+          <>
             <button
-              key={d}
               type="button"
-              onClick={() => setOpen(d)}
-              title={has ? "Ver comprovante de entrega" : "Sem comprovante do motorista ainda"}
+              aria-expanded={listOpen}
+              onClick={() => setListOpen((v) => !v)}
+              title={`${dests.length} destinos · ${done} com comprovante`}
               className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 ${
-                has
+                done === dests.length
                   ? "border-teal-300 bg-teal-50 text-teal-800"
                   : "border-navy-300 text-navy-700"
               }`}
             >
-              {d}
-              {has && <span aria-label="comprovante enviado">✓</span>}
+              Diversos
+              <span className="text-[10px] font-normal">
+                {done}/{dests.length}
+              </span>
+              <span aria-hidden="true" className="text-[10px]">
+                {listOpen ? "▲" : "▼"}
+              </span>
             </button>
-          );
-        })}
+            {listOpen && (
+              <span className="mt-1.5 flex flex-col items-start gap-1">{dests.map(chip)}</span>
+            )}
+          </>
+        )}
       </span>
       {open !== null && (
         <ProofModal
