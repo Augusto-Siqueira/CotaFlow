@@ -20,6 +20,7 @@ interface Load {
   destination: string | null;
   plate: string | null;
   status: string;
+  notes: string | null;
 }
 
 interface Proof {
@@ -56,7 +57,7 @@ export default function ComprovanteEntregaPage() {
     const [l, p] = await Promise.all([
       supabase
         .from("loading_schedules")
-        .select("id, schedule_date, client_name, cargo, origin, destination, plate, status")
+        .select("id, schedule_date, client_name, cargo, origin, destination, plate, status, notes")
         .or(`schedule_date.eq.${today},and(schedule_date.lt.${today},status.neq.entregue)`)
         .order("schedule_date", { ascending: false })
         .order("loading_time", { ascending: true, nullsFirst: false }),
@@ -120,6 +121,14 @@ export default function ComprovanteEntregaPage() {
                   </span>
                 </div>
 
+                {l.notes?.trim() && (
+                  <div className="mt-3 whitespace-pre-line rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <span className="block text-[11px] font-medium uppercase text-amber-800">
+                      Observações
+                    </span>
+                    {l.notes}
+                  </div>
+                )}
                 <ul className="mt-3 space-y-2">
                   {list.map((dest) => {
                     const key = `${l.id}|${dest}`;
@@ -189,6 +198,7 @@ function ProofForm({
   const [clientName, setClientName] = useState("");
   const [invoice, setInvoice] = useState("");
   const [cte, setCte] = useState("");
+  const [notes, setNotes] = useState("");
   const [invoiceKg, setInvoiceKg] = useState("");
   const [unloadedKg, setUnloadedKg] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -225,6 +235,7 @@ function ProofForm({
         client_name: clientName.trim(),
         invoice_number: invoice.trim(),
         cte_number: cte.trim(),
+        notes: notes.trim() || null,
         invoice_weight_kg: invKg,
         unloaded_weight_kg: unlKg,
         photos: paths,
@@ -368,6 +379,20 @@ function ProofForm({
         <p className="mt-1 text-xs text-navy-500">
           Pode ser uma foto só mostrando os dois, ou uma de cada (até {MAX_PHOTOS}).
         </p>
+      </div>
+
+      <div>
+        <label className={labelCls} htmlFor={`${id}-obs`}>
+          Observação <span className="font-normal text-navy-500">(opcional)</span>
+        </label>
+        <textarea
+          id={`${id}-obs`}
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className={fieldCls}
+          placeholder="Ex.: cliente pediu para reentregar a sobra amanhã"
+        />
       </div>
 
       {error && (

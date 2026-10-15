@@ -17,6 +17,7 @@ interface ProofDetail {
   unloaded_weight_kg: number;
   photos: string[];
   created_at: string;
+  notes: string | null;
 }
 
 /**
@@ -137,7 +138,7 @@ function ProofModal({
     (async () => {
       const { data, error: err } = await supabase
         .from("delivery_proofs")
-        .select("client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at")
+        .select("client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes")
         .eq("schedule_id", scheduleId)
         .eq("destination", destination)
         .maybeSingle();
@@ -232,6 +233,12 @@ function ProofModal({
               })}
             />
           </dl>
+          {proof.notes?.trim() && (
+            <div className="mt-4">
+              <span className="text-[11px] uppercase text-navy-500">Observação do motorista</span>
+              <p className="mt-0.5 whitespace-pre-line text-sm text-navy-900">{proof.notes}</p>
+            </div>
+          )}
           <div className="mt-4">
             <span className="text-[11px] uppercase text-navy-500">
               Fotos (canhoto e ticket)
