@@ -1,41 +1,59 @@
 #!/usr/bin/env bash
-# Restaura um backup (gerado por backup-supabase.sh) na pilha de DESTINO.
-# APAGA o que houver no destino antes de copiar — por isso exige confirmação:
+# Restaura um backup (gerado por backup-supabase.sh) numa pilha de DESTINO,
+# local (Docker) ou remota (Railway). APAGA o que houver no destino antes de
+# copiar — por isso exige confirmação:
 #
-#   CONFIRM_RESTORE=sim bash scripts/restore-to-stack.sh backups/<data> [arquivo-env] [projeto-compose]
+#   CONFIRM_RESTORE=sim bash scripts/restore-to-stack.sh backups/<data> <arquivo-env>
 #
+# O arquivo-env (em infra/) aponta o destino:
+#   POSTGRES_PASSWORD, DB_PORT, PUBLIC_API_URL, SERVICE_ROLE_KEY
+#   DB_HOST   (opcional; padrão host.docker.internal = pilha local no Docker.
+#              No Railway: endereço do "TCP Proxy" do serviço db)
 # Exemplos:
-#   ensaio local (destino de teste):  ... backups/2026... .env.dest cotaflow-dest
-#   pilha principal local:            ... backups/2026... .env cotaflow-infra
+#   ensaio local:   CONFIRM_RESTORE=sim bash scripts/restore-to-stack.sh backups/2026... .env.dest
+#   Railway teste:  CONFIRM_RESTORE=sim bash scripts/restore-to-stack.sh backups/2026... .env.staging
+# SKIP_MIGRATIONS=1 pula as migrations (destino que já as tem).
 # Passos: migrations -> limpa destino -> usuários -> dados do banco -> fotos -> conferência.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BACKUP="${1:?Informe a pasta do backup (ex.: backups/20261015-120000)}"
 ENV_FILE="${2:-.env}"
-PROJECT="${3:-cotaflow-infra}"
-[ "${CONFIRM_RESTORE:-}" = "sim" ] || { echo "Isto APAGA o destino ($PROJECT). Rode com CONFIRM_RESTORE=sim para continuar."; exit 1; }
+[ "${CONFIRM_RESTORE:-}" = "sim" ] || { echo "Isto APAGA o destino. Rode com CONFIRM_RESTORE=sim para continuar."; exit 1; }
 [ -d "$BACKUP" ] || { echo "Pasta não encontrada: $BACKUP"; exit 1; }
+[ -f "$ENV_FILE" ] || { echo "Arquivo de ambiente não encontrado: $ENV_FILE"; exit 1; }
 
 set -a; . "./$ENV_FILE"; set +a
-export MSYS_NO_PATHCONV=1
-HERE="$(pwd -W 2>/dev/null || pwd)"
-DB_URL="postgresql://postgres:${POSTGRES_PASSWORD}@host.docker.internal:${DB_PORT}/postgres"
-# Superusuário da imagem: só ele pode adiar as chaves estrangeiras durante a carga.
-ADMIN_URL="postgresql://supabase_admin:${POSTGRES_PASSWORD}@host.docker.internal:${DB_PORT}/postgres"
-CLIENT=(docker run --rm -v "${HERE}:/work" -w /work postgres:17-alpine)
-DC="docker compose -p $PROJECT --env-file $ENV_FILE"
-psql_db() { $DC exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q "$@"; }
+: "${POSTGRES_PASSWORD:?}" "${DB_PORT:?Preencha DB_PORT no $ENV_FILE}" "${PUBLIC_API_URL:?Preencha PUBLIC_API_URL no $ENV_FILE}" "${SERVICE_ROLE_KEY:?}"
+DB_HOST="${DB_HOST:-host.docker.internal}"
+# Destino remoto (Railway): a conexão TEM que ser criptografada. Local: não precisa.
+if [ "$DB_HOST" = "host.docker.internal" ]; then SSL="prefer"; else SSL="require"; fi
 
-if [ "${SKIP_MIGRATIONS:-}" = "1" ]; then echo "1/6 Migrations: puladas (SKIP_MIGRATIONS=1)"; else echo "1/6 Migrations (estrutura do banco)…"; fi
-if [ "${SKIP_MIGRATIONS:-}" != "1" ]; then
+export MSYS_NO_PATHCONV=1
+ROOT="$(cd .. && (pwd -W 2>/dev/null || pwd))"
+CLIENT=(docker run --rm -i -v "${ROOT}:/work" -w /work/infra postgres:17-alpine)
+DB_URL="postgresql://postgres:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/postgres?sslmode=${SSL}"
+# Superusuário da imagem: só ele pode adiar as chaves estrangeiras durante a carga.
+ADMIN_URL="postgresql://supabase_admin:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/postgres?sslmode=${SSL}"
+B="/work/infra/$BACKUP"
+
+echo "Destino: banco em ${DB_HOST}:${DB_PORT} (conexão: ${SSL}) · API em ${PUBLIC_API_URL}"
+"${CLIENT[@]}" psql "$DB_URL" -At -c "select 'conexão ok: ' || current_user" >/dev/null \
+  || { echo "Não consegui conectar ao banco de destino. Confira DB_HOST, DB_PORT e a senha."; exit 1; }
+
+if [ "${SKIP_MIGRATIONS:-}" = "1" ]; then
+  echo "1/6 Migrations: puladas (SKIP_MIGRATIONS=1)"
+else
+  echo "1/6 Migrations (estrutura do banco)…"
   for f in $(ls ../supabase/migrations/*.sql | sort); do
-    psql_db -f - < "$f" >/dev/null || { echo "FALHOU na migration $f"; exit 1; }
+    "${CLIENT[@]}" psql "$DB_URL" -v ON_ERROR_STOP=1 -q -o /dev/null -f "/work/supabase/migrations/$(basename "$f")" \
+      || { echo "FALHOU na migration $f"; exit 1; }
   done
 fi
 
 echo "2/6 Limpando o destino…"
-psql_db <<'SQL'
+"${CLIENT[@]}" psql "$DB_URL" -v ON_ERROR_STOP=1 -q -o /dev/null <<'SQL'
+set client_min_messages = warning;
 do $$
 declare t record;
 begin
@@ -52,10 +70,10 @@ SQL
 # (session_replication_role = replica), pois a ordem das tabelas num backup só
 # de dados não respeita as chaves.
 echo "3/6 Usuários e logins (auth)…"
-"${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; sed '/transaction_timeout/d' /work/$BACKUP/auth.sql) | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+"${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; sed '/transaction_timeout/d' $B/auth.sql) | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
 
 echo "4/6 Dados do banco (public)…"
-"${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; pg_restore --data-only --no-owner -f - /work/$BACKUP/public.dump | sed '/transaction_timeout/d') | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+"${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; pg_restore --data-only --no-owner -f - $B/public.dump | sed '/transaction_timeout/d') | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
 
 echo "5/6 Fotos…"
 if [ -d "$BACKUP/photos" ]; then
@@ -65,7 +83,7 @@ else
 fi
 
 echo "6/6 Conferência das contagens…"
-"${CLIENT[@]}" psql "$DB_URL" -At -F ' | ' -f /work/sql/counts.sql > "$BACKUP/counts.destino.txt"
+"${CLIENT[@]}" psql "$DB_URL" -At -F ' | ' -f /work/infra/sql/counts.sql > "$BACKUP/counts.destino.txt"
 if diff -u "$BACKUP/counts.txt" "$BACKUP/counts.destino.txt"; then
   echo "OK: todas as contagens são iguais à origem."
 else
