@@ -51,14 +51,14 @@ export function DeliveryProofDestinations({
         key={d}
         type="button"
         onClick={() => setOpen(d)}
-        title={has ? "Comprovante enviado — clique para ver" : "Sem comprovante"}
-        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-left text-xs font-medium ${
+        title={`${d} — ${has ? "comprovante enviado (clique para ver)" : "sem comprovante"}`}
+        className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-left text-xs font-medium ${
           has
             ? "border-transparent bg-teal-200 text-teal-900 hover:brightness-110"
             : "border-amber-400 text-navy-700 hover:bg-amber-50"
         }`}
       >
-        {d}
+        <span className="truncate">{d}</span>
         {has && <span aria-label="comprovante enviado">✓</span>}
       </button>
     );
@@ -67,7 +67,7 @@ export function DeliveryProofDestinations({
   return (
     <>
       <span className="hidden print:inline">{dests.join(", ")}</span>
-      <span className="print:hidden">
+      <span className="block min-w-0 print:hidden">
         {dests.length === 1 ? (
           chip(dests[0])
         ) : (
@@ -92,7 +92,7 @@ export function DeliveryProofDestinations({
               </span>
             </button>
             {listOpen && (
-              <span className="mt-1.5 flex flex-col items-start gap-1">{dests.map(chip)}</span>
+              <span className="mt-1.5 flex min-w-0 flex-col items-start gap-1">{dests.map(chip)}</span>
             )}
           </>
         )}

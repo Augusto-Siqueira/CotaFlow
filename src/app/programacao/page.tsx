@@ -765,7 +765,7 @@ export default function ProgramacaoPage() {
   }));
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+    <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-navy-900">
@@ -1271,13 +1271,13 @@ export default function ProgramacaoPage() {
             const hasDestination = loads.some((l) => l.destination?.trim());
             const hasTrailer = loads.some((l) => l.trailer_plate?.trim());
             const cols = [
-              "2fr",
+              "1.7fr",
               hasOrigin ? "1.4fr" : null,
-              hasDestination ? "1.4fr" : null,
+              hasDestination ? "1.9fr" : null,
               "1fr",
               "1fr",
               hasTrailer ? "1fr" : null,
-              "1.6fr",
+              "2fr",
               "0.8fr",
               "1.8fr",
             ]
@@ -1351,7 +1351,7 @@ export default function ProgramacaoPage() {
                           )}
                           {hasDestination && (
                             <div
-                              className={`text-navy-700 ${l.destination?.trim() ? "" : "max-lg:hidden"}`}
+                              className={`min-w-0 text-navy-700 ${l.destination?.trim() ? "" : "max-lg:hidden"}`}
                             >
                               <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                                 Destino
@@ -1389,7 +1389,10 @@ export default function ProgramacaoPage() {
                           {l.trailer_plate || "—"}
                         </div>
                       )}
-                      <div className="text-navy-700">
+                      <div
+                        className="min-w-0 truncate whitespace-nowrap text-navy-700"
+                        title={l.driver ?? undefined}
+                      >
                         <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                           Motorista
                         </span>
