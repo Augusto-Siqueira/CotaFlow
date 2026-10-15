@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 1000;
-const CACHE_KEY = "cotaflow:cities:v2";
+const CACHE_KEY = "cotaflow:cities:v3";
 const TTL_MS = 6 * 60 * 60 * 1000;
 
 // A tabela `cities` só guarda municípios reais, no formato "Cidade/UF".
@@ -10,14 +10,7 @@ export function isCityWithUf(name: string): boolean {
   return /^.+\/[A-Z]{2}$/.test(name.trim());
 }
 
-/** Texto sem acento, em minúsculas e sem espaços nas pontas (para comparar nomes de cidade). */
-export function normalizeCityText(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
+export { normalizeCityText } from "@/lib/normalizeText";
 
 let memory: string[] | null = null;
 let inflight: Promise<string[]> | null = null;

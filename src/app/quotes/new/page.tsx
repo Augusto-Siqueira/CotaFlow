@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { fetchAllCityNames, invalidateCityCache, isCityWithUf } from "@/lib/cities";
+import { fetchAllCityNames, invalidateCityCache, isCityWithUf, normalizeCityText } from "@/lib/cities";
 import { AddressField, type AddressOption } from "@/components/AddressField";
 import { AdminGate } from "@/components/AdminGate";
 import { formatCurrency, revisionLabel } from "@/lib/format";
@@ -694,6 +694,7 @@ function NewQuotePage({
       }
     }
 
+    const knownCities = new Set(cities.map(normalizeCityText));
     const newCityNames = Array.from(
       new Set(
         [
@@ -704,7 +705,7 @@ function NewQuotePage({
           .map((c) => c.trim())
           .filter(isCityWithUf)
       )
-    );
+    ).filter((c) => !knownCities.has(normalizeCityText(c)));
     if (newCityNames.length > 0) {
       const { error: citiesError } = await supabase
         .from("cities")

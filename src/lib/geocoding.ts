@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabaseServer";
+import { normalizeCityText } from "@/lib/normalizeText";
 
 export interface CityCoordinates {
   lat: number;
@@ -57,14 +58,28 @@ export async function getCityCoordinates(
     return { lat: address.latitude, lng: address.longitude };
   }
 
-  const { data: cached } = await supabase
-    .from("cities")
-    .select("latitude, longitude")
-    .eq("name", trimmed)
-    .maybeSingle();
+  // Procura a cidade já cadastrada ignorando acento e maiúsculas (evita criar
+  // "ALMIRANTE TAMANDARÉ/PR" ao lado de "Almirante Tamandaré/PR").
+  const uf = trimmed.match(/\/([A-Za-z]{2})$/)?.[1];
+  let existing: { name: string; latitude: number | null; longitude: number | null } | null = null;
+  if (uf) {
+    const { data: sameUf } = await supabase
+      .from("cities")
+      .select("name, latitude, longitude")
+      .ilike("name", `%/${uf}`);
+    existing =
+      (sameUf ?? []).find((c) => normalizeCityText(c.name) === normalizeCityText(trimmed)) ?? null;
+  } else {
+    const { data } = await supabase
+      .from("cities")
+      .select("name, latitude, longitude")
+      .eq("name", trimmed)
+      .maybeSingle();
+    existing = data;
+  }
 
-  if (cached && cached.latitude !== null && cached.longitude !== null) {
-    return { lat: cached.latitude, lng: cached.longitude };
+  if (existing && existing.latitude !== null && existing.longitude !== null) {
+    return { lat: existing.latitude, lng: existing.longitude };
   }
 
   let coordinates: CityCoordinates | null = null;
@@ -78,7 +93,7 @@ export async function getCityCoordinates(
   await supabase
     .from("cities")
     .upsert(
-      { name: trimmed, latitude: coordinates.lat, longitude: coordinates.lng },
+      { name: existing?.name ?? trimmed, latitude: coordinates.lat, longitude: coordinates.lng },
       { onConflict: "name" }
     );
 
