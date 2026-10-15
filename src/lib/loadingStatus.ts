@@ -1,7 +1,6 @@
-// Mantido em sincronia com loading_schedules_status_check (migrations 0038 e 0048).
+// Mantido em sincronia com loading_schedules_status_check (migrations 0038 e 0048). "lavando" foi retirado da tela; o banco ainda aceita o valor.
 export const LOADING_STATUSES = [
   { value: "programado", label: "Programado", badge: "bg-navy-200 text-navy-800" },
-  { value: "lavando", label: "Lavando", badge: "bg-sky-200 text-sky-900" },
   { value: "carregando", label: "Carregando", badge: "bg-amber-200 text-amber-900" },
   { value: "em_viagem", label: "Carregado em Viagem", badge: "bg-brand-200 text-brand-900" },
   { value: "entregue", label: "Entrega Concluída", badge: "bg-teal-200 text-teal-900" },

@@ -99,7 +99,7 @@ async function fetchAffected(
   const { data } = await supabase
     .from("loading_schedules")
     .select("id, schedule_date, client_name, cargo, plate, trailer_plate, status")
-    .in("status", ["programado", "lavando", "carregando"])
+    .in("status", ["programado", "carregando"])
     .gte("schedule_date", fromDate)
     .or(`plate.in.(${list}),trailer_plate.in.(${list})`)
     .order("schedule_date");

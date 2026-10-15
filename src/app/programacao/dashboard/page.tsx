@@ -32,7 +32,7 @@ const COLUMNS =
   "id, schedule_date, client_name, cargo, origin, destination, weight, plate, trailer_plate, driver, loading_time, status";
 const PAGE = 1000;
 const LATE = "atrasadas";
-const NOT_DEPARTED = new Set(["programado", "lavando", "carregando"]);
+const NOT_DEPARTED = new Set(["programado", "carregando"]);
 
 // ---------- datas (sempre no calendário local, como "YYYY-MM-DD") ----------
 
@@ -143,7 +143,7 @@ export default function DashboardPage() {
     [periodRows, activeClient]
   );
 
-  // Atrasada = dia já passou e a carga ainda não saiu (Programado, Lavando ou
+  // Atrasada = dia já passou e a carga ainda não saiu (Programado ou
   // Carregando). Em viagem ou entregue não é atraso.
   const isLate = (r: Load) =>
     r.schedule_date < today && NOT_DEPARTED.has(r.status);
@@ -423,7 +423,7 @@ export default function DashboardPage() {
               type="button"
               aria-pressed={statusFilter === LATE}
               onClick={() => setStatusFilter(statusFilter === LATE ? "" : LATE)}
-              title="Cargas de dias anteriores que ainda não saíram (Programado, Lavando ou Carregando)"
+              title="Cargas de dias anteriores que ainda não saíram (Programado ou Carregando)"
               className={`${cardBase} ${
                 stats.late.count > 0
                   ? "border-red-300 bg-red-50 text-red-800"

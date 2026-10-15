@@ -65,7 +65,7 @@ function fmtDateTime(iso: string): string {
 }
 
 // Status que só podem ser usados com a viagem anterior da placa concluída.
-const RESTRICTED_STATUSES = new Set(["lavando", "carregando", "em_viagem"]);
+const RESTRICTED_STATUSES = new Set(["carregando", "em_viagem"]);
 
 interface QuoteOption {
   id: string;
@@ -462,7 +462,7 @@ export default function ProgramacaoPage() {
   }
 
   // Viagem "programado" pode ser lançada à vontade (dá para adiantar a
-  // programação). Já passar para Lavando, Carregando ou Carregado em Viagem só
+  // programação). Já passar para Carregando ou Carregado em Viagem só
   // é permitido quando as viagens ANTERIORES da mesma placa estão em Entrega
   // Concluída. "Anterior" = data menor, ou mesma data lançada antes.
   async function findPriorOpenTrips(
