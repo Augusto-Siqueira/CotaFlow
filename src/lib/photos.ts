@@ -33,8 +33,8 @@ export async function uploadPhoto(userId: string, file: File): Promise<string> {
   return path;
 }
 
-/** Link temporário (1 h) para a equipe ver uma foto. */
-export async function photoUrl(path: string): Promise<string | null> {
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+/** Link temporário (1 h por padrão) para a equipe ver uma foto. */
+export async function photoUrl(path: string, seconds = 3600): Promise<string | null> {
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, seconds);
   return data?.signedUrl ?? null;
 }

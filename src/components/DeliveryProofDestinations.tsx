@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { photoUrl } from "@/lib/photos";
-import { formatKg } from "@/lib/deliveryProof";
+import { buildOutlookComposeUrl, formatKg } from "@/lib/deliveryProof";
 import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
@@ -124,6 +124,9 @@ function ProofModal({
 }) {
   const [proof, setProof] = useState<ProofDetail | null | undefined>(undefined);
   const [photos, setPhotos] = useState<string[]>([]);
+  // Links de 7 dias para o e-mail (os de 1 h acima são só para a tela).
+  const [mailLinks, setMailLinks] = useState<string[]>([]);
+  const [mailNote, setMailNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { confirm: askConfirm } = useFeedback();
@@ -144,6 +147,8 @@ function ProofModal({
       if (p) {
         const urls = await Promise.all(p.photos.map((x) => photoUrl(x)));
         if (!cancelled) setPhotos(urls.filter((u): u is string => Boolean(u)));
+        const long = await Promise.all(p.photos.map((x) => photoUrl(x, 7 * 24 * 3600)));
+        if (!cancelled) setMailLinks(long.filter((u): u is string => Boolean(u)));
       }
     })();
     return () => {
@@ -166,6 +171,20 @@ function ProofModal({
     }
     onChanged();
     onClose();
+  }
+
+  function sendByEmail() {
+    if (!proof) return;
+    const { url, omittedPhotos } = buildOutlookComposeUrl(
+      { ...proof, destination },
+      mailLinks
+    );
+    setMailNote(
+      omittedPhotos > 0
+        ? `${omittedPhotos} foto(s) não couberam no e-mail como link: baixe e anexe manualmente.`
+        : null
+    );
+    window.open(url, "_blank", "noopener");
   }
 
   const diff = proof ? Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg) : 0;
@@ -228,7 +247,12 @@ function ProofModal({
           </div>
         </>
       )}
-      <div className="mt-5 flex justify-between gap-2">
+      {mailNote && (
+        <div role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {mailNote}
+        </div>
+      )}
+      <div className="mt-5 flex flex-wrap justify-between gap-2">
         {canDelete && proof ? (
           <button
             type="button"
@@ -241,9 +265,22 @@ function ProofModal({
         ) : (
           <span />
         )}
-        <button type="button" onClick={onClose} className={buttonClasses("secondary")}>
-          Fechar
-        </button>
+        <span className="flex gap-2">
+          {proof && (
+            <button
+              type="button"
+              onClick={sendByEmail}
+              disabled={mailLinks.length === 0}
+              title="Abre um e-mail novo no Outlook na web, já preenchido"
+              className={buttonClasses("soft")}
+            >
+              Enviar por e-mail
+            </button>
+          )}
+          <button type="button" onClick={onClose} className={buttonClasses("secondary")}>
+            Fechar
+          </button>
+        </span>
       </div>
     </Modal>
   );
