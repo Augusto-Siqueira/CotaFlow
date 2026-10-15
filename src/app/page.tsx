@@ -43,7 +43,7 @@ export default function Home() {
   const { stats, recent } = useHomeData(5);
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+    <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-chrome-900 via-chrome-800 to-chrome-700 p-8 text-white lg:col-span-2">
           <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-500/20 blur-2xl" />

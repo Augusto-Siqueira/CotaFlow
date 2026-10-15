@@ -41,7 +41,7 @@ export default function ChecklistsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+    <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-navy-900">

@@ -557,7 +557,7 @@ function NewQuoteBatchPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+    <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="mb-8">
         <ButtonLink href="/quotes/batches" variant="secondary" size="sm" aria-label="Voltar para Lotes">Voltar</ButtonLink>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">

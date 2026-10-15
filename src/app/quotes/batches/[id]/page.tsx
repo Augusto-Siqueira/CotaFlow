@@ -49,7 +49,7 @@ export default async function QuoteBatchDetailPage({
   const routes = (routesData as unknown as BatchRoute[]) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+    <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="mb-8 flex items-start justify-between">
         <div>
           <ButtonLink href="/quotes/batches" variant="secondary" size="sm" aria-label="Voltar para Lotes">Voltar</ButtonLink>

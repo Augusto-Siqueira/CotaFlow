@@ -332,7 +332,7 @@ export default function ClientsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+    <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-navy-900">
