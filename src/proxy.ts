@@ -2,6 +2,18 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // Depois da migração para o Railway: o sistema antigo (Vercel) define
+  // REDIRECT_TO e passa a só mandar todo mundo para o endereço novo, para
+  // ninguém continuar gravando no banco antigo. Redirecionamento temporário
+  // (307): para voltar atrás, basta apagar a variável. No Railway ela não existe.
+  const redirectTo = process.env.REDIRECT_TO;
+  if (redirectTo) {
+    return NextResponse.redirect(
+      new URL(request.nextUrl.pathname + request.nextUrl.search, redirectTo),
+      307
+    );
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
