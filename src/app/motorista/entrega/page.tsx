@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { ButtonLink } from "@/components/Button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { splitDestinations } from "@/components/Destinations";
@@ -80,10 +80,8 @@ export default function ComprovanteEntregaPage() {
 
   return (
     <div className="mx-auto w-full max-w-md flex-1 px-4 py-6">
-      <Link href="/motorista" className="text-sm text-navy-500">
-        ← Voltar
-      </Link>
-      <h1 className="mt-1 text-xl font-semibold text-navy-900">Comprovante de entrega</h1>
+      <ButtonLink href="/motorista" variant="secondary" size="sm" aria-label="Voltar para Voltar">Voltar</ButtonLink>
+      <h1 className="mt-3 text-xl font-semibold text-navy-900">Comprovante de entrega</h1>
       <p className="text-sm text-navy-500">
         Para cada destino, lance os dados e a foto do canhoto e do ticket de pesagem.
       </p>
@@ -296,7 +294,7 @@ function ProofForm({
           autoComplete="off"
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-3">
         <div>
           <label className={labelCls} htmlFor={`${id}-pnf`}>
             Peso da NF (kg)

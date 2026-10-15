@@ -20,7 +20,7 @@ import {
   type IcmsRateMap,
 } from "@/lib/icms";
 import { RouteCard } from "./RouteCard";
-import { buttonClasses } from "@/components/Button";
+import { buttonClasses, ButtonLink } from "@/components/Button";
 
 interface ClientOption {
   id: string;
@@ -559,12 +559,7 @@ function NewQuoteBatchPage() {
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
       <div className="mb-8">
-        <Link
-          href="/quotes/batches"
-          className="text-sm text-navy-500 hover:text-navy-700"
-        >
-          ← Lotes
-        </Link>
+        <ButtonLink href="/quotes/batches" variant="secondary" size="sm" aria-label="Voltar para Lotes">Voltar</ButtonLink>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
           Nova cotação em lote
         </h1>

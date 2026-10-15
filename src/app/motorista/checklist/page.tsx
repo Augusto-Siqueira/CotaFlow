@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ButtonLink } from "@/components/Button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { uploadPhoto } from "@/lib/photos";
@@ -195,10 +196,8 @@ export default function ChecklistPage() {
   if (step === "start") {
     return (
       <div className="mx-auto w-full max-w-md flex-1 px-4 py-6">
-        <Link href="/motorista" className="text-sm text-navy-500">
-          ← Voltar
-        </Link>
-        <h1 className="mt-1 text-xl font-semibold text-navy-900">Check-list diário</h1>
+        <ButtonLink href="/motorista" variant="secondary" size="sm" aria-label="Voltar para Voltar">Voltar</ButtonLink>
+        <h1 className="mt-3 text-xl font-semibold text-navy-900">Check-list diário</h1>
         <p className="mt-1 text-sm text-navy-500">
           Obrigatório antes de iniciar a viagem. Responda cada item olhando o veículo, e não de
           memória.

@@ -13,7 +13,7 @@ import { computeIcmsValue } from "@/lib/quoteCalculations";
 import { getCityCoordinates } from "@/lib/geocoding";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { QuoteStatusSelect } from "@/components/QuoteStatusSelect";
-import { buttonClasses } from "@/components/Button";
+import { buttonClasses, ButtonLink } from "@/components/Button";
 
 interface QuoteDetail {
   id: string;
@@ -160,12 +160,7 @@ export default async function QuoteDetailPage({
     <div className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link
-            href="/quotes"
-            className="text-sm text-navy-500 hover:text-navy-700"
-          >
-            ← Cotações
-          </Link>
+          <ButtonLink href="/quotes" variant="secondary" size="sm" aria-label="Voltar para Cotações">Voltar</ButtonLink>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
             Cotação #{quote.id.slice(0, 8).toUpperCase()}
           </h1>

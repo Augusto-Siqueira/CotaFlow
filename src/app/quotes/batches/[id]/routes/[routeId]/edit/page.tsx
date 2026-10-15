@@ -12,7 +12,7 @@ import {
   computeNetFreight,
 } from "@/lib/quoteCalculations";
 import { CurrencyInput } from "@/components/CurrencyInput";
-import { buttonClasses } from "@/components/Button";
+import { buttonClasses, ButtonLink } from "@/components/Button";
 
 interface VehicleOption {
   id: string;
@@ -288,12 +288,7 @@ function EditBatchRoutePage({
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
       <div className="mb-8">
-        <Link
-          href={`/quotes/batches/${batchId}`}
-          className="text-sm text-navy-500 hover:text-navy-700"
-        >
-          ← Lote
-        </Link>
+        <ButtonLink href={`/quotes/batches/${batchId}`} variant="secondary" size="sm" aria-label="Voltar para Lote">Voltar</ButtonLink>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
           Editar rota
         </h1>

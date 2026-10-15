@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ButtonLink } from "@/components/Button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { REPORT_CATEGORIES, SEVERITIES } from "@/lib/maintenance";
@@ -136,10 +137,8 @@ export default function RelatarDefeitoPage() {
 
   return (
     <form onSubmit={submit} className="mx-auto w-full max-w-md flex-1 px-4 py-6">
-      <Link href="/motorista" className="text-sm text-navy-500">
-        ← Voltar
-      </Link>
-      <h1 className="mt-1 text-xl font-semibold text-navy-900">Relatar defeito</h1>
+      <ButtonLink href="/motorista" variant="secondary" size="sm" aria-label="Voltar para Voltar">Voltar</ButtonLink>
+      <h1 className="mt-3 text-xl font-semibold text-navy-900">Relatar defeito</h1>
 
       <div className="mt-4 space-y-4">
         <div>

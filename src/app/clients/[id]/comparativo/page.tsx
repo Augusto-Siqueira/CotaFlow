@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabaseServer";
 import { formatCurrency, formatDate, revisionLabel } from "@/lib/format";
-import { buttonClasses } from "@/components/Button";
+import { buttonClasses, ButtonLink } from "@/components/Button";
 
 interface ClientInfo {
   id: string;
@@ -90,9 +90,7 @@ export default async function ClientComparativoPage({
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <div className="mb-8">
-        <Link href="/clients" className="text-sm text-navy-500 hover:text-navy-700">
-          ← Clientes
-        </Link>
+        <ButtonLink href="/clients" variant="secondary" size="sm" aria-label="Voltar para Clientes">Voltar</ButtonLink>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
           Comparativo de preços — {client.name}
         </h1>

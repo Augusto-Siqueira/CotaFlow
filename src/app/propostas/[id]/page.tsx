@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
+import { ButtonLink } from "@/components/Button";
 import { supabase } from "@/lib/supabase";
 import { prepareProposalHtml } from "@/lib/proposalHtml";
 import { AdminGate } from "@/components/AdminGate";
@@ -28,12 +28,7 @@ function Preview({ id }: { id: string }) {
   return (
     <div className="flex min-h-screen flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-navy-200 bg-white px-6 py-3">
-        <Link
-          href="/propostas"
-          className="text-sm text-navy-500 hover:text-navy-700"
-        >
-          ← Propostas
-        </Link>
+        <ButtonLink href="/propostas" variant="secondary" size="sm" aria-label="Voltar para Propostas">Voltar</ButtonLink>
         <span className="truncate pl-4 text-sm font-medium text-navy-800">
           {proposal?.title ?? ""}
         </span>

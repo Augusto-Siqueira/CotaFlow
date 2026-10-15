@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/Button";
 import { AdminOnly } from "@/components/AdminOnly";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabaseServer";
@@ -52,12 +52,7 @@ export default async function QuoteBatchDetailPage({
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <Link
-            href="/quotes/batches"
-            className="text-sm text-navy-500 hover:text-navy-700"
-          >
-            ← Lotes
-          </Link>
+          <ButtonLink href="/quotes/batches" variant="secondary" size="sm" aria-label="Voltar para Lotes">Voltar</ButtonLink>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900">
             Lote #{batch.id.slice(0, 8).toUpperCase()}
           </h1>
