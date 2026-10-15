@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.07";
+export const APP_VERSION = "1.08";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.08",
+    date: "2026-10-15",
+    notes: [
+      "Comprovante de entrega no app do motorista: para cada destino da carga, ele lança nome do cliente, nota fiscal, peso da NF e peso descarregado (em kg) e envia a foto do canhoto e do ticket de pesagem (obrigatória).",
+      "Programação: cada destino é clicável e abre o comprovante enviado, com os dados, a diferença de peso e as fotos; destinos com comprovante ficam marcados com ✓. Quem edita a programação pode apagar um comprovante lançado errado.",
+      "Acesso dos motoristas: login com o CPF e senha inicial fixa (6 primeiros dígitos do CPF), sem troca obrigatória.",
+    ],
+  },
   {
     version: "1.07",
     date: "2026-10-17",

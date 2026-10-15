@@ -16,7 +16,8 @@ import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
 import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf } from "@/lib/cities";
-import { DestinationsCell, DestinationsInput } from "@/components/Destinations";
+import { DestinationsInput } from "@/components/Destinations";
+import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
 
@@ -147,6 +148,8 @@ export default function ProgramacaoPage() {
   } | null>(null);
   const latestDate = useRef(date);
 
+  // Destinos que já têm comprovante do motorista, por carga.
+  const [proofMap, setProofMap] = useState<Map<string, string[]>>(new Map());
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
   const [showMaint, setShowMaint] = useState(true);
@@ -250,12 +253,25 @@ export default function ProgramacaoPage() {
       .order("created_at", { ascending: true });
 
     loadMaintenance();
+    const ids = ((rows as { id: string }[] | null) ?? []).map((r) => r.id);
+    const { data: proofRows } = ids.length
+      ? await supabase.from("delivery_proofs").select("schedule_id, destination").in("schedule_id", ids)
+      : { data: [] };
     if (d !== latestDate.current) return;
+    const pm = new Map<string, string[]>();
+    for (const p of (proofRows as { schedule_id: string; destination: string }[] | null) ?? []) {
+      pm.set(p.schedule_id, [...(pm.get(p.schedule_id) ?? []), p.destination]);
+    }
+    setProofMap(pm);
     setData({
       date: d,
       rows: (rows as Load[] | null) ?? [],
       error: error?.message ?? null,
     });
+  }
+
+  async function reloadRows() {
+    await fetchRows(date);
   }
 
   useEffect(() => {
@@ -1238,7 +1254,13 @@ export default function ProgramacaoPage() {
                               <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
                                 Destino
                               </span>
-                              <DestinationsCell value={l.destination} />
+                              <DeliveryProofDestinations
+                                scheduleId={l.id}
+                                destination={l.destination}
+                                proofDestinations={proofMap.get(l.id) ?? []}
+                                canDelete={canEditSchedule}
+                                onChanged={reloadRows}
+                              />
                             </div>
                           )}
                         </>

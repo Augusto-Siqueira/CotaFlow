@@ -1,0 +1,228 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { photoUrl } from "@/lib/photos";
+import { formatKg } from "@/lib/deliveryProof";
+import { splitDestinations } from "@/components/Destinations";
+import { Modal } from "@/components/Modal";
+import { buttonClasses } from "@/components/Button";
+import { useFeedback } from "@/components/Feedback";
+
+interface ProofDetail {
+  client_name: string;
+  invoice_number: string;
+  invoice_weight_kg: number;
+  unloaded_weight_kg: number;
+  photos: string[];
+  created_at: string;
+}
+
+/**
+ * Destinos de uma carga na programação. Cada destino é clicável e abre o
+ * comprovante que o motorista lançou no app (✓ = já enviado). Na impressão
+ * sai só o texto dos destinos.
+ */
+export function DeliveryProofDestinations({
+  scheduleId,
+  destination,
+  proofDestinations,
+  canDelete,
+  onChanged,
+}: {
+  scheduleId: string;
+  destination: string | null;
+  /** Destinos desta carga que já têm comprovante. */
+  proofDestinations: string[];
+  canDelete: boolean;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const dests = splitDestinations(destination);
+  if (dests.length === 0) return <>—</>;
+
+  return (
+    <>
+      <span className="hidden print:inline">{dests.join(", ")}</span>
+      <span className="flex flex-wrap gap-1.5 print:hidden">
+        {dests.map((d) => {
+          const has = proofDestinations.includes(d);
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setOpen(d)}
+              title={has ? "Ver comprovante de entrega" : "Sem comprovante do motorista ainda"}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 ${
+                has
+                  ? "border-teal-300 bg-teal-50 text-teal-800"
+                  : "border-navy-300 text-navy-700"
+              }`}
+            >
+              {d}
+              {has && <span aria-label="comprovante enviado">✓</span>}
+            </button>
+          );
+        })}
+      </span>
+      {open !== null && (
+        <ProofModal
+          scheduleId={scheduleId}
+          destination={open}
+          canDelete={canDelete}
+          onClose={() => setOpen(null)}
+          onChanged={onChanged}
+        />
+      )}
+    </>
+  );
+}
+
+function ProofModal({
+  scheduleId,
+  destination,
+  canDelete,
+  onClose,
+  onChanged,
+}: {
+  scheduleId: string;
+  destination: string;
+  canDelete: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [proof, setProof] = useState<ProofDetail | null | undefined>(undefined);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { confirm: askConfirm } = useFeedback();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error: err } = await supabase
+        .from("delivery_proofs")
+        .select("client_name, invoice_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at")
+        .eq("schedule_id", scheduleId)
+        .eq("destination", destination)
+        .maybeSingle();
+      if (cancelled) return;
+      if (err) setError(err.message);
+      const p = (data as ProofDetail | null) ?? null;
+      setProof(p);
+      if (p) {
+        const urls = await Promise.all(p.photos.map((x) => photoUrl(x)));
+        if (!cancelled) setPhotos(urls.filter((u): u is string => Boolean(u)));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scheduleId, destination]);
+
+  async function remove() {
+    if (!(await askConfirm("Apagar este comprovante? O motorista poderá lançar de novo."))) return;
+    setDeleting(true);
+    const { error: err } = await supabase
+      .from("delivery_proofs")
+      .delete()
+      .eq("schedule_id", scheduleId)
+      .eq("destination", destination);
+    setDeleting(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    onChanged();
+    onClose();
+  }
+
+  const diff = proof ? Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg) : 0;
+
+  return (
+    <Modal onClose={onClose} labelledBy="proof-title" className="max-w-xl">
+      <h2 id="proof-title" className="text-base font-medium">
+        Comprovante de entrega · {destination}
+      </h2>
+      {error && (
+        <div role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {proof === undefined ? (
+        <p className="mt-3 text-sm text-navy-500">Carregando...</p>
+      ) : proof === null ? (
+        <p className="mt-3 text-sm text-navy-500">
+          O motorista ainda não lançou o comprovante deste destino.
+        </p>
+      ) : (
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <Field label="Cliente" value={proof.client_name} />
+            <Field label="Nota fiscal" value={proof.invoice_number} />
+            <Field label="Peso da NF" value={`${formatKg(proof.invoice_weight_kg)} kg`} />
+            <Field label="Peso descarregado" value={`${formatKg(proof.unloaded_weight_kg)} kg`} />
+            <Field
+              label="Diferença"
+              value={`${diff > 0 ? "+" : ""}${formatKg(diff)} kg`}
+              tone={diff === 0 ? undefined : diff < 0 ? "text-red-700" : "text-amber-700"}
+            />
+            <Field
+              label="Lançado em"
+              value={new Date(proof.created_at).toLocaleString("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })}
+            />
+          </dl>
+          <div className="mt-4">
+            <span className="text-[11px] uppercase text-navy-500">
+              Fotos (canhoto e ticket)
+            </span>
+            <div className="mt-1.5 grid grid-cols-2 gap-2">
+              {photos.map((url) => (
+                <a key={url} href={url} target="_blank" rel="noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt="Foto do comprovante"
+                    className="h-44 w-full rounded-lg border border-navy-200 object-cover"
+                  />
+                </a>
+              ))}
+              {photos.length === 0 && (
+                <p className="col-span-2 text-sm text-navy-500">Carregando fotos...</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      <div className="mt-5 flex justify-between gap-2">
+        {canDelete && proof ? (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={deleting}
+            className={buttonClasses("danger")}
+          >
+            {deleting ? "Apagando..." : "Apagar comprovante"}
+          </button>
+        ) : (
+          <span />
+        )}
+        <button type="button" onClick={onClose} className={buttonClasses("secondary")}>
+          Fechar
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function Field({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] uppercase text-navy-500">{label}</dt>
+      <dd className={`font-medium ${tone ?? "text-navy-900"}`}>{value}</dd>
+    </div>
+  );
+}
