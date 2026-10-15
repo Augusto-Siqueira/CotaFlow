@@ -16,7 +16,7 @@ import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
 import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf } from "@/lib/cities";
-import { DestinationsInput } from "@/components/Destinations";
+import { DestinationsInput, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
@@ -159,6 +159,16 @@ export default function ProgramacaoPage() {
   const [inMaintenance, setInMaintenance] = useState<Map<string, MaintInfo>>(new Map());
   // Sugestões de Origem/Destino: só municípios cadastrados.
   const [cityNames, setCityNames] = useState<string[]>([]);
+  // Origem e destinos só aceitam cidades da lista cadastrada (evita texto solto nos relatórios).
+  const cityIndex = useMemo(
+    () => new Map(cityNames.map((c) => [c.toLowerCase(), c])),
+    [cityNames]
+  );
+  // Nome oficial da cidade, ou null se não existir. Sem a lista carregada não dá para conferir: aceita.
+  const resolveCity = (text: string) =>
+    cityIndex.size === 0 ? text.trim() : (cityIndex.get(text.trim().toLowerCase()) ?? null);
+  const [originTouched, setOriginTouched] = useState(false);
+  const [pendingDestination, setPendingDestination] = useState("");
   const [tractorPlates, setTractorPlates] = useState<string[]>([]);
   const [trailerPlates, setTrailerPlates] = useState<string[]>([]);
   const [drivers, setDrivers] = useState<{ nickname: string; name: string }[]>([]);
@@ -470,6 +480,21 @@ export default function ProgramacaoPage() {
       setFormError("Informe a data.");
       return;
     }
+    const badOrigin = form.origin.trim() && resolveCity(form.origin) === null;
+    const badDestinations = splitDestinations(form.destination).filter(
+      (d) => resolveCity(d) === null
+    );
+    if (badOrigin) {
+      setFormError(`Origem inválida: escolha uma cidade da lista (Cidade/UF). Recebido: "${form.origin.trim()}".`);
+      return;
+    }
+    if (badDestinations.length > 0 || pendingDestination.trim()) {
+      const names = [...badDestinations, pendingDestination.trim()].filter(Boolean);
+      setFormError(
+        `Destino inválido: escolha cidades da lista (Cidade/UF) e clique em Adicionar. Corrija: ${names.join("; ")}.`
+      );
+      return;
+    }
     const invalid = [
       fieldChecks.client_name === null && "cliente",
       fieldChecks.plate === null && "placa do cavalo/truck",
@@ -487,8 +512,10 @@ export default function ProgramacaoPage() {
       schedule_date: form.schedule_date,
       client_name: fieldChecks.client_name ?? form.client_name.trim(),
       cargo: form.cargo.trim(),
-      origin: form.origin.trim() || null,
-      destination: form.destination.trim() || null,
+      origin: form.origin.trim() ? resolveCity(form.origin) : null,
+      destination: form.destination.trim()
+        ? splitDestinations(form.destination).map((d) => resolveCity(d) ?? d).join("; ")
+        : null,
       weight: normalizeWeight(form.weight) || null,
       plate: fieldChecks.plate || null,
       trailer_plate: fieldChecks.trailer_plate || null,
@@ -1044,7 +1071,16 @@ export default function ProgramacaoPage() {
               </label>
               <AddressField id="prog-origem-opcional"
                 value={form.origin}
-                onValueChange={(v) => updateForm("origin", v)}
+                onValueChange={(v) => {
+                  updateForm("origin", v);
+                  setOriginTouched(false);
+                }}
+                onBlur={() => setOriginTouched(true)}
+                error={
+                  originTouched && form.origin.trim() && resolveCity(form.origin) === null
+                    ? "Escolha uma cidade da lista (Cidade/UF)."
+                    : undefined
+                }
                 placeholder="Ex: Palhoça/SC"
                 cities={cityNames}
                 addresses={[]}
@@ -1060,6 +1096,8 @@ export default function ProgramacaoPage() {
                 onChange={(v) => updateForm("destination", v)}
                 placeholder="Ex: Ponta Grossa/PR"
                 cities={cityNames}
+                strict
+                onDraftChange={setPendingDestination}
               />
             </div>
 

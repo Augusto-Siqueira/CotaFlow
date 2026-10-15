@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AddressField } from "@/components/AddressField";
 
 // Vários destinos ficam no mesmo campo de texto, separados por ";" (nenhum
@@ -29,25 +29,62 @@ export function DestinationsInput({
   onChange,
   placeholder,
   cities,
+  strict = false,
+  onDraftChange,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   cities: string[];
+  // Só aceita cidades da lista (`cities`); o que não bater fica no campo com aviso.
+  // Sem a lista carregada não dá para conferir, então aceita (como antes).
+  strict?: boolean;
+  // Avisa o formulário do texto digitado e ainda não adicionado.
+  onDraftChange?: (draft: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraftState] = useState("");
+  const [draftError, setDraftError] = useState<string | null>(null);
   const list = splitDestinations(value);
+  const index = useMemo(
+    () => new Map(cities.map((c) => [c.toLowerCase(), c])),
+    [cities]
+  );
+  const checking = strict && index.size > 0;
+
+  function setDraft(text: string) {
+    setDraftState(text);
+    onDraftChange?.(text);
+  }
+
+  // Ao sair do formulário, o texto pendente some junto.
+  useEffect(() => () => onDraftChange?.(""), [onDraftChange]);
 
   function commit(text: string = draft) {
     const items = splitDestinations(text);
-    setDraft("");
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      setDraft("");
+      setDraftError(null);
+      return;
+    }
     const next = [...list];
-    for (const item of items) {
+    const invalid: string[] = [];
+    for (const raw of items) {
+      const item = checking ? index.get(raw.toLowerCase()) : raw;
+      if (!item) {
+        invalid.push(raw);
+        continue;
+      }
       if (!next.some((d) => d.toLowerCase() === item.toLowerCase())) next.push(item);
     }
-    onChange(joinDestinations(next));
+    if (next.length !== list.length) onChange(joinDestinations(next));
+    if (invalid.length > 0) {
+      setDraft(invalid.join("; "));
+      setDraftError(`Escolha uma cidade da lista (Cidade/UF): ${invalid.join("; ")}`);
+    } else {
+      setDraft("");
+      setDraftError(null);
+    }
   }
 
   function remove(index: number) {
@@ -60,7 +97,11 @@ export function DestinationsInput({
         <AddressField
           id={id}
           value={draft}
-          onValueChange={setDraft}
+          onValueChange={(v) => {
+            setDraft(v);
+            setDraftError(null);
+          }}
+          error={draftError ?? undefined}
           onPick={(name) => commit(name)}
           onBlur={() => commit()}
           onKeyDown={(e) => {
