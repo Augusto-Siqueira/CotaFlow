@@ -63,6 +63,8 @@ PGPASSWORD=${pw}
 PGDATABASE=postgres
 POSTGRES_DB=postgres
 PGDATA=/var/lib/postgresql/data/pgdata
+# Não registrar os comandos nos logs (a inicialização define senhas em texto):
+PGOPTIONS=-c log_statement=none
 `,
   "auth.env": `# Serviço "auth" — imagem supabase/gotrue:v2.174.0
 GOTRUE_API_HOST=0.0.0.0
@@ -75,6 +77,7 @@ GOTRUE_URI_ALLOW_LIST=${APP}
 GOTRUE_DISABLE_SIGNUP=true
 GOTRUE_JWT_ADMIN_ROLES=service_role
 GOTRUE_JWT_AUD=authenticated
+GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
 GOTRUE_JWT_EXP=3600
 GOTRUE_JWT_SECRET=${secret}
 GOTRUE_EXTERNAL_EMAIL_ENABLED=true
@@ -112,6 +115,9 @@ TENANT_ID=cotaflow
 REGION=railway
 GLOBAL_S3_BUCKET=cotaflow
 ENABLE_IMAGE_TRANSFORMATION=false
+# O Railway injeta PORT=8080; o gateway espera 5000:
+SERVER_PORT=5000
+PORT=5000
 `,
   "gateway.env": `# Serviço "gateway" — pasta infra/railway/gateway (Dockerfile) — domínio público
 PORT=8000
