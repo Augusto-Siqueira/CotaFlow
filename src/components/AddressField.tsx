@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { normalizeCityText } from "@/lib/cities";
 
 export interface AddressOption {
   id: string;
@@ -74,7 +75,7 @@ export function AddressField({
       : openMode === "search"
       ? Array.from(new Set([...cities, ...addresses.map((a) => a.name)]))
           .filter((name) =>
-            name.toLowerCase().startsWith(value.trim().toLowerCase())
+            normalizeCityText(name).startsWith(normalizeCityText(value))
           )
           .sort()
       : [];

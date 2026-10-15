@@ -10,6 +10,15 @@ export function isCityWithUf(name: string): boolean {
   return /^.+\/[A-Z]{2}$/.test(name.trim());
 }
 
+/** Texto sem acento, em minúsculas e sem espaços nas pontas (para comparar nomes de cidade). */
+export function normalizeCityText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 let memory: string[] | null = null;
 let inflight: Promise<string[]> | null = null;
 

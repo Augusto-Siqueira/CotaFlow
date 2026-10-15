@@ -15,7 +15,7 @@ import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
 import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
-import { fetchAllCityNames, isCityWithUf } from "@/lib/cities";
+import { fetchAllCityNames, isCityWithUf, normalizeCityText } from "@/lib/cities";
 import { DestinationsInput, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 import { Modal } from "@/components/Modal";
@@ -161,12 +161,12 @@ export default function ProgramacaoPage() {
   const [cityNames, setCityNames] = useState<string[]>([]);
   // Origem e destinos só aceitam cidades da lista cadastrada (evita texto solto nos relatórios).
   const cityIndex = useMemo(
-    () => new Map(cityNames.map((c) => [c.toLowerCase(), c])),
+    () => new Map(cityNames.map((c) => [normalizeCityText(c), c])),
     [cityNames]
   );
   // Nome oficial da cidade, ou null se não existir. Sem a lista carregada não dá para conferir: aceita.
   const resolveCity = (text: string) =>
-    cityIndex.size === 0 ? text.trim() : (cityIndex.get(text.trim().toLowerCase()) ?? null);
+    cityIndex.size === 0 ? text.trim() : (cityIndex.get(normalizeCityText(text)) ?? null);
   const [originTouched, setOriginTouched] = useState(false);
   const [pendingDestination, setPendingDestination] = useState("");
   const [tractorPlates, setTractorPlates] = useState<string[]>([]);

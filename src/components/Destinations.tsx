@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AddressField } from "@/components/AddressField";
+import { normalizeCityText } from "@/lib/cities";
 
 // Vários destinos ficam no mesmo campo de texto, separados por ";" (nenhum
 // nome de cidade usa esse caractere), então não precisa de coluna nova.
@@ -47,7 +48,7 @@ export function DestinationsInput({
   const [draftError, setDraftError] = useState<string | null>(null);
   const list = splitDestinations(value);
   const index = useMemo(
-    () => new Map(cities.map((c) => [c.toLowerCase(), c])),
+    () => new Map(cities.map((c) => [normalizeCityText(c), c])),
     [cities]
   );
   const checking = strict && index.size > 0;
@@ -70,7 +71,7 @@ export function DestinationsInput({
     const next = [...list];
     const invalid: string[] = [];
     for (const raw of items) {
-      const item = checking ? index.get(raw.toLowerCase()) : raw;
+      const item = checking ? index.get(normalizeCityText(raw)) : raw;
       if (!item) {
         invalid.push(raw);
         continue;
