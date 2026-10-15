@@ -50,13 +50,15 @@ export function DeliveryProofDestinations({
         key={d}
         type="button"
         onClick={() => setOpen(d)}
-        title={has ? "Ver comprovante de entrega" : "Sem comprovante do motorista ainda"}
-        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-left text-xs font-medium hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 ${
-          has ? "border-teal-300 bg-teal-50 text-teal-800" : "border-navy-300 text-navy-700"
+        title={has ? "Comprovante enviado — clique para ver" : "Sem comprovante"}
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-left text-xs font-medium ${
+          has
+            ? "border-teal-400 bg-teal-50 text-teal-800 hover:bg-teal-100"
+            : "border-amber-400 text-navy-700 hover:bg-amber-50"
         }`}
       >
         {d}
-        <span className="text-[10px] font-normal">{has ? "✓ comprovante" : "sem comprovante"}</span>
+        {has && <span aria-label="comprovante enviado">✓</span>}
       </button>
     );
   };
@@ -74,10 +76,10 @@ export function DeliveryProofDestinations({
               aria-expanded={listOpen}
               onClick={() => setListOpen((v) => !v)}
               title={`${dests.length} destinos · ${done} com comprovante`}
-              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 ${
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${
                 done === dests.length
-                  ? "border-teal-300 bg-teal-50 text-teal-800"
-                  : "border-navy-300 text-navy-700"
+                  ? "border-teal-400 bg-teal-50 text-teal-800 hover:bg-teal-100"
+                  : "border-amber-400 text-navy-700 hover:bg-amber-50"
               }`}
             >
               Diversos
