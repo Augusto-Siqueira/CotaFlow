@@ -12,6 +12,7 @@ import { useFeedback } from "@/components/Feedback";
 interface ProofDetail {
   client_name: string;
   invoice_number: string;
+  cte_number: string | null;
   invoice_weight_kg: number;
   unloaded_weight_kg: number;
   photos: string[];
@@ -136,7 +137,7 @@ function ProofModal({
     (async () => {
       const { data, error: err } = await supabase
         .from("delivery_proofs")
-        .select("client_name, invoice_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at")
+        .select("client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at")
         .eq("schedule_id", scheduleId)
         .eq("destination", destination)
         .maybeSingle();
@@ -210,6 +211,7 @@ function ProofModal({
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <Field label="Cliente" value={proof.client_name} />
             <Field label="Nota fiscal" value={proof.invoice_number} />
+            <Field label="CTE" value={proof.cte_number || "—"} />
             <Field label="Peso da NF" value={`${formatKg(proof.invoice_weight_kg)} kg`} />
             <Field label="Peso descarregado" value={`${formatKg(proof.unloaded_weight_kg)} kg`} />
             <Field

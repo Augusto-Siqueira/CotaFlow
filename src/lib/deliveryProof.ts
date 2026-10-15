@@ -23,6 +23,7 @@ export interface ProofMailData {
   destination: string;
   client_name: string;
   invoice_number: string;
+  cte_number?: string | null;
   invoice_weight_kg: number;
   unloaded_weight_kg: number;
 }
@@ -45,14 +46,16 @@ export function buildOutlookComposeUrl(
     `Cliente: ${proof.client_name}`,
     `Destino: ${proof.destination || "—"}`,
     `Nota fiscal: ${proof.invoice_number}`,
+    ...(proof.cte_number ? [`CTE: ${proof.cte_number}`] : []),
     `Peso da NF: ${formatKg(proof.invoice_weight_kg)} kg`,
     `Peso descarregado: ${formatKg(proof.unloaded_weight_kg)} kg`,
     `Diferença: ${diff > 0 ? "+" : ""}${formatKg(diff)} kg`,
   ];
   const tail = ["", "Atenciosamente,"];
-  const subject = `Comprovante de entrega - NF ${proof.invoice_number}${
-    proof.destination ? ` - ${proof.destination}` : ""
-  }`;
+  // Assunto no padrão usado pela empresa: "CANHOTO CTE 132275".
+  const subject = proof.cte_number
+    ? `CANHOTO CTE ${proof.cte_number}`
+    : `CANHOTO NF ${proof.invoice_number}`;
 
   const make = (links: string[]) => {
     const lines = [...head];

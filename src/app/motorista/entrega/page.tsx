@@ -27,6 +27,7 @@ interface Proof {
   destination: string;
   client_name: string;
   invoice_number: string;
+  cte_number: string | null;
   invoice_weight_kg: number;
   unloaded_weight_kg: number;
 }
@@ -61,7 +62,7 @@ export default function ComprovanteEntregaPage() {
         .order("loading_time", { ascending: true, nullsFirst: false }),
       supabase
         .from("delivery_proofs")
-        .select("schedule_id, destination, client_name, invoice_number, invoice_weight_kg, unloaded_weight_kg"),
+        .select("schedule_id, destination, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg"),
     ]);
     if (l.error) setError(l.error.message);
     setLoads((l.data as Load[] | null) ?? []);
@@ -147,7 +148,7 @@ export default function ComprovanteEntregaPage() {
                         </div>
                         {proof && (
                           <p className="mt-1 text-xs text-navy-500">
-                            {proof.client_name} · NF {proof.invoice_number} · peso NF{" "}
+                            {proof.client_name} · NF {proof.invoice_number}{proof.cte_number ? ` · CTE ${proof.cte_number}` : ""} · peso NF{" "}
                             {formatKg(proof.invoice_weight_kg)} kg · descarregado{" "}
                             {formatKg(proof.unloaded_weight_kg)} kg
                           </p>
@@ -189,6 +190,7 @@ function ProofForm({
 }) {
   const [clientName, setClientName] = useState("");
   const [invoice, setInvoice] = useState("");
+  const [cte, setCte] = useState("");
   const [invoiceKg, setInvoiceKg] = useState("");
   const [unloadedKg, setUnloadedKg] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -209,6 +211,7 @@ function ProofForm({
     const unlKg = parseKg(unloadedKg);
     if (!clientName.trim()) return setError("Informe o nome do cliente.");
     if (!invoice.trim()) return setError("Informe o número da nota fiscal.");
+    if (!cte.trim()) return setError("Informe o número do CTE.");
     if (invKg === null) return setError("Informe o peso da nota fiscal, em quilos.");
     if (unlKg === null) return setError("Informe o peso descarregado, em quilos.");
     if (files.length === 0)
@@ -223,6 +226,7 @@ function ProofForm({
         destination,
         client_name: clientName.trim(),
         invoice_number: invoice.trim(),
+        cte_number: cte.trim(),
         invoice_weight_kg: invKg,
         unloaded_weight_kg: unlKg,
         photos: paths,
@@ -274,6 +278,20 @@ function ProofForm({
           inputMode="numeric"
           value={invoice}
           onChange={(e) => setInvoice(e.target.value)}
+          className={fieldCls}
+          autoComplete="off"
+        />
+      </div>
+      <div>
+        <label className={labelCls} htmlFor={`${id}-cte`}>
+          CTE
+        </label>
+        <input
+          id={`${id}-cte`}
+          type="text"
+          inputMode="numeric"
+          value={cte}
+          onChange={(e) => setCte(e.target.value)}
           className={fieldCls}
           autoComplete="off"
         />
