@@ -54,7 +54,7 @@ export function DeliveryProofDestinations({
         title={has ? "Comprovante enviado — clique para ver" : "Sem comprovante"}
         className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-left text-xs font-medium ${
           has
-            ? "border-teal-400 bg-teal-50 text-teal-800 hover:bg-teal-100"
+            ? "border-transparent bg-teal-200 text-teal-900 hover:brightness-110"
             : "border-amber-400 text-navy-700 hover:bg-amber-50"
         }`}
       >
@@ -79,7 +79,7 @@ export function DeliveryProofDestinations({
               title={`${dests.length} destinos · ${done} com comprovante`}
               className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${
                 done === dests.length
-                  ? "border-teal-400 bg-teal-50 text-teal-800 hover:bg-teal-100"
+                  ? "border-transparent bg-teal-200 text-teal-900 hover:brightness-110"
                   : "border-amber-400 text-navy-700 hover:bg-amber-50"
               }`}
             >

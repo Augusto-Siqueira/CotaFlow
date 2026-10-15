@@ -179,6 +179,31 @@ export default function ProgramacaoPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Cargas com todos os comprovantes recebidos e o MDF-e ainda por encerrar.
+  const [mdfeAlerts, setMdfeAlerts] = useState<
+    { id: string; schedule_date: string; client_name: string; cargo: string; plate: string | null; destination: string | null }[]
+  >([]);
+  async function loadMdfeAlerts() {
+    const { data } = await supabase
+      .from("loading_schedules")
+      .select("id, schedule_date, client_name, cargo, plate, destination")
+      .eq("mdfe_required", true)
+      .is("mdfe_closed_at", null)
+      .order("schedule_date");
+    setMdfeAlerts((data as typeof mdfeAlerts | null) ?? []);
+  }
+  async function closeMdfe(id: string) {
+    const { error } = await supabase
+      .from("loading_schedules")
+      .update({ mdfe_closed_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      toastError(`Não foi possível registrar o encerramento (${error.message}).`);
+      return;
+    }
+    await loadMdfeAlerts();
+  }
+
   async function loadMaintenance() {
     const { data } = await supabase
       .from("maintenance_orders")
@@ -263,6 +288,7 @@ export default function ProgramacaoPage() {
       .order("created_at", { ascending: true });
 
     loadMaintenance();
+    loadMdfeAlerts();
     const ids = ((rows as { id: string }[] | null) ?? []).map((r) => r.id);
     const { data: proofRows } = ids.length
       ? await supabase.from("delivery_proofs").select("schedule_id, destination").in("schedule_id", ids)
@@ -288,6 +314,15 @@ export default function ProgramacaoPage() {
     latestDate.current = date;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRows(date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
+  // Comprovantes chegam do app do motorista a qualquer hora: confere de minuto em minuto.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden) fetchRows(date);
+    }, 60000);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
@@ -826,6 +861,35 @@ export default function ProgramacaoPage() {
           })}
         </div>
       </div>
+
+      {canEditSchedule && mdfeAlerts.length > 0 && (
+        <section
+          aria-label="MDF-e para encerrar"
+          className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 print:hidden"
+        >
+          <h2 className="text-sm font-medium text-amber-800">
+            📄 Encerrar MDF-e ({mdfeAlerts.length}) — todos os comprovantes de entrega já chegaram
+          </h2>
+          <ul className="mt-2 space-y-2">
+            {mdfeAlerts.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900">
+                <span>
+                  <span className="font-medium">{a.client_name}</span> · {a.cargo} · {a.plate || "—"} ·{" "}
+                  {new Date(`${a.schedule_date}T12:00:00`).toLocaleDateString("pt-BR")}
+                  {a.destination ? ` · ${a.destination}` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => closeMdfe(a.id)}
+                  className={buttonClasses("soft", "sm")}
+                >
+                  MDF-e encerrado
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {(inMaintenance.size > 0 || defects.size > 0) && (
         <section
