@@ -38,15 +38,17 @@ export function buildOutlookComposeUrl(
   photoLinks: string[]
 ): { url: string; omittedPhotos: number } {
   const diff = Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg);
+  const esc = (t: string) =>
+    t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const head = [
     "Prezados,",
     "",
     "Segue o comprovante de entrega:",
     "",
-    `Cliente: ${proof.client_name}`,
-    `Destino: ${proof.destination || "—"}`,
-    `Nota fiscal: ${proof.invoice_number}`,
-    ...(proof.cte_number ? [`CTE: ${proof.cte_number}`] : []),
+    `Cliente: ${esc(proof.client_name)}`,
+    `Destino: ${esc(proof.destination || "—")}`,
+    `Nota fiscal: ${esc(proof.invoice_number)}`,
+    ...(proof.cte_number ? [`CTE: ${esc(proof.cte_number)}`] : []),
     `Peso da NF: ${formatKg(proof.invoice_weight_kg)} kg`,
     `Peso descarregado: ${formatKg(proof.unloaded_weight_kg)} kg`,
     `Diferença: ${diff > 0 ? "+" : ""}${formatKg(diff)} kg`,
@@ -57,17 +59,18 @@ export function buildOutlookComposeUrl(
     ? `CANHOTO CTE ${proof.cte_number}`
     : `CANHOTO NF ${proof.invoice_number}`;
 
+  // Corpo em HTML: cada foto vira o texto clicável "Link da imagem N".
   const make = (links: string[]) => {
     const lines = [...head];
     if (links.length > 0) {
       lines.push("", "Fotos do canhoto e do ticket de pesagem (links válidos por 7 dias):");
-      links.forEach((l, i) => lines.push(`${i + 1}) ${l}`));
+      links.forEach((l, i) => lines.push(`<a href="${esc(l)}">Link da imagem ${i + 1}</a>`));
     }
     lines.push(...tail);
     return (
       "https://outlook.office.com/mail/deeplink/compose" +
       `?subject=${encodeURIComponent(subject)}` +
-      `&body=${encodeURIComponent(lines.join("\r\n"))}`
+      `&body=${encodeURIComponent(lines.join("<br>"))}`
     );
   };
 
