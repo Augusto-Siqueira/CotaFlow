@@ -10,6 +10,19 @@ COPY jwt.sql /docker-entrypoint-initdb.d/init-scripts/99-jwt.sql
 # Conexão criptografada (TLS). A imagem vem com SSL desligado; sem isso, a
 # restauração pelo "TCP Proxy" público do Railway trafegaria sem criptografia.
 # O certificado é gerado AQUI, no build (um diferente por build, fora do git).
-RUN mkdir -p /etc/postgresql/ssl  && openssl req -new -x509 -days 3650 -nodes -subj "/CN=cotaflow-db"       -out /etc/postgresql/ssl/server.crt -keyout /etc/postgresql/ssl/server.key  && chown -R postgres:postgres /etc/postgresql/ssl  && chmod 700 /etc/postgresql/ssl  && chmod 600 /etc/postgresql/ssl/server.key
+RUN mkdir -p /etc/postgresql/ssl \
+ && openssl req -new -x509 -days 3650 -nodes -subj "/CN=cotaflow-db" \
+      -out /etc/postgresql/ssl/server.crt -keyout /etc/postgresql/ssl/server.key \
+ && chown -R postgres:postgres /etc/postgresql/ssl \
+ && chmod 700 /etc/postgresql/ssl \
+ && chmod 600 /etc/postgresql/ssl/server.key
 
-CMD ["postgres", "-D", "/etc/postgresql",      "-c", "ssl=on",      "-c", "ssl_cert_file=/etc/postgresql/ssl/server.crt",      "-c", "ssl_key_file=/etc/postgresql/ssl/server.key"]
+# data_directory: a imagem fixa os dados em /var/lib/postgresql/data, mas no
+# Railway o volume tem uma pasta "lost+found" na raiz, então os dados ficam na
+# subpasta pgdata (variável PGDATA no serviço). O servidor precisa apontar para
+# ela, senão não sobe ("data directory ... has wrong ownership").
+CMD ["postgres", "-D", "/etc/postgresql", \
+     "-c", "data_directory=/var/lib/postgresql/data/pgdata", \
+     "-c", "ssl=on", \
+     "-c", "ssl_cert_file=/etc/postgresql/ssl/server.crt", \
+     "-c", "ssl_key_file=/etc/postgresql/ssl/server.key"]
