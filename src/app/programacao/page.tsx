@@ -48,6 +48,13 @@ interface ScheduleNote {
   created_at: string;
 }
 
+// Botão "Observações": amarelo quando a carga já tem observação.
+function notesButtonClass(count: number): string {
+  return count > 0
+    ? "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-amber-400 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+    : buttonClasses("secondary", "sm");
+}
+
 function noteMeta(n: ScheduleNote): string {
   const who =
     n.source === "motorista"
@@ -1516,17 +1523,6 @@ export default function ProgramacaoPage() {
                       </div>
                     )}
 
-                    {(noteMap.get(l.id)?.length ?? 0) > 0 && (
-                      <p
-                        className="mt-2 truncate text-xs text-navy-500"
-                        title={noteMap.get(l.id)!.map((n) => `• ${n.body}`).join("\n")}
-                      >
-                        <span className="font-medium text-navy-600">
-                          Obs.{noteMap.get(l.id)!.length > 1 ? ` (${noteMap.get(l.id)!.length})` : ""}:
-                        </span>{" "}
-                        {noteMap.get(l.id)!.at(-1)!.body}
-                      </p>
-                    )}
                     {(l.quote_id || canEditSchedule || (noteMap.get(l.id)?.length ?? 0) > 0) && (
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                         {l.quote_id && (
@@ -1543,7 +1539,8 @@ export default function ProgramacaoPage() {
                           <button
                             type="button"
                             onClick={() => openNotes(l)}
-                            className={`${buttonClasses("secondary", "sm")} print:hidden`}
+                            title={`${noteMap.get(l.id)?.length ?? 0} observação(ões)`}
+                            className={`${notesButtonClass(noteMap.get(l.id)?.length ?? 0)} print:hidden`}
                           >
                             Observações
                           </button>
@@ -1560,7 +1557,12 @@ export default function ProgramacaoPage() {
                             <button
                               type="button"
                               onClick={() => openNotes(l)}
-                              className={buttonClasses("secondary", "sm")}
+                              title={
+                                (noteMap.get(l.id)?.length ?? 0) > 0
+                                  ? `${noteMap.get(l.id)!.length} observação(ões)`
+                                  : "Sem observações"
+                              }
+                              className={notesButtonClass(noteMap.get(l.id)?.length ?? 0)}
                             >
                               Observações
                             </button>
