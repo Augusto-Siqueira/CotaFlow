@@ -7,10 +7,10 @@ import { useAuth } from "@/lib/auth";
 // garante a restrição; aqui é só pra não deixar o usuário preencher um
 // formulário que ele não vai conseguir salvar.
 export function AdminGate({ children }: { children: React.ReactNode }) {
-  const { loading, isAdmin } = useAuth();
+  const { loading, canEditCommercial } = useAuth();
 
   if (loading) return null;
-  if (!isAdmin) {
+  if (!canEditCommercial) {
     return (
       <div className="mx-auto w-full max-w-md px-6 py-16 text-center">
         <h1 className="text-lg font-semibold text-navy-900">Acesso restrito</h1>

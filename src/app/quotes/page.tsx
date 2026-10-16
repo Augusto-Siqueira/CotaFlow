@@ -103,7 +103,7 @@ function StatusBadge({ status }: { status: string }) {
 const PAGE_SIZE = 50;
 
 export default function QuotesPage() {
-  const { isAdmin } = useAuth();
+  const { canEditCommercial } = useAuth();
   const { toastError, confirm: askConfirm } = useFeedback();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [clients, setClients] = useState<ClientFilterOption[]>([]);
@@ -284,7 +284,7 @@ export default function QuotesPage() {
           >
             PDF
           </a>
-          {isAdmin && (
+          {canEditCommercial && (
             <button
               type="button"
               disabled={deleting}
@@ -311,7 +311,7 @@ export default function QuotesPage() {
             Histórico de cotações geradas.
           </p>
         </div>
-        {isAdmin && (
+        {canEditCommercial && (
         <div className="flex items-center gap-3">
           <Link
             href="/quotes/batches/new"
@@ -344,7 +344,7 @@ export default function QuotesPage() {
         resultNoun={["cotação encontrada", "cotações encontradas"]}
       />
 
-      {isAdmin && selected.size > 0 && (
+      {canEditCommercial && selected.size > 0 && (
         <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm">
           <span className="text-red-800">
             {selected.size}{" "}
@@ -392,7 +392,7 @@ export default function QuotesPage() {
                 rowKey={(q) => q.id}
                 columns={quoteColumns}
                 selection={
-                  isAdmin
+                  canEditCommercial
                     ? {
                         isSelected: (q) => selected.has(q.id),
                         onToggle: (q) => toggleSelected(q.id),

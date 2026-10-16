@@ -8,6 +8,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  canEditCommercial: boolean;
   role: string | null;
   canEditSchedule: boolean;
   canEditMaintenance: boolean;
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   isAdmin: false,
+  canEditCommercial: false,
   role: null,
   canEditSchedule: false,
   canEditMaintenance: false,
@@ -37,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user: null,
     loading: true,
     isAdmin: false,
+    canEditCommercial: false,
     role: null,
     canEditSchedule: false,
     canEditMaintenance: false,
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading: false,
         isAdmin: role === "admin",
+        canEditCommercial: role === "admin" || role === "comercial",
         role,
         canEditSchedule: role === "admin" || role === "logistica",
         canEditMaintenance: role === "admin" || role === "manutencao",

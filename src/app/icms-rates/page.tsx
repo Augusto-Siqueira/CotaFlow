@@ -28,7 +28,7 @@ const emptyForm: FormState = {
 };
 
 export default function IcmsRatesPage() {
-  const { isAdmin } = useAuth();
+  const { canEditCommercial } = useAuth();
   const { toastError, confirm: askConfirm } = useFeedback();
   const [rates, setRates] = useState<IcmsRateRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -209,7 +209,7 @@ export default function IcmsRatesPage() {
       key: "actions",
       header: "Ações",
       cell: (r) =>
-        isAdmin ? (
+        canEditCommercial ? (
           <button
             type="button"
             onClick={() => handleDelete(r)}
@@ -236,7 +236,7 @@ export default function IcmsRatesPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        {isAdmin && (
+        {canEditCommercial && (
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-1">
           <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-medium text-navy-900">
@@ -400,7 +400,7 @@ export default function IcmsRatesPage() {
         </div>
         )}
 
-        <div className={`min-w-0 ${isAdmin ? "lg:col-span-2" : "lg:col-span-3"}`}>
+        <div className={`min-w-0 ${canEditCommercial ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy-200 px-6 py-4">
               <h2 className="text-base font-medium text-navy-900">

@@ -14,13 +14,34 @@ interface Driver {
   name: string;
   nickname: string | null;
   cpf: string;
+  user_id: string | null;
 }
 
 const inputCls =
   "w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 export default function DriversPage() {
-  const { canEditSchedule } = useAuth();
+  const { canEditSchedule, isAdmin } = useAuth();
+  const [creatingAccess, setCreatingAccess] = useState<string | null>(null);
+
+  // Cria o login do app (CPF + 6 primeiros dígitos do CPF). Só o admin.
+  async function createAccess(d: Driver) {
+    if (!(await askConfirm(
+      `Criar o acesso ao app para ${d.name}? Login: CPF. Senha: os 6 primeiros dígitos do CPF.`,
+      { confirmLabel: "Criar acesso" }
+    ))) return;
+    setCreatingAccess(d.id);
+    const r = await fetch(`/api/admin/drivers/${d.id}/access`, { method: "POST" });
+    const body = await r.json().catch(() => ({}));
+    setCreatingAccess(null);
+    if (!r.ok) {
+      setActionError(`Não foi possível criar o acesso (${body.error ?? r.status}).`);
+      return;
+    }
+    setActionError(null);
+    setSuccessMessage(`Acesso ao app criado para ${d.name}.`);
+    loadDrivers();
+  }
   const { confirm: askConfirm } = useFeedback();
   const [drivers, setDrivers] = useState<Driver[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -39,7 +60,7 @@ export default function DriversPage() {
   async function loadDrivers() {
     const { data, error } = await supabase
       .from("drivers")
-      .select("id, name, nickname, cpf")
+      .select("id, name, nickname, cpf, user_id")
       .order("name");
     if (error) {
       setListError(error.message);
@@ -221,6 +242,7 @@ export default function DriversPage() {
                   <th className="px-6 py-3 font-medium">Apelido</th>
                   <th className="px-6 py-3 font-medium">Nome</th>
                   <th className="px-6 py-3 font-medium">CPF</th>
+                  <th className="px-6 py-3 font-medium">App</th>
                   {canEditSchedule && (
                     <th className="px-6 py-3 font-medium">Ações</th>
                   )}
@@ -235,6 +257,24 @@ export default function DriversPage() {
                     <td className="px-6 py-3 text-navy-700">{d.name}</td>
                     <td className="px-6 py-3 text-navy-600">
                       {formatCpf(d.cpf)}
+                    </td>
+                    <td className="px-6 py-3">
+                      {d.user_id ? (
+                        <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800">
+                          Com acesso
+                        </span>
+                      ) : isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => createAccess(d)}
+                          disabled={creatingAccess === d.id}
+                          className={buttonClasses("soft", "sm")}
+                        >
+                          {creatingAccess === d.id ? "Criando..." : "Criar acesso"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-navy-500">Sem acesso</span>
+                      )}
                     </td>
                     {canEditSchedule && (
                       <td className="px-6 py-3">

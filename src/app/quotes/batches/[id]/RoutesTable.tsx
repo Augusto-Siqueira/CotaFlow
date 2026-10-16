@@ -53,7 +53,7 @@ export function RoutesTable({
   initialRoutes: BatchRoute[];
 }) {
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const { canEditCommercial } = useAuth();
   const { toastError, confirm: askConfirm } = useFeedback();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [unit, setUnit] = useState<FreightUnit>("viagem");
@@ -220,7 +220,7 @@ export function RoutesTable({
               >
                 Detalhes
               </Link>
-              {isAdmin && (<><Link
+              {canEditCommercial && (<><Link
                 href={`/quotes/batches/${batchId}/routes/${route.id}/edit`}
                 className={buttonClasses("soft", "sm")}
               >
@@ -317,7 +317,7 @@ export function RoutesTable({
                     >
                       Detalhes
                     </Link>
-                    {isAdmin && (<><Link
+                    {canEditCommercial && (<><Link
                       href={`/quotes/batches/${batchId}/routes/${route.id}/edit`}
                       className={buttonClasses("soft", "sm")}
                     >

@@ -9,6 +9,7 @@ interface NavLeaf {
   href: string;
   label: string;
   adminOnly?: boolean;
+  commercialOnly?: boolean;
 }
 
 interface NavEntry {
@@ -28,7 +29,7 @@ export const NAV: NavEntry[] = [
     items: [
       { href: "/quotes", label: "Cotações" },
       { href: "/quotes/batches", label: "Cotações em Lote" },
-      { href: "/propostas", label: "Propostas", adminOnly: true },
+      { href: "/propostas", label: "Propostas", commercialOnly: true },
     ],
   },
   {
@@ -68,6 +69,12 @@ export const NAV: NavEntry[] = [
       { href: "/antt-coefficients", label: "ANTT" },
       { href: "/icms-rates", label: "ICMS" },
     ],
+  },
+  {
+    key: "admin",
+    label: "Administração",
+    icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a7 7 0 0 1 14 0v1M19 8v6M22 11h-6",
+    items: [{ href: "/usuarios", label: "Usuários", adminOnly: true }],
   },
 ];
 
@@ -211,7 +218,9 @@ export function SidebarMenu({
                 );
               }
               const items = (entry.items ?? []).filter(
-                (i) => !i.adminOnly || role === "admin"
+                (i) =>
+                  (!i.adminOnly || role === "admin") &&
+                  (!i.commercialOnly || role === "admin" || role === "comercial")
               );
               if (items.length === 0) return null;
               const isOpen = expanded.has(entry.key);

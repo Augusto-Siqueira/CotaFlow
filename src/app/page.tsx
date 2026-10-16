@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { roleLabel } from "@/lib/roles";
 import { useHomeData } from "@/lib/useHomeData";
 import { LogisticsArt } from "@/components/LogisticsArt";
 import { formatCurrency, revisionLabel } from "@/lib/format";
@@ -39,7 +40,7 @@ const MODULES = [
 ];
 
 export default function Home() {
-  const { isAdmin } = useAuth();
+  const { canEditCommercial, role } = useAuth();
   const { stats, recent } = useHomeData(5);
 
   return (
@@ -49,10 +50,10 @@ export default function Home() {
           <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-500/20 blur-2xl" />
           <LogisticsArt />
           <p className="relative text-sm font-medium text-brand-300">
-            {isAdmin ? "Comercial" : "Somente leitura"}
+            {canEditCommercial ? roleLabel(role) : "Somente leitura"}
           </p>
           <h1 className="relative mt-2 text-3xl font-semibold tracking-tight">
-            {isAdmin ? "Pronto para a próxima cotação?" : "Consulte as cotações"}
+            {canEditCommercial ? "Pronto para a próxima cotação?" : "Consulte as cotações"}
           </h1>
           <p className="relative mt-2 max-w-md text-sm text-chrome-200">
             {stats
@@ -60,7 +61,7 @@ export default function Home() {
               : "Carregando..."}
           </p>
           <div className="relative mt-6 flex flex-wrap gap-3">
-            {isAdmin && (
+            {canEditCommercial && (
               <Link
                 href="/quotes/new"
                 className="rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-800"

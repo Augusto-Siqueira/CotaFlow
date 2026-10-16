@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth, MANUAL_LOGOUT_KEY } from "@/lib/auth";
+import { roleLabel } from "@/lib/roles";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SidebarMenu, currentPageTitle } from "@/components/SidebarMenu";
@@ -74,15 +75,7 @@ export function SiteHeader() {
         {user && (
           <div className="flex shrink-0 items-center gap-3 text-xs text-chrome-200">
             <span className="hidden rounded-full bg-chrome-800 px-2 py-0.5 font-medium text-chrome-100 sm:inline">
-              {role === "admin"
-                ? "Comercial"
-                : role === "logistica"
-                  ? "Logística"
-                  : role === "manutencao"
-                    ? "Manutenção"
-                    : role === "motorista"
-                      ? "Motorista"
-                      : "Somente leitura"}
+              {roleLabel(role)}
             </span>
             <ThemeToggle className="text-chrome-300 hover:text-brand-400" />
             <button

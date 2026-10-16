@@ -40,7 +40,7 @@ const emptyForm: FormState = {
 };
 
 export default function ClientsPage() {
-  const { isAdmin } = useAuth();
+  const { canEditCommercial } = useAuth();
   const { confirm: askConfirm } = useFeedback();
   const [allClients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
@@ -234,7 +234,7 @@ export default function ClientsPage() {
 
   const layoutSelect = (client: Client, className: string) => (
     <select
-      disabled={!isAdmin}
+      disabled={!canEditCommercial}
       value={client.pdf_layout}
       onChange={(e) => updateLayout(client.id, e.target.value)}
       className={className}
@@ -307,7 +307,7 @@ export default function ClientsPage() {
           >
             Comparativo
           </Link>
-          {isAdmin && (
+          {canEditCommercial && (
             <>
               <button
                 type="button"
@@ -342,7 +342,7 @@ export default function ClientsPage() {
             Cadastre clientes e consulte suas condições comerciais.
           </p>
         </div>
-        {isAdmin && (
+        {canEditCommercial && (
           <button
             type="button"
             onClick={openNew}
@@ -354,7 +354,7 @@ export default function ClientsPage() {
       </div>
 
       <div>
-        {isAdmin && showForm && (
+        {canEditCommercial && showForm && (
         <Modal onClose={cancelEditing} labelledBy="client-modal-title" className="max-w-lg">
             <h2 id="client-modal-title" className="text-base font-medium text-navy-900">
               {editingId ? "Editar cliente" : "Novo cliente"}
