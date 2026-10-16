@@ -21,21 +21,28 @@ const inputCls =
   "w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 export default function DriversPage() {
-  const { canEditSchedule, isAdmin } = useAuth();
+  const { canEditSchedule } = useAuth();
   const [creatingAccess, setCreatingAccess] = useState<string | null>(null);
 
-  // Cria o login do app (CPF + 6 primeiros dígitos do CPF). Só o admin.
+  // Rota do servidor que cuida do login do motorista no app.
+  async function accessCall(id: string, method: "POST" | "PUT" | "DELETE"): Promise<string | null> {
+    const r = await fetch(`/api/admin/drivers/${id}/access`, { method });
+    if (r.ok) return null;
+    const body = await r.json().catch(() => ({}));
+    return body.error ?? `erro ${r.status}`;
+  }
+
+  // Cria o login do app (CPF + 6 primeiros dígitos do CPF) de quem ficou sem.
   async function createAccess(d: Driver) {
     if (!(await askConfirm(
       `Criar o acesso ao app para ${d.name}? Login: CPF. Senha: os 6 primeiros dígitos do CPF.`,
       { confirmLabel: "Criar acesso" }
     ))) return;
     setCreatingAccess(d.id);
-    const r = await fetch(`/api/admin/drivers/${d.id}/access`, { method: "POST" });
-    const body = await r.json().catch(() => ({}));
+    const err = await accessCall(d.id, "POST");
     setCreatingAccess(null);
-    if (!r.ok) {
-      setActionError(`Não foi possível criar o acesso (${body.error ?? r.status}).`);
+    if (err) {
+      setActionError(`Não foi possível criar o acesso (${err}).`);
       return;
     }
     setActionError(null);
@@ -133,30 +140,60 @@ export default function DriversPage() {
     };
     setSaving(true);
     setFormError(null);
-    const { error } = editingId
-      ? await supabase.from("drivers").update(payload).eq("id", editingId)
-      : await supabase.from("drivers").insert(payload);
-    setSaving(false);
+    const before = editingId ? (drivers ?? []).find((d) => d.id === editingId) : null;
+    const { data: saved, error } = editingId
+      ? await supabase.from("drivers").update(payload).eq("id", editingId).select("id").single()
+      : await supabase.from("drivers").insert(payload).select("id").single();
 
-    if (error) {
+    if (error || !saved) {
+      setSaving(false);
       setFormError(
-        error.code === "23505"
+        error?.code === "23505"
           ? "Já existe um motorista com esse CPF."
-          : `Não foi possível salvar (${error.message}).`
+          : `Não foi possível salvar (${error?.message ?? "sem retorno"}).`
       );
       return;
     }
 
+    // O acesso ao app acompanha o cadastro: nasce junto e segue a troca de CPF.
+    let accessMsg = "";
+    let accessErr: string | null = null;
+    if (!editingId) {
+      accessErr = await accessCall(saved.id, "POST");
+      accessMsg = " Acesso ao app criado: login é o CPF e a senha são os 6 primeiros dígitos.";
+    } else if (before?.user_id && before.cpf !== payload.cpf) {
+      accessErr = await accessCall(saved.id, "PUT");
+      accessMsg = " O login do app passou a ser o CPF novo (senha: 6 primeiros dígitos).";
+    }
+    setSaving(false);
+
     setSuccessMessage(
-      editingId ? "Motorista atualizado com sucesso." : "Motorista cadastrado com sucesso."
+      (editingId ? "Motorista atualizado com sucesso." : "Motorista cadastrado com sucesso.") +
+        (accessErr ? "" : accessMsg)
+    );
+    setActionError(
+      accessErr
+        ? `O cadastro foi salvo, mas o acesso ao app não (${accessErr}). Use o botão Criar acesso na lista.`
+        : null
     );
     closeForm();
     await loadDrivers();
   }
 
   async function handleDelete(d: Driver) {
-    if (!await askConfirm(`Excluir o motorista "${d.name}"?`)) return;
+    if (!await askConfirm(
+      d.user_id
+        ? `Excluir o motorista "${d.name}"? O acesso dele ao app será bloqueado.`
+        : `Excluir o motorista "${d.name}"?`
+    )) return;
     setActionError(null);
+    if (d.user_id) {
+      const err = await accessCall(d.id, "DELETE");
+      if (err) {
+        setActionError(`Não foi possível bloquear o acesso ao app (${err}). Nada foi excluído.`);
+        return;
+      }
+    }
     const { error } = await supabase.from("drivers").delete().eq("id", d.id);
     if (error) {
       setActionError(`Não foi possível excluir (${error.message}).`);
@@ -263,7 +300,7 @@ export default function DriversPage() {
                         <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800">
                           Com acesso
                         </span>
-                      ) : isAdmin ? (
+                      ) : canEditSchedule ? (
                         <button
                           type="button"
                           onClick={() => createAccess(d)}

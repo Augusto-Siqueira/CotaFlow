@@ -14,19 +14,25 @@ export function supabaseAdmin() {
   });
 }
 
-/** Confere no servidor de login quem está pedindo; só passa se for admin. */
-export async function requireAdmin(): Promise<
-  { ok: true; user: User } | { ok: false; response: Response }
-> {
+/** Confere no servidor de login quem está pedindo; só passa se o perfil estiver na lista. */
+export async function requireRole(
+  roles: string[],
+  denied = "Seu perfil não pode fazer isso."
+): Promise<{ ok: true; user: User } | { ok: false; response: Response }> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return { ok: false, response: Response.json({ error: "Faça login de novo." }, { status: 401 }) };
   }
-  if (data.user.app_metadata?.role !== "admin") {
-    return { ok: false, response: Response.json({ error: "Só o admin pode fazer isso." }, { status: 403 }) };
+  if (!roles.includes(data.user.app_metadata?.role as string)) {
+    return { ok: false, response: Response.json({ error: denied }, { status: 403 }) };
   }
   return { ok: true, user: data.user };
+}
+
+/** Só o admin (tela Usuários). */
+export function requireAdmin() {
+  return requireRole(["admin"], "Só o admin pode fazer isso.");
 }
 
 /** Senha temporária fácil de ditar (sem 0/O, 1/l/I). */

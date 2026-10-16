@@ -310,7 +310,7 @@ export default function UsuariosPage() {
       </div>
       {tab === "motoristas" && (
         <p className="mt-2 text-xs text-navy-500">
-          O acesso do motorista é criado em Veículos e motoristas › Motoristas (login = CPF, senha = 6 primeiros dígitos).
+          O acesso do motorista nasce sozinho ao cadastrá-lo em Veículos e motoristas › Motoristas (login = CPF, senha = 6 primeiros dígitos); ao excluir o motorista, o acesso é bloqueado.
         </p>
       )}
 
