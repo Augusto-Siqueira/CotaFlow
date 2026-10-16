@@ -522,17 +522,10 @@ export default function ProgramacaoPage() {
     if (error) toastError(`Não foi possível salvar a ordem (${error.message}).`);
   }
 
-  function moveClient(client: string, delta: number) {
-    const list = groups.map(([c]) => c);
-    const i = list.indexOf(client);
-    const j = i + delta;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j], list[i]];
-    void saveClientOrder(list);
-  }
-
-  function dropClient(target: string) {
-    const from = dragClient;
+  // Tipo próprio no arrasto: só os blocos de cliente reagem (não arquivos nem texto).
+  const DRAG_TYPE = "application/x-cotaflow-client";
+  function dropClient(target: string, fromData?: string) {
+    const from = fromData || dragClient;
     setDragClient(null);
     setDropTarget(null);
     if (!from || from === target) return;
@@ -1429,7 +1422,7 @@ export default function ProgramacaoPage() {
               : "Nenhum carregamento programado para este dia."}
           </div>
         ) : (
-          groups.map(([client, loads], groupIndex) => {
+          groups.map(([client, loads]) => {
             const hasOrigin = loads.some((l) => l.origin?.trim());
             const hasDestination = loads.some((l) => l.destination?.trim());
             const hasTrailer = loads.some((l) => l.trailer_plate?.trim());
@@ -1451,13 +1444,15 @@ export default function ProgramacaoPage() {
             <section
               key={client}
               onDragOver={(e) => {
-                if (!dragClient) return;
+                if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
                 e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
                 if (dropTarget !== client) setDropTarget(client);
               }}
               onDrop={(e) => {
+                if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
                 e.preventDefault();
-                dropClient(client);
+                dropClient(client, e.dataTransfer.getData(DRAG_TYPE));
               }}
               className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow ${
                 dragClient === client ? "opacity-50" : ""
@@ -1467,47 +1462,31 @@ export default function ProgramacaoPage() {
                   : "border-navy-200"
               }`}
             >
-              <header className="flex items-center justify-between border-b border-navy-200 bg-navy-50 px-5 py-3">
+              <header
+                draggable={canEditSchedule && groups.length > 1}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData(DRAG_TYPE, client);
+                  e.dataTransfer.setData("text/plain", client);
+                  // Mudar a tela no mesmo instante pode cancelar o arrasto no Chrome/Edge.
+                  setTimeout(() => setDragClient(client), 0);
+                }}
+                onDragEnd={() => {
+                  setDragClient(null);
+                  setDropTarget(null);
+                }}
+                title={canEditSchedule && groups.length > 1 ? "Arraste para mudar a ordem dos clientes" : undefined}
+                className={`flex items-center justify-between border-b border-navy-200 bg-navy-50 px-5 py-3 ${
+                  canEditSchedule && groups.length > 1 ? "cursor-grab active:cursor-grabbing" : ""
+                }`}
+              >
                 <span className="flex items-center gap-2">
                   {canEditSchedule && groups.length > 1 && (
-                    <span className="flex items-center gap-0.5 print:hidden">
-                      <span
-                        draggable
-                        onDragStart={(e) => {
-                          setDragClient(client);
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", client);
-                        }}
-                        onDragEnd={() => {
-                          setDragClient(null);
-                          setDropTarget(null);
-                        }}
-                        title="Arraste para mudar a ordem dos clientes"
-                        aria-hidden="true"
-                        className="cursor-grab select-none px-1 text-base leading-none text-navy-400 active:cursor-grabbing"
-                      >
-                        ⠿
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => moveClient(client, -1)}
-                        disabled={groupIndex === 0}
-                        aria-label={`Subir ${client}`}
-                        title="Subir"
-                        className="rounded px-1 text-xs text-navy-500 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveClient(client, 1)}
-                        disabled={groupIndex === groups.length - 1}
-                        aria-label={`Descer ${client}`}
-                        title="Descer"
-                        className="rounded px-1 text-xs text-navy-500 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        ▼
-                      </button>
+                    <span
+                      aria-hidden="true"
+                      className="select-none text-base leading-none text-navy-400 print:hidden"
+                    >
+                      ⠿
                     </span>
                   )}
                   <h2 className="text-sm font-semibold text-navy-900">{client}</h2>
