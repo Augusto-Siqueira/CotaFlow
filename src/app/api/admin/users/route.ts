@@ -23,6 +23,11 @@ export async function GET() {
   if (!auth.ok) return auth.response;
 
   const admin = supabaseAdmin();
+  // Nome do motorista vem do cadastro de motoristas (fonte única), não do login.
+  const { data: drivers } = await admin.from("drivers").select("name, user_id").not("user_id", "is", null);
+  const driverName = new Map(
+    ((drivers ?? []) as { name: string; user_id: string }[]).map((d) => [d.user_id, d.name])
+  );
   const rows: AdminUserRow[] = [];
   for (let page = 1; ; page++) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
@@ -31,7 +36,7 @@ export async function GET() {
       rows.push({
         id: u.id,
         email: u.email ?? "",
-        name: (u.user_metadata?.name as string | undefined) ?? null,
+        name: driverName.get(u.id) ?? (u.user_metadata?.name as string | undefined) ?? null,
         role: (u.app_metadata?.role as string | undefined) ?? null,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at ?? null,
