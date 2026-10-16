@@ -3,7 +3,8 @@
 -- corrige os lançamentos.
 --
 -- Regras da folha:
---   * valor R$/litro só fora do pátio (posto externo) — e aí a foto do cupom é obrigatória;
+--   * foto da NF/cupom obrigatória em todo abastecimento;
+--   * valor R$/litro e posto só fora do pátio (posto externo);
 --   * "completou o tanque?" marca os abastecimentos que fecham a média (km/l),
 --     calculada na tela: km desde o último tanque cheio da placa ÷ litros desde então.
 
@@ -35,12 +36,12 @@ create table if not exists fuel_entries (
   created_at timestamptz not null default now(),
   edited_at timestamptz,
   edited_by uuid,
+  constraint fuel_entries_photo_required check (cardinality(photos) >= 1),
   constraint fuel_entries_external_needs_details check (
     location_type = 'patio'
     or (
       price_per_liter is not null and price_per_liter > 0
       and coalesce(btrim(location), '') <> ''
-      and cardinality(photos) >= 1
     )
   )
 );

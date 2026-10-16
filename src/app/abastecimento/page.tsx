@@ -246,7 +246,7 @@ export default function AbastecimentoPage() {
     if (error) {
       setFormError(
         /external_needs_details/.test(error.message)
-          ? "Fora do pátio o lançamento precisa de posto, valor por litro e foto do cupom."
+          ? "Fora do pátio o lançamento precisa de posto e valor por litro."
           : /foreign key/i.test(error.message)
             ? "Placa não cadastrada na frota."
             : error.message

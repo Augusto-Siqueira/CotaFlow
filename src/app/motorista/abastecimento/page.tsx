@@ -172,8 +172,8 @@ export default function AbastecimentoMotoristaPage() {
     if (where === "externo") {
       if (!station.trim()) return setError("Informe o posto (nome e cidade).");
       if (priceN === null) return setError("Informe o valor por litro.");
-      if (files.length === 0) return setError("Tire a foto do cupom do abastecimento.");
     }
+    if (files.length === 0) return setError("Tire a foto da NF do abastecimento.");
     setSaving(true);
     setError(null);
     try {
@@ -364,12 +364,7 @@ export default function AbastecimentoMotoristaPage() {
 
         <div>
           <span className={labelCls}>
-            Foto do cupom{" "}
-            {where === "externo" ? (
-              <span className="font-normal text-red-700">(obrigatória fora do pátio)</span>
-            ) : (
-              <span className="font-normal text-navy-500">(opcional)</span>
-            )}
+            Foto da NF <span className="font-normal text-red-700">(obrigatória)</span>
           </span>
           {files.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-2">
