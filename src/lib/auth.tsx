@@ -12,6 +12,7 @@ interface AuthState {
   role: string | null;
   canEditSchedule: boolean;
   canEditMaintenance: boolean;
+  canEditFuel: boolean;
   isDriver: boolean;
   mustChangePassword: boolean;
 }
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthState>({
   role: null,
   canEditSchedule: false,
   canEditMaintenance: false,
+  canEditFuel: false,
   isDriver: false,
   mustChangePassword: false,
 });
@@ -43,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role: null,
     canEditSchedule: false,
     canEditMaintenance: false,
+    canEditFuel: false,
     isDriver: false,
     mustChangePassword: false,
   });
@@ -58,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         canEditSchedule: role === "admin" || role === "logistica",
         canEditMaintenance: role === "admin" || role === "manutencao",
+        canEditFuel: role === "admin" || role === "abastecimento",
         isDriver: role === "motorista",
         mustChangePassword: user?.user_metadata?.must_change_password === true,
       });

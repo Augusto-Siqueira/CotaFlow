@@ -134,15 +134,23 @@ export default function MotoristaHome() {
         </Link>
         <Link
           href="/motorista/entrega"
-          className="col-span-2 flex flex-col gap-1 rounded-xl border border-navy-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-brand-500"
+          className="flex flex-col gap-1 rounded-xl border border-navy-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-brand-500"
         >
           <span className="text-2xl" aria-hidden="true">
             📄
           </span>
           <span className="text-sm font-semibold text-navy-900">Comprovante de entrega</span>
-          <span className="text-xs text-navy-500">
-            Nota fiscal, pesos e foto do canhoto e do ticket
+          <span className="text-xs text-navy-500">NF, pesos e foto do canhoto</span>
+        </Link>
+        <Link
+          href="/motorista/abastecimento"
+          className="flex flex-col gap-1 rounded-xl border border-navy-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-brand-500"
+        >
+          <span className="text-2xl" aria-hidden="true">
+            ⛽
           </span>
+          <span className="text-sm font-semibold text-navy-900">Abastecimento</span>
+          <span className="text-xs text-navy-500">Diesel e ARLA</span>
         </Link>
       </div>
 

@@ -1,11 +1,12 @@
 // Perfis fixos do sistema (um por pessoa). Mantido em sincronia com as funções
 // do banco (is_admin, can_edit_commercial, can_edit_schedule,
-// can_edit_maintenance, is_driver — migrations 0036, 0038, 0049, 0051, 0062).
+// can_edit_maintenance, can_edit_fuel, is_driver — migrations 0036, 0038, 0049, 0051, 0062, 0064).
 export const ROLES = [
   { value: "admin", label: "Admin", hint: "Tudo, inclusive cadastrar usuários" },
   { value: "comercial", label: "Comercial", hint: "Cotações, propostas, clientes e tabelas" },
   { value: "logistica", label: "Logística", hint: "Programação" },
   { value: "manutencao", label: "Manutenção", hint: "Manutenção e check-lists" },
+  { value: "abastecimento", label: "Abastecimento", hint: "Acompanha e corrige os abastecimentos" },
   { value: "motorista", label: "Motorista", hint: "Só o app do motorista" },
 ] as const;
 

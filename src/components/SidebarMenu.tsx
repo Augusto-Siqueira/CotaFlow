@@ -10,6 +10,7 @@ interface NavLeaf {
   label: string;
   adminOnly?: boolean;
   commercialOnly?: boolean;
+  fuelOnly?: boolean;
 }
 
 interface NavEntry {
@@ -49,6 +50,7 @@ export const NAV: NavEntry[] = [
       { href: "/manutencao", label: "Lançamentos" },
       { href: "/manutencao/dashboard", label: "Dashboard" },
       { href: "/manutencao/checklists", label: "Check-lists" },
+      { href: "/abastecimento", label: "Abastecimento", fuelOnly: true },
     ],
   },
   {
@@ -221,7 +223,8 @@ export function SidebarMenu({
               const items = (entry.items ?? []).filter(
                 (i) =>
                   (!i.adminOnly || role === "admin") &&
-                  (!i.commercialOnly || role === "admin" || role === "comercial")
+                  (!i.commercialOnly || role === "admin" || role === "comercial") &&
+                  (!i.fuelOnly || role === "admin" || role === "abastecimento")
               );
               if (items.length === 0) return null;
               const isOpen = expanded.has(entry.key);
