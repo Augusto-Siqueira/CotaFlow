@@ -463,6 +463,21 @@ export default function ProgramacaoPage() {
   const loading = data === null || data.date !== date;
   const rows = useMemo(() => (loading ? [] : data!.rows), [loading, data]);
 
+  // Ordem dos clientes (blocos arrastáveis): uma só para todos os dias.
+  const [clientOrder, setClientOrder] = useState<Map<string, number>>(new Map());
+  const [dragClient, setDragClient] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  useEffect(() => {
+    supabase
+      .from("schedule_client_order")
+      .select("client_name, position")
+      .then(({ data }) => {
+        setClientOrder(
+          new Map(((data ?? []) as { client_name: string; position: number }[]).map((r) => [r.client_name, r.position]))
+        );
+      });
+  }, []);
+
   const groups = useMemo(() => {
     const map = new Map<string, Load[]>();
     for (const r of rows) {
@@ -470,8 +485,61 @@ export default function ProgramacaoPage() {
       const key = r.client_name.trim() || "Sem cliente";
       map.set(key, [...(map.get(key) ?? []), r]);
     }
-    return Array.from(map.entries());
-  }, [rows, statusFilter]);
+    // Posicionados primeiro (pela ordem salva); os outros depois, na ordem de horário.
+    const entries = Array.from(map.entries());
+    return entries
+      .map((e, i) => ({ e, i }))
+      .sort((a, b) => {
+        const pa = clientOrder.get(a.e[0]);
+        const pb = clientOrder.get(b.e[0]);
+        if (pa !== undefined && pb !== undefined) return pa - pb;
+        if (pa !== undefined) return -1;
+        if (pb !== undefined) return 1;
+        return a.i - b.i;
+      })
+      .map((x) => x.e);
+  }, [rows, statusFilter, clientOrder]);
+
+  // Grava a nova ordem dos clientes do dia, encaixando-a na ordem geral (que
+  // tem clientes de outros dias): os clientes do dia ocupam as mesmas posições
+  // de antes, só que na sequência nova.
+  async function saveClientOrder(visibleNew: string[]) {
+    const known = [...clientOrder.entries()].sort((a, b) => a[1] - b[1]).map(([c]) => c);
+    const visibleOld = groups.map(([c]) => c);
+    const full = [...known, ...visibleOld.filter((c) => !clientOrder.has(c))];
+    const slots = full
+      .map((c, i) => (visibleNew.includes(c) ? i : -1))
+      .filter((i) => i >= 0);
+    slots.forEach((slot, k) => {
+      full[slot] = visibleNew[k];
+    });
+    const next = new Map(full.map((c, i) => [c, i]));
+    setClientOrder(next);
+    const { error } = await supabase.from("schedule_client_order").upsert(
+      full.map((client_name, position) => ({ client_name, position, updated_at: new Date().toISOString() })),
+      { onConflict: "client_name" }
+    );
+    if (error) toastError(`Não foi possível salvar a ordem (${error.message}).`);
+  }
+
+  function moveClient(client: string, delta: number) {
+    const list = groups.map(([c]) => c);
+    const i = list.indexOf(client);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    void saveClientOrder(list);
+  }
+
+  function dropClient(target: string) {
+    const from = dragClient;
+    setDragClient(null);
+    setDropTarget(null);
+    if (!from || from === target) return;
+    const list = groups.map(([c]) => c).filter((c) => c !== from);
+    list.splice(list.indexOf(target), 0, from);
+    void saveClientOrder(list);
+  }
 
   const vigenteIds = useMemo(() => new Set(quotes.map((q) => q.id)), [quotes]);
 
@@ -1361,7 +1429,7 @@ export default function ProgramacaoPage() {
               : "Nenhum carregamento programado para este dia."}
           </div>
         ) : (
-          groups.map(([client, loads]) => {
+          groups.map(([client, loads], groupIndex) => {
             const hasOrigin = loads.some((l) => l.origin?.trim());
             const hasDestination = loads.some((l) => l.destination?.trim());
             const hasTrailer = loads.some((l) => l.trailer_plate?.trim());
@@ -1382,10 +1450,68 @@ export default function ProgramacaoPage() {
             return (
             <section
               key={client}
-              className="overflow-hidden rounded-xl border border-navy-200 bg-white shadow-sm"
+              onDragOver={(e) => {
+                if (!dragClient) return;
+                e.preventDefault();
+                if (dropTarget !== client) setDropTarget(client);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                dropClient(client);
+              }}
+              className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow ${
+                dragClient === client ? "opacity-50" : ""
+              } ${
+                dropTarget === client && dragClient && dragClient !== client
+                  ? "border-brand-500 ring-2 ring-brand-500"
+                  : "border-navy-200"
+              }`}
             >
               <header className="flex items-center justify-between border-b border-navy-200 bg-navy-50 px-5 py-3">
-                <h2 className="text-sm font-semibold text-navy-900">{client}</h2>
+                <span className="flex items-center gap-2">
+                  {canEditSchedule && groups.length > 1 && (
+                    <span className="flex items-center gap-0.5 print:hidden">
+                      <span
+                        draggable
+                        onDragStart={(e) => {
+                          setDragClient(client);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", client);
+                        }}
+                        onDragEnd={() => {
+                          setDragClient(null);
+                          setDropTarget(null);
+                        }}
+                        title="Arraste para mudar a ordem dos clientes"
+                        aria-hidden="true"
+                        className="cursor-grab select-none px-1 text-base leading-none text-navy-400 active:cursor-grabbing"
+                      >
+                        ⠿
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => moveClient(client, -1)}
+                        disabled={groupIndex === 0}
+                        aria-label={`Subir ${client}`}
+                        title="Subir"
+                        className="rounded px-1 text-xs text-navy-500 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveClient(client, 1)}
+                        disabled={groupIndex === groups.length - 1}
+                        aria-label={`Descer ${client}`}
+                        title="Descer"
+                        className="rounded px-1 text-xs text-navy-500 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        ▼
+                      </button>
+                    </span>
+                  )}
+                  <h2 className="text-sm font-semibold text-navy-900">{client}</h2>
+                </span>
                 <span className="text-xs text-navy-500">
                   {loads.length} {loads.length === 1 ? "carga" : "cargas"}
                 </span>
