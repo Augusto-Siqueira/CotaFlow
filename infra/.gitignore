@@ -2,3 +2,5 @@
 backups/
 *.dump
 .rehearsal-users.json
+.local-users.json
+.local-migrations

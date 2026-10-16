@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "local": "bash infra/scripts/local.sh",
+    "local:down": "bash infra/scripts/local.sh down"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.6.1",
