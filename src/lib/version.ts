@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.08";
+export const APP_VERSION = "1.09";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.09",
+    date: "2026-10-16",
+    notes: [
+      "Programação: bloco de notas do dia, um texto livre por data, compartilhado pela equipe e salvo automaticamente.",
+      "Observações da carga em tópicos (botão Observações, amarelo quando há anotação): cada uma com origem (equipe ou motorista) e data/hora, com editar e excluir. O motorista vê só as observações que ele mesmo mandou.",
+      "App do motorista: observação opcional junto com o comprovante de entrega, que entra como tópico nas observações da carga.",
+      "App do motorista: no relato de defeito, campo de placa com sugestões da frota (placas da carga do dia primeiro).",
+      "Programação: tela mais larga (padrão para as telas de lista), destinos e motoristas sem quebra de linha, status Lavando removido, e o Voltar de uma cotação aberta pela Programação retorna ao mesmo dia.",
+      "Cidades: busca e validação ignoram acentos e maiúsculas, duplicadas removidas; origem e destino da Programação só aceitam cidades cadastradas.",
+      "Botão Voltar no lugar das setas em todas as telas.",
+    ],
+  },
   {
     version: "1.08",
     date: "2026-10-15",
