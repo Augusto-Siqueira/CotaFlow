@@ -58,8 +58,11 @@ export const NAV: NavEntry[] = [
     key: "abastecimento",
     label: "Abastecimento",
     icon: "M4 21V5a2 2 0 012-2h6a2 2 0 012 2v16M3 21h12M7 8h4M14 9h2a2 2 0 012 2v5a1.5 1.5 0 003 0V8l-3-3",
-    href: "/abastecimento",
     fuelOnly: true,
+    items: [
+      { href: "/abastecimento", label: "Lançamentos", fuelOnly: true },
+      { href: "/abastecimento/dashboard", label: "Dashboard", fuelOnly: true },
+    ],
   },
   {
     key: "cadastros",
