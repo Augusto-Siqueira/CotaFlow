@@ -36,6 +36,16 @@ function monthRange(month: string) {
   const [y, m] = month.split("-").map(Number);
   return { start: new Date(y, m - 1, 1), end: new Date(y, m, 1) };
 }
+function todayInput() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+/** Dias escolhidos (de/até, os dois incluídos) -> intervalo [início, fim). */
+function dayRange(from: string, to: string) {
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  return { start: new Date(fy, fm - 1, fd), end: new Date(ty, tm - 1, td + 1) };
+}
 function toDateInput(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -63,7 +73,17 @@ export default function AbastecimentoPage() {
   const { toastSuccess, toastError, confirm: askConfirm } = useFeedback();
   const allowed = role === "admin" || role === "abastecimento";
 
+  // Período: um mês inteiro ou dias personalizados (de/até).
+  const [mode, setMode] = useState<"mes" | "personalizado">("mes");
   const [month, setMonth] = useState(currentMonth);
+  const [fromDay, setFromDay] = useState(() => `${currentMonth()}-01`);
+  const [toDay, setToDay] = useState(todayInput);
+  const range = useMemo(
+    () => (mode === "mes" ? monthRange(month) : dayRange(fromDay, toDay)),
+    [mode, month, fromDay, toDay]
+  );
+  const rangeKey = mode === "mes" ? month : `${fromDay}_a_${toDay}`;
+  const periodWord = mode === "mes" ? "mês" : "período";
   const [entries, setEntries] = useState<FuelEntry[] | null>(null);
   const [plateFilter, setPlateFilter] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
@@ -77,10 +97,10 @@ export default function AbastecimentoPage() {
   const [fleetPlates, setFleetPlates] = useState<SearchOption[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Busca o mês e mais 2 meses antes: a média de um tanque cheio do começo do
-  // mês depende do tanque cheio anterior.
+  // Busca o período e mais 2 meses antes: a média de um tanque cheio do começo
+  // do período depende do tanque cheio anterior.
   const load = useCallback(async () => {
-    const { start, end } = monthRange(month);
+    const { start, end } = range;
     const from = new Date(start);
     from.setMonth(from.getMonth() - 2);
     const { data, error } = await supabase
@@ -92,7 +112,7 @@ export default function AbastecimentoPage() {
       .order("odometer_km", { ascending: false });
     if (error) toastError(`Não foi possível carregar (${error.message}).`);
     setEntries((data as FuelEntry[] | null) ?? []);
-  }, [month, toastError]);
+  }, [range, toastError]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -116,12 +136,12 @@ export default function AbastecimentoPage() {
   const intervals = useMemo(() => fuelIntervals(entries ?? []), [entries]);
 
   const monthRows = useMemo(() => {
-    const { start, end } = monthRange(month);
+    const { start, end } = range;
     return (entries ?? []).filter((e) => {
       const t = new Date(e.fueled_at);
       return t >= start && t < end;
     });
-  }, [entries, month]);
+  }, [entries, range]);
 
   const plates = useMemo(() => [...new Set(monthRows.map((e) => e.plate))].sort(), [monthRows]);
   const drivers = useMemo(
@@ -292,7 +312,7 @@ export default function AbastecimentoPage() {
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `abastecimentos-${month}.csv`;
+    a.download = `abastecimentos-${rangeKey}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -389,11 +409,51 @@ export default function AbastecimentoPage() {
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <div>
-          <label htmlFor="ab-mes" className="mb-1 block text-xs font-medium text-navy-600">
-            Mês
+          <label htmlFor="ab-modo" className="mb-1 block text-xs font-medium text-navy-600">
+            Período
           </label>
-          <input id="ab-mes" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className={selectCls} />
+          <select id="ab-modo" value={mode} onChange={(e) => setMode(e.target.value as "mes" | "personalizado")} className={selectCls}>
+            <option value="mes">Por mês</option>
+            <option value="personalizado">Personalizado (por dia)</option>
+          </select>
         </div>
+        {mode === "mes" ? (
+          <div>
+            <label htmlFor="ab-mes" className="mb-1 block text-xs font-medium text-navy-600">
+              Mês
+            </label>
+            <input id="ab-mes" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className={selectCls} />
+          </div>
+        ) : (
+          <>
+            <div>
+              <label htmlFor="ab-de" className="mb-1 block text-xs font-medium text-navy-600">
+                De
+              </label>
+              <input
+                id="ab-de"
+                type="date"
+                value={fromDay}
+                max={toDay}
+                onChange={(e) => e.target.value && setFromDay(e.target.value)}
+                className={selectCls}
+              />
+            </div>
+            <div>
+              <label htmlFor="ab-ate" className="mb-1 block text-xs font-medium text-navy-600">
+                Até
+              </label>
+              <input
+                id="ab-ate"
+                type="date"
+                value={toDay}
+                min={fromDay}
+                onChange={(e) => e.target.value && setToDay(e.target.value)}
+                className={selectCls}
+              />
+            </div>
+          </>
+        )}
         <div>
           <label htmlFor="ab-f-placa" className="mb-1 block text-xs font-medium text-navy-600">
             Placa
@@ -430,17 +490,17 @@ export default function AbastecimentoPage() {
 
       {summary.length > 0 && (
         <section className="mt-6 overflow-x-auto rounded-xl border border-navy-200 bg-white shadow-sm">
-          <h2 className="border-b border-navy-200 px-5 py-3 text-sm font-medium text-navy-900">Resumo do mês por placa</h2>
+          <h2 className="border-b border-navy-200 px-5 py-3 text-sm font-medium text-navy-900">Resumo do {periodWord} por placa</h2>
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-500">
               <tr>
                 <th className="px-5 py-2 font-medium">Placa</th>
-                <th className="px-5 py-2 font-medium">Km início do mês</th>
-                <th className="px-5 py-2 font-medium">Km final do mês</th>
+                <th className="px-5 py-2 font-medium">Km inicial do {periodWord}</th>
+                <th className="px-5 py-2 font-medium">Km final do {periodWord}</th>
                 <th className="px-5 py-2 font-medium">Km rodados</th>
                 <th className="px-5 py-2 font-medium">Diesel (L)</th>
                 <th className="px-5 py-2 font-medium">ARLA (L)</th>
-                <th className="px-5 py-2 font-medium">Média do mês</th>
+                <th className="px-5 py-2 font-medium">Média do {periodWord}</th>
                 <th className="px-5 py-2 font-medium">Gasto fora do pátio</th>
               </tr>
             </thead>
@@ -475,7 +535,7 @@ export default function AbastecimentoPage() {
           <p className="text-sm text-navy-500">Carregando...</p>
         ) : rows.length === 0 ? (
           <div className="rounded-xl border border-navy-200 bg-white px-6 py-10 text-center text-sm text-navy-500">
-            Nenhum abastecimento neste mês{plateFilter || driverFilter || typeFilter ? " com esses filtros" : ""}.
+            Nenhum abastecimento neste {periodWord}{plateFilter || driverFilter || typeFilter ? " com esses filtros" : ""}.
           </div>
         ) : (
           <DataTable rows={rows} columns={columns} rowKey={(e) => e.id} />
