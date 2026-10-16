@@ -8,6 +8,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
 import { useFeedback } from "@/components/Feedback";
+import { SearchSelect, type SearchOption } from "@/components/SearchSelect";
 import {
   FUEL_LABEL,
   formatAverage,
@@ -72,6 +73,8 @@ export default function AbastecimentoPage() {
   const [editing, setEditing] = useState<FuelEntry | null>(null);
   const [form, setForm] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  // Placas da frota (cavalos e trucks) para a correção: escolhe da lista.
+  const [fleetPlates, setFleetPlates] = useState<SearchOption[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Busca o mês e mais 2 meses antes: a média de um tanque cheio do começo do
@@ -97,6 +100,17 @@ export default function AbastecimentoPage() {
       load();
     });
   }, [allowed, load]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    supabase.rpc("fleet_plates").then(({ data }) => {
+      setFleetPlates(
+        ((data ?? []) as { plate: string; kind: string }[])
+          .filter((f) => f.kind !== "semirreboque")
+          .map((f) => ({ value: f.plate, hint: "Cavalo/truck" }))
+      );
+    });
+  }, [allowed]);
 
   const averages = useMemo(() => fuelAverages(entries ?? []), [entries]);
   const intervals = useMemo(() => fuelIntervals(entries ?? []), [entries]);
@@ -203,6 +217,10 @@ export default function AbastecimentoPage() {
     const km = Number(form.km.replace(/\D/g, ""));
     if (liters === null) return setFormError("Informe os litros.");
     if (!km) return setFormError("Informe o km.");
+    const plate = form.plate.trim().replace(/[\s-]/g, "").toUpperCase();
+    if (fleetPlates.length > 0 && !fleetPlates.some((o) => o.value === plate)) {
+      return setFormError("Escolha uma placa cadastrada na frota.");
+    }
     if (form.location_type === "externo" && (price === null || !form.location.trim())) {
       return setFormError("Fora do pátio: informe o posto e o valor por litro.");
     }
@@ -211,7 +229,7 @@ export default function AbastecimentoPage() {
       .from("fuel_entries")
       .update({
         fuel_type: form.fuel_type,
-        plate: form.plate.trim().toUpperCase(),
+        plate,
         fueled_at: new Date(`${form.fueled_at}T12:00:00`).toISOString(),
         location_type: form.location_type,
         location: form.location_type === "externo" ? form.location.trim() : null,
@@ -494,7 +512,14 @@ export default function AbastecimentoPage() {
               </div>
               <div>
                 <label htmlFor="ed-placa" className="mb-1 block text-sm font-medium text-navy-700">Placa</label>
-                <input id="ed-placa" value={form.plate} onChange={(e) => setForm({ ...form, plate: e.target.value })} className={`${inputCls} uppercase`} />
+                <SearchSelect
+                  id="ed-placa"
+                  value={form.plate}
+                  onChange={(v) => setForm({ ...form, plate: v.toUpperCase() })}
+                  options={fleetPlates}
+                  placeholder="Digite a placa"
+                  className={`${inputCls} uppercase tracking-wide`}
+                />
               </div>
               <div className="col-span-2">
                 <label htmlFor="ed-data" className="mb-1 block text-sm font-medium text-navy-700">Data</label>
