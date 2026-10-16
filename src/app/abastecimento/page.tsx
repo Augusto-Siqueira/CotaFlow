@@ -270,7 +270,7 @@ export default function AbastecimentoPage() {
   }
 
   function exportCsv() {
-    const head = ["Data", "Placa", "Motorista", "Combustível", "Local", "R$/litro", "Litros", "Total R$", "Km", "Tanque cheio", "Km rodado", "Observação"];
+    const head = ["Data", "Placa", "Motorista", "Combustível", "Local", "R$/litro", "Litros", "Total R$", "Km", "Tanque cheio", "Km rodado", "Média km/l", "Observação"];
     const num = (n: number | null | undefined, d = 2) => (n === null || n === undefined ? "" : Number(n).toFixed(d).replace(".", ","));
     const lines = rows.map((e) => [
       fmtWhen(e.fueled_at),
@@ -284,6 +284,7 @@ export default function AbastecimentoPage() {
       String(e.odometer_km),
       e.full_tank ? "Sim" : "Não",
       e.fuel_type === "diesel" ? String(kmDeltas.get(e.id) ?? 0) : "",
+      e.fuel_type === "diesel" && (kmDeltas.get(e.id) ?? 0) > 0 ? num((kmDeltas.get(e.id) ?? 0) / Number(e.liters)) : "",
       (e.notes ?? "").replace(/\s+/g, " "),
     ]);
     const csv = [head, ...lines].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
@@ -350,17 +351,22 @@ export default function AbastecimentoPage() {
     { key: "km", header: "Km", mobile: "field", cell: (e) => formatKm(e.odometer_km) },
     { key: "full", header: "Tanque cheio", mobile: "field", cell: (e) => (e.full_tank ? "Sim" : "Não") },
     {
-      key: "ran",
-      header: "Km rodado",
+      key: "avg",
+      header: "Média",
       mobile: "field",
-      cell: (e) =>
-        e.fuel_type === "diesel" && (kmDeltas.get(e.id) ?? 0) > 0 ? (
-          <span className="font-medium text-navy-900" title="Km desde o abastecimento anterior desta placa">
-            {formatKm(kmDeltas.get(e.id)!)}
+      cell: (e) => {
+        const ran = kmDeltas.get(e.id) ?? 0;
+        return e.fuel_type === "diesel" && ran > 0 && Number(e.liters) > 0 ? (
+          <span
+            className="font-medium text-navy-900"
+            title={`${formatKm(ran)} km desde o abastecimento anterior desta placa ÷ ${formatLiters(e.liters)} L deste abastecimento`}
+          >
+            {formatAverage(ran / Number(e.liters))}
           </span>
         ) : (
           "—"
-        ),
+        );
+      },
     },
     {
       key: "actions",
