@@ -18,6 +18,7 @@ import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf, normalizeCityText } from "@/lib/cities";
 import { DestinationsInput, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
+import { DayNotepad } from "@/components/DayNotepad";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
 
@@ -953,6 +954,8 @@ export default function ProgramacaoPage() {
           })}
         </div>
       </div>
+
+      <DayNotepad date={date} canEdit={canEditSchedule} />
 
       {canEditSchedule && mdfeAlerts.length > 0 && (
         <section
