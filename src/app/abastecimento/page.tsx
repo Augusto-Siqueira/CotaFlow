@@ -21,30 +21,13 @@ import {
   type FuelEntry,
   type FuelType,
 } from "@/lib/fuel";
+import { PRESET_OPTIONS, dayRange, presetRange, type Preset } from "@/lib/fuelPeriod";
 
 const inputCls =
   "w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
-}
-function currentMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
-}
-function monthRange(month: string) {
-  const [y, m] = month.split("-").map(Number);
-  return { start: new Date(y, m - 1, 1), end: new Date(y, m, 1) };
-}
-function todayInput() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-/** Dias escolhidos (de/até, os dois incluídos) -> intervalo [início, fim). */
-function dayRange(from: string, to: string) {
-  const [fy, fm, fd] = from.split("-").map(Number);
-  const [ty, tm, td] = to.split("-").map(Number);
-  return { start: new Date(fy, fm - 1, fd), end: new Date(ty, tm - 1, td + 1) };
 }
 function toDateInput(iso: string) {
   const d = new Date(iso);
@@ -73,17 +56,16 @@ export default function AbastecimentoPage() {
   const { toastSuccess, toastError, confirm: askConfirm } = useFeedback();
   const allowed = role === "admin" || role === "abastecimento";
 
-  // Período: um mês inteiro ou dias personalizados (de/até).
-  const [mode, setMode] = useState<"mes" | "personalizado">("mes");
-  const [month, setMonth] = useState(currentMonth);
-  const [fromDay, setFromDay] = useState(() => `${currentMonth()}-01`);
-  const [toDay, setToDay] = useState(todayInput);
-  const range = useMemo(
-    () => (mode === "mes" ? monthRange(month) : dayRange(fromDay, toDay)),
-    [mode, month, fromDay, toDay]
-  );
-  const rangeKey = mode === "mes" ? month : `${fromDay}_a_${toDay}`;
-  const periodWord = mode === "mes" ? "mês" : "período";
+  // Período: o mesmo filtro do dashboard (prontos ou personalizado por dia).
+  const [preset, setPreset] = useState<Preset>("mes");
+  const [days, setDays] = useState(() => presetRange("mes"));
+  const range = useMemo(() => dayRange(days.from, days.to), [days]);
+  const rangeKey = `${days.from}_a_${days.to}`;
+  function choosePreset(p: Preset) {
+    setPreset(p);
+    if (p !== "personalizado") setDays(presetRange(p));
+  }
+  const periodWord = preset === "mes" || preset === "mes_anterior" ? "mês" : "período";
   const [entries, setEntries] = useState<FuelEntry[] | null>(null);
   const [plateFilter, setPlateFilter] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
@@ -409,22 +391,18 @@ export default function AbastecimentoPage() {
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <div>
-          <label htmlFor="ab-modo" className="mb-1 block text-xs font-medium text-navy-600">
+          <label htmlFor="ab-periodo" className="mb-1 block text-xs font-medium text-navy-600">
             Período
           </label>
-          <select id="ab-modo" value={mode} onChange={(e) => setMode(e.target.value as "mes" | "personalizado")} className={selectCls}>
-            <option value="mes">Por mês</option>
-            <option value="personalizado">Personalizado (por dia)</option>
+          <select id="ab-periodo" value={preset} onChange={(e) => choosePreset(e.target.value as Preset)} className={selectCls}>
+            {PRESET_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </div>
-        {mode === "mes" ? (
-          <div>
-            <label htmlFor="ab-mes" className="mb-1 block text-xs font-medium text-navy-600">
-              Mês
-            </label>
-            <input id="ab-mes" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className={selectCls} />
-          </div>
-        ) : (
+        {preset === "personalizado" && (
           <>
             <div>
               <label htmlFor="ab-de" className="mb-1 block text-xs font-medium text-navy-600">
@@ -433,9 +411,9 @@ export default function AbastecimentoPage() {
               <input
                 id="ab-de"
                 type="date"
-                value={fromDay}
-                max={toDay}
-                onChange={(e) => e.target.value && setFromDay(e.target.value)}
+                value={days.from}
+                max={days.to}
+                onChange={(e) => e.target.value && setDays({ ...days, from: e.target.value })}
                 className={selectCls}
               />
             </div>
@@ -446,9 +424,9 @@ export default function AbastecimentoPage() {
               <input
                 id="ab-ate"
                 type="date"
-                value={toDay}
-                min={fromDay}
-                onChange={(e) => e.target.value && setToDay(e.target.value)}
+                value={days.to}
+                min={days.from}
+                onChange={(e) => e.target.value && setDays({ ...days, to: e.target.value })}
                 className={selectCls}
               />
             </div>

@@ -12,6 +12,7 @@ import {
   fuelIntervals,
   type FuelEntry,
 } from "@/lib/fuel";
+import { PRESET_OPTIONS, presetRange, type Preset } from "@/lib/fuelPeriod";
 
 // Dashboard do abastecimento. A média é sempre a do DIESEL pelo método do
 // tanque cheio (soma dos km entre tanques cheios ÷ soma dos litros desses
@@ -25,23 +26,6 @@ const TYPES = FLEET_KINDS.filter((k) => k.value !== "semirreboque");
 
 const selectCls =
   "rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
-
-const pad = (n: number) => String(n).padStart(2, "0");
-const isoDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-type Preset = "mes" | "mes_anterior" | "3meses" | "personalizado";
-
-function presetRange(p: Exclude<Preset, "personalizado">): { from: string; to: string } {
-  const now = new Date();
-  if (p === "mes") return { from: isoDay(new Date(now.getFullYear(), now.getMonth(), 1)), to: isoDay(now) };
-  if (p === "mes_anterior") {
-    return {
-      from: isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-      to: isoDay(new Date(now.getFullYear(), now.getMonth(), 0)),
-    };
-  }
-  return { from: isoDay(new Date(now.getFullYear(), now.getMonth() - 2, 1)), to: isoDay(now) };
-}
 
 interface Agg {
   key: string;
@@ -327,10 +311,11 @@ export default function AbastecimentoDashboardPage() {
             Período
           </label>
           <select id="db-periodo" value={preset} onChange={(e) => choosePreset(e.target.value as Preset)} className={selectCls}>
-            <option value="mes">Este mês</option>
-            <option value="mes_anterior">Mês anterior</option>
-            <option value="3meses">Últimos 3 meses</option>
-            <option value="personalizado">Personalizado</option>
+            {PRESET_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </div>
         {preset === "personalizado" && (
