@@ -116,6 +116,24 @@ services:
     volumes:
       - storage-data:/var/lib/storage
 
+  # Serviço de backup (o mesmo do Railway): entrega a cópia do banco e as fotos
+  # a quem tiver o BACKUP_TOKEN. No local: http://127.0.0.1:${BACKUP_PORT:-54340}
+  backup:
+    build: ./railway/backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      STORAGE_URL: http://storage:5000
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      BACKUP_TOKEN: ${BACKUP_TOKEN:-}
+      PORT: 8080
+    ports:
+      - "${BACKUP_PORT:-54340}:8080"
+    profiles: ["backup"]
+
   gateway:
     image: caddy:2-alpine
     restart: unless-stopped

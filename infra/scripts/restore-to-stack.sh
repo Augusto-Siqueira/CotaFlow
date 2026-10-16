@@ -12,6 +12,9 @@
 # Exemplos:
 #   ensaio local:   CONFIRM_RESTORE=sim bash scripts/restore-to-stack.sh backups/2026... .env.dest
 #   Railway teste:  CONFIRM_RESTORE=sim bash scripts/restore-to-stack.sh backups/2026... .env.staging
+# Também aceita o BACKUP DIÁRIO (infra/backup/cotaflow-backup.ps1): copie a pasta
+# do servidor (com as subpastas banco\ e fotos\) para infra/backups/<nome> e
+# informe essa pasta. Usa a cópia mais recente de banco\ (ou DUMP=<arquivo>).
 # SKIP_MIGRATIONS=1 pula as migrations (destino que já as tem).
 # Passos: migrations -> limpa destino -> usuários -> dados do banco -> fotos -> conferência.
 set -euo pipefail
@@ -36,6 +39,15 @@ DB_URL="postgresql://postgres:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/postgre
 # Superusuário da imagem: só ele pode adiar as chaves estrangeiras durante a carga.
 ADMIN_URL="postgresql://supabase_admin:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/postgres?sslmode=${SSL}"
 B="/work/infra/$BACKUP"
+
+# Formato do backup: o da migração (public.dump + auth.sql + photos/) ou o diário
+# (banco/cotaflow-AAAA-MM-DD.dump + fotos/<bucket>/...).
+if [ -d "$BACKUP/banco" ]; then
+  DAILY_DUMP="${DUMP:-$(ls "$BACKUP"/banco/cotaflow-*.dump 2>/dev/null | sort | tail -1)}"
+  [ -n "$DAILY_DUMP" ] || { echo "Nenhum cotaflow-*.dump em $BACKUP/banco"; exit 1; }
+  D="/work/infra/$DAILY_DUMP"
+  echo "Backup diário: $(basename "$DAILY_DUMP")"
+fi
 
 echo "Destino: banco em ${DB_HOST}:${DB_PORT} (conexão: ${SSL}) · API em ${PUBLIC_API_URL}"
 "${CLIENT[@]}" psql "$DB_URL" -At -c "select 'conexão ok: ' || current_user" >/dev/null \
@@ -80,13 +92,23 @@ SQL
 # (session_replication_role = replica), pois a ordem das tabelas num backup só
 # de dados não respeita as chaves.
 echo "3/6 Usuários e logins (auth)…"
-"${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; sed '/transaction_timeout/d' $B/auth.sql) | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+if [ -n "${D:-}" ]; then
+  "${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; pg_restore --data-only --no-owner -n auth -t users -t identities -f - '$D' | sed '/transaction_timeout/d') | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+else
+  "${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; sed '/transaction_timeout/d' $B/auth.sql) | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+fi
 
 echo "4/6 Dados do banco (public)…"
-"${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; pg_restore --data-only --no-owner -f - $B/public.dump | sed '/transaction_timeout/d') | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+if [ -n "${D:-}" ]; then
+  "${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; pg_restore --data-only --no-owner -n public -f - '$D' | sed '/transaction_timeout/d') | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+else
+  "${CLIENT[@]}" sh -c "(echo 'SET session_replication_role = replica;'; pg_restore --data-only --no-owner -f - $B/public.dump | sed '/transaction_timeout/d') | psql '$ADMIN_URL' -v ON_ERROR_STOP=1 -q --single-transaction -o /dev/null"
+fi
 
 echo "5/6 Fotos…"
-if [ -d "$BACKUP/photos" ]; then
+if [ -d "$BACKUP/fotos/driver-photos" ]; then
+  CLEAN=1 API_URL="$PUBLIC_API_URL" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" SRC_DIR="$BACKUP/fotos/driver-photos" node scripts/storage-upload.mjs
+elif [ -d "$BACKUP/photos" ]; then
   CLEAN=1 API_URL="$PUBLIC_API_URL" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" SRC_DIR="$BACKUP/photos" node scripts/storage-upload.mjs
 else
   echo "   (sem pasta de fotos neste backup)"
@@ -94,6 +116,11 @@ fi
 
 echo "6/6 Conferência das contagens…"
 "${CLIENT[@]}" psql "$DB_URL" -At -F ' | ' -f /work/infra/sql/counts.sql > "$BACKUP/counts.destino.txt"
+if [ ! -f "$BACKUP/counts.txt" ]; then
+  echo "Backup diário não traz contagem de origem; contagens no destino:"
+  cat "$BACKUP/counts.destino.txt"
+  exit 0
+fi
 if diff -u "$BACKUP/counts.txt" "$BACKUP/counts.destino.txt"; then
   echo "OK: todas as contagens são iguais à origem."
 else
