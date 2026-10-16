@@ -46,6 +46,7 @@ interface ScheduleNote {
   source: "equipe" | "motorista";
   destination: string | null;
   created_at: string;
+  edited_at: string | null;
 }
 
 // Botão "Observações": amarelo quando a carga já tem observação.
@@ -64,7 +65,7 @@ function noteMeta(n: ScheduleNote): string {
     dateStyle: "short",
     timeStyle: "short",
   });
-  return `${who} · ${when}`;
+  return `${who} · ${when}${n.edited_at ? " · editado" : ""}`;
 }
 
 interface DefectInfo {
@@ -326,7 +327,7 @@ export default function ProgramacaoPage() {
     const { data: noteRows } = ids.length
       ? await supabase
           .from("loading_schedule_notes")
-          .select("id, schedule_id, body, source, destination, created_at")
+          .select("id, schedule_id, body, source, destination, created_at, edited_at")
           .in("schedule_id", ids)
           .order("created_at")
       : { data: [] };
@@ -355,6 +356,7 @@ export default function ProgramacaoPage() {
   function openNotes(l: Load) {
     setNotesFor(l);
     setNotesText("");
+    setEditingNoteId(null);
   }
   async function addNote() {
     if (!notesFor || !notesText.trim()) return;
@@ -368,6 +370,22 @@ export default function ProgramacaoPage() {
       return;
     }
     setNotesText("");
+    await fetchRows(date);
+  }
+  // Edição de um tópico (um por vez, na própria lista).
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
+  async function saveNoteEdit(n: ScheduleNote) {
+    if (!editingNoteText.trim()) return;
+    const { error } = await supabase
+      .from("loading_schedule_notes")
+      .update({ body: editingNoteText.trim(), edited_at: new Date().toISOString() })
+      .eq("id", n.id);
+    if (error) {
+      toastError(`Não foi possível salvar a observação (${error.message}).`);
+      return;
+    }
+    setEditingNoteId(null);
     await fetchRows(date);
   }
   async function deleteNote(n: ScheduleNote) {
@@ -1611,17 +1629,61 @@ export default function ProgramacaoPage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[11px] font-medium text-navy-500">{noteMeta(n)}</span>
-                    {canEditSchedule && (
-                      <button
-                        type="button"
-                        onClick={() => deleteNote(n)}
-                        className={buttonClasses("danger", "sm")}
-                      >
-                        Excluir
-                      </button>
+                    {canEditSchedule && editingNoteId !== n.id && (
+                      <span className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingNoteId(n.id);
+                            setEditingNoteText(n.body);
+                          }}
+                          className={buttonClasses("soft", "sm")}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteNote(n)}
+                          className={buttonClasses("danger", "sm")}
+                        >
+                          Excluir
+                        </button>
+                      </span>
                     )}
                   </div>
-                  <p className="mt-1 whitespace-pre-line text-sm text-navy-900">{n.body}</p>
+                  {editingNoteId === n.id ? (
+                    <div className="mt-2">
+                      <label htmlFor={`note-edit-${n.id}`} className="sr-only">
+                        Editar observação
+                      </label>
+                      <textarea
+                        id={`note-edit-${n.id}`}
+                        rows={3}
+                        value={editingNoteText}
+                        onChange={(e) => setEditingNoteText(e.target.value)}
+                        className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                      />
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingNoteId(null)}
+                          className={buttonClasses("secondary", "sm")}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveNoteEdit(n)}
+                          disabled={!editingNoteText.trim()}
+                          className={buttonClasses("primary", "sm")}
+                        >
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-1 whitespace-pre-line text-sm text-navy-900">{n.body}</p>
+                  )}
                 </li>
               ))}
             </ul>

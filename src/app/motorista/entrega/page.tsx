@@ -142,7 +142,7 @@ export default function ComprovanteEntregaPage() {
                 {loadNotes.some((n) => n.schedule_id === l.id) && (
                   <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                     <span className="block text-[11px] font-medium uppercase text-amber-800">
-                      Observações
+                      Suas observações
                     </span>
                     <ul className="mt-1 list-disc space-y-1 pl-4">
                       {loadNotes
@@ -150,9 +150,6 @@ export default function ComprovanteEntregaPage() {
                         .map((n) => (
                           <li key={n.id} className="whitespace-pre-line">
                             {n.body}
-                            {n.source === "motorista" && (
-                              <span className="text-xs text-amber-700"> (você)</span>
-                            )}
                           </li>
                         ))}
                     </ul>
