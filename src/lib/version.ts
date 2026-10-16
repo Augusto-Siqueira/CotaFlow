@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.10";
+export const APP_VERSION = "1.11";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.11",
+    date: "2026-10-16",
+    notes: [
+      "Abastecimento no app do motorista: lançamento de diesel e ARLA (substitui a folha de papel) com data, placa da frota, posto e valor por litro fora do pátio, km, litros e se completou o tanque; a foto é obrigatória (tela da bomba no pátio, NF no posto externo).",
+      "Novo perfil Abastecimento: tela com resumo do mês por placa, média de cada tanque cheio, filtros (período, placa, motorista, combustível), correção e exclusão de lançamentos, ver a foto e exportar planilha. Vê a Programação do dia somente para leitura.",
+      "Dashboard do abastecimento: rankings de caminhões e de motoristas pela melhor média (km/l), filtro por tipo de veículo (cavalo, truck, bitruck), média por tipo e evolução mensal.",
+      "Cadastro de oficinas em Cadastros, igual ao de clientes (razão social, fantasia, CNPJ/CPF e segmento).",
+      "Usuários: o acesso do motorista ao app nasce junto com o cadastro dele (CPF e 6 primeiros dígitos), acompanha a troca de CPF e é bloqueado ao excluí-lo.",
+    ],
+  },
   {
     version: "1.10",
     date: "2026-10-16",
