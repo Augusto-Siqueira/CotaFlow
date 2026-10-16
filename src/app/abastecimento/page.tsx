@@ -189,7 +189,10 @@ export default function AbastecimentoPage() {
 
   async function openPhotos(e: FuelEntry) {
     const urls = (await Promise.all(e.photos.map((p) => photoUrl(p)))).filter((u): u is string => Boolean(u));
-    setPhotosFor({ title: `${e.plate} · ${fmtWhen(e.fueled_at)}`, urls });
+    setPhotosFor({
+      title: `${e.location_type === "externo" ? "NF" : "Tela da bomba"} · ${e.plate} · ${fmtWhen(e.fueled_at)}`,
+      urls,
+    });
   }
 
   function openEdit(e: FuelEntry) {
@@ -349,10 +352,10 @@ export default function AbastecimentoPage() {
             <button
               type="button"
               onClick={() => openPhotos(e)}
-              title={`Ver foto da NF (${e.photos.length})`}
+              title={`Ver foto ${e.location_type === "externo" ? "da NF" : "da tela da bomba"} (${e.photos.length})`}
               className="inline-flex items-center justify-center rounded-md border border-amber-400 bg-amber-50 px-1.5 py-1 text-[11px] font-medium leading-none text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
             >
-              NF
+              {e.location_type === "externo" ? "NF" : "Bomba"}
             </button>
           )}
           {canEditFuel && (
@@ -482,13 +485,13 @@ export default function AbastecimentoPage() {
       {photosFor && (
         <Modal onClose={() => setPhotosFor(null)} labelledBy="ab-photos-title" className="max-w-2xl">
           <h2 id="ab-photos-title" className="text-base font-medium text-navy-900">
-            NF · {photosFor.title}
+            {photosFor.title}
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
             {photosFor.urls.map((u) => (
               <a key={u} href={u} target="_blank" rel="noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={u} alt="Foto da NF" className="h-56 w-full rounded-lg border border-navy-200 object-cover" />
+                <img src={u} alt="Foto do abastecimento" className="h-56 w-full rounded-lg border border-navy-200 object-cover" />
               </a>
             ))}
           </div>

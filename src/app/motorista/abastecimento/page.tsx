@@ -173,7 +173,9 @@ export default function AbastecimentoMotoristaPage() {
       if (!station.trim()) return setError("Informe o posto (nome e cidade).");
       if (priceN === null) return setError("Informe o valor por litro.");
     }
-    if (files.length === 0) return setError("Tire a foto da NF do abastecimento.");
+    if (files.length === 0) {
+      return setError(where === "externo" ? "Tire a foto da NF do abastecimento." : "Tire a foto da tela da bomba.");
+    }
     setSaving(true);
     setError(null);
     try {
@@ -364,7 +366,8 @@ export default function AbastecimentoMotoristaPage() {
 
         <div>
           <span className={labelCls}>
-            Foto da NF <span className="font-normal text-red-700">(obrigatória)</span>
+            {where === "externo" ? "Foto da NF" : "Foto da tela da bomba"}{" "}
+            <span className="font-normal text-red-700">(obrigatória)</span>
           </span>
           {files.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-2">

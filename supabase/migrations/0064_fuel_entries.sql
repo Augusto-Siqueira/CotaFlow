@@ -3,7 +3,7 @@
 -- corrige os lançamentos.
 --
 -- Regras da folha:
---   * foto da NF/cupom obrigatória em todo abastecimento;
+--   * foto obrigatória em todo abastecimento (no pátio, da tela da bomba; fora, da NF);
 --   * valor R$/litro e posto só fora do pátio (posto externo);
 --   * "completou o tanque?" marca os abastecimentos que fecham a média (km/l),
 --     calculada na tela: km desde o último tanque cheio da placa ÷ litros desde então.
