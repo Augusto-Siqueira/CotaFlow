@@ -13,7 +13,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.11",
     date: "2026-10-16",
     notes: [
-      "Abastecimento no app do motorista: lançamento de diesel e ARLA (substitui a folha de papel) com data, placa da frota, posto e valor por litro fora do pátio, km, litros e se completou o tanque; a foto é obrigatória (tela da bomba no pátio, odômetro no posto externo).",
+      "Abastecimento no app do motorista: lançamento de diesel e ARLA (substitui a folha de papel) com data, placa da frota, posto e valor por litro fora do pátio, km, litros e se completou o tanque; a foto do odômetro é obrigatória.",
       "Novo perfil Abastecimento: tela com resumo do mês por placa, média de cada tanque cheio, filtros (período, placa, motorista, combustível), correção e exclusão de lançamentos, ver a foto e exportar planilha. Vê a Programação do dia somente para leitura.",
       "Dashboard do abastecimento: rankings de caminhões e de motoristas pela melhor média (km/l), filtro por tipo de veículo (cavalo, truck, bitruck), média por tipo e evolução mensal.",
       "Cadastro de oficinas em Cadastros, igual ao de clientes (razão social, fantasia, CNPJ/CPF e segmento).",

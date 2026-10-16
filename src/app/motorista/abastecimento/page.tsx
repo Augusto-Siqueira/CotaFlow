@@ -173,9 +173,7 @@ export default function AbastecimentoMotoristaPage() {
       if (!station.trim()) return setError("Informe o posto (nome e cidade).");
       if (priceN === null) return setError("Informe o valor por litro.");
     }
-    if (files.length === 0) {
-      return setError(where === "externo" ? "Tire a foto do odômetro." : "Tire a foto da tela da bomba.");
-    }
+    if (files.length === 0) return setError("Tire a foto do odômetro.");
     setSaving(true);
     setError(null);
     try {
@@ -366,8 +364,7 @@ export default function AbastecimentoMotoristaPage() {
 
         <div>
           <span className={labelCls}>
-            {where === "externo" ? "Foto do odômetro" : "Foto da tela da bomba"}{" "}
-            <span className="font-normal text-red-700">(obrigatória)</span>
+            Foto do odômetro <span className="font-normal text-red-700">(obrigatória)</span>
           </span>
           {files.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-2">
