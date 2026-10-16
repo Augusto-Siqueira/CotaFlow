@@ -192,7 +192,7 @@ export default function AbastecimentoPage() {
   async function openPhotos(e: FuelEntry) {
     const urls = (await Promise.all(e.photos.map((p) => photoUrl(p)))).filter((u): u is string => Boolean(u));
     setPhotosFor({
-      title: `${e.location_type === "externo" ? "NF" : "Tela da bomba"} · ${e.plate} · ${fmtWhen(e.fueled_at)}`,
+      title: `${e.location_type === "externo" ? "Odômetro" : "Tela da bomba"} · ${e.plate} · ${fmtWhen(e.fueled_at)}`,
       urls,
     });
   }
@@ -354,10 +354,10 @@ export default function AbastecimentoPage() {
             <button
               type="button"
               onClick={() => openPhotos(e)}
-              title={`Ver foto ${e.location_type === "externo" ? "da NF" : "da tela da bomba"} (${e.photos.length})`}
+              title={`Ver foto ${e.location_type === "externo" ? "do odômetro" : "da tela da bomba"} (${e.photos.length})`}
               className="inline-flex items-center justify-center rounded-md border border-amber-400 bg-amber-50 px-1.5 py-1 text-[11px] font-medium leading-none text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
             >
-              {e.location_type === "externo" ? "NF" : "Bomba"}
+              {e.location_type === "externo" ? "Odômetro" : "Bomba"}
             </button>
           )}
           {canEditFuel && (

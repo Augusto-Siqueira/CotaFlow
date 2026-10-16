@@ -174,7 +174,7 @@ export default function AbastecimentoMotoristaPage() {
       if (priceN === null) return setError("Informe o valor por litro.");
     }
     if (files.length === 0) {
-      return setError(where === "externo" ? "Tire a foto da NF do abastecimento." : "Tire a foto da tela da bomba.");
+      return setError(where === "externo" ? "Tire a foto do odômetro." : "Tire a foto da tela da bomba.");
     }
     setSaving(true);
     setError(null);
@@ -366,7 +366,7 @@ export default function AbastecimentoMotoristaPage() {
 
         <div>
           <span className={labelCls}>
-            {where === "externo" ? "Foto da NF" : "Foto da tela da bomba"}{" "}
+            {where === "externo" ? "Foto do odômetro" : "Foto da tela da bomba"}{" "}
             <span className="font-normal text-red-700">(obrigatória)</span>
           </span>
           {files.length > 0 && (
