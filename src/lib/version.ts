@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.09";
+export const APP_VERSION = "1.10";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.10",
+    date: "2026-10-16",
+    notes: [
+      "Administração de usuários (só admin): tela Usuários para cadastrar a equipe com senha temporária, mudar perfil, editar nome, redefinir senha, bloquear e desbloquear; tudo fica registrado.",
+      "Perfis fixos: Admin, Comercial, Logística, Manutenção e Motorista. O novo perfil Comercial edita cotações, propostas, clientes e tabelas e só lê Programação e Manutenção.",
+      "Motoristas: botão Criar acesso no cadastro (login = CPF, senha = 6 primeiros dígitos do CPF).",
+      "Programação: os blocos de cliente podem ser arrastados para definir a ordem, que vale para todos os dias e para toda a equipe.",
+    ],
+  },
   {
     version: "1.09",
     date: "2026-10-16",
