@@ -101,6 +101,8 @@ PGRST_APP_SETTINGS_JWT_SECRET=${secret}
 PGRST_APP_SETTINGS_JWT_EXP=3600
 PGRST_DB_MAX_ROWS=1000
 PGRST_SERVER_PORT=3000
+GHCRTS=-N2 -A2m -qg -I0.3
+PGRST_DB_POOL=5
 `,
   "storage.env": `# Serviço "storage" — imagem supabase/storage-api:v1.24.7 — volume em /var/lib/storage
 ANON_KEY=${anon}

@@ -87,6 +87,10 @@ services:
       PGRST_APP_SETTINGS_JWT_EXP: 3600
       # Evita o limite padrão de 1000 linhas virar surpresa: o site já pagina.
       PGRST_DB_MAX_ROWS: 1000
+      # Economia de memória (em servidor com muitos núcleos o PostgREST reserva
+      # memória por núcleo): 2 núcleos, coleta de lixo enxuta e 5 conexões.
+      GHCRTS: "-N2 -A2m -qg -I0.3"
+      PGRST_DB_POOL: 5
 
   storage:
     image: supabase/storage-api:v1.24.7
