@@ -6,8 +6,8 @@
     - as fotos, só as novas       -> <Destino>\fotos\<bucket>\<caminho>
   e registra tudo em <Destino>\backup.log.
 
-  A chave de acesso fica no perfil do usuário do Windows, criptografada
-  (só esse usuário, neste computador, consegue ler). Para gravar ou trocar:
+  A chave de acesso fica na pasta do script, criptografada para o usuário do
+  Windows (só esse usuário, neste computador, consegue ler). Para gravar ou trocar:
     .\cotaflow-backup.ps1 -SalvarChave
 
   Uso normal (Agendador de Tarefas):
@@ -21,10 +21,20 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Qualquer erro, inclusive antes de a pasta do servidor estar acessível, fica
+# registrado também aqui (o log principal fica na pasta de destino).
+$erroLocal = Join-Path $PSScriptRoot "ultimo-erro.txt"
+trap {
+  New-Item -ItemType Directory -Force (Split-Path $erroLocal) | Out-Null
+  Add-Content -Path $erroLocal -Encoding UTF8 -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}  [{2}]" -f (Get-Date), $_.Exception.Message, $_.InvocationInfo.PositionMessage)
+  exit 1
+}
 $ProgressPreference = "SilentlyContinue"   # deixa os downloads bem mais rápidos no PowerShell 5.1
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$pastaConfig = Join-Path $env:LOCALAPPDATA "CotaFlowBackup"
+# Chave e configuração ficam na mesma pasta do script (ex.: C:\ProgramData\CotaFlowBackup).
+$pastaConfig = $PSScriptRoot
 $arquivoChave = Join-Path $pastaConfig "chave.dat"
 $arquivoConfig = Join-Path $pastaConfig "config.json"
 New-Item -ItemType Directory -Force $pastaConfig | Out-Null
