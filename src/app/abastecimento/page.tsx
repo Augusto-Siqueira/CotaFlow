@@ -15,8 +15,7 @@ import {
   formatKm,
   formatLiters,
   formatMoney,
-  fuelAverages,
-  fuelIntervals,
+  fuelKmDeltas,
   parseDecimal,
   type FuelEntry,
   type FuelType,
@@ -114,8 +113,11 @@ export default function AbastecimentoPage() {
     });
   }, [allowed]);
 
-  const averages = useMemo(() => fuelAverages(entries ?? []), [entries]);
-  const intervals = useMemo(() => fuelIntervals(entries ?? []), [entries]);
+  // Km rodado entre abastecimentos de diesel (mesmo método do dashboard).
+  const kmDeltas = useMemo(
+    () => fuelKmDeltas((entries ?? []).filter((e) => e.fuel_type === "diesel")),
+    [entries]
+  );
 
   const monthRows = useMemo(() => {
     const { start, end } = range;
@@ -154,8 +156,7 @@ export default function AbastecimentoPage() {
         arla: number;
         spent: number;
         count: number;
-        avgKm: number;
-        avgLiters: number;
+        ran: number;
       }
     >();
     for (const e of monthRows) {
@@ -169,15 +170,10 @@ export default function AbastecimentoPage() {
         arla: 0,
         spent: 0,
         count: 0,
-        avgKm: 0,
-        avgLiters: 0,
+        ran: 0,
       };
-      // Média do mês: só os intervalos entre tanques cheios de diesel que fecham no mês.
-      const iv = e.fuel_type === "diesel" ? intervals.get(e.id) : undefined;
-      if (iv) {
-        s.avgKm += iv.km;
-        s.avgLiters += iv.liters;
-      }
+      // Km rodado do período: soma do km entre abastecimentos de diesel.
+      if (e.fuel_type === "diesel") s.ran += kmDeltas.get(e.id) ?? 0;
       s.kmMin = Math.min(s.kmMin, e.odometer_km);
       s.kmMax = Math.max(s.kmMax, e.odometer_km);
       if (e.fuel_type === "diesel") s.diesel += Number(e.liters);
@@ -187,7 +183,7 @@ export default function AbastecimentoPage() {
       map.set(e.plate, s);
     }
     return [...map.values()].sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [monthRows, plateFilter, driverFilter, intervals]);
+  }, [monthRows, plateFilter, driverFilter, kmDeltas]);
 
   async function openPhotos(e: FuelEntry) {
     const urls = (await Promise.all(e.photos.map((p) => photoUrl(p)))).filter((u): u is string => Boolean(u));
@@ -274,7 +270,7 @@ export default function AbastecimentoPage() {
   }
 
   function exportCsv() {
-    const head = ["Data", "Placa", "Motorista", "Combustível", "Local", "R$/litro", "Litros", "Total R$", "Km", "Tanque cheio", "Média km/l", "Observação"];
+    const head = ["Data", "Placa", "Motorista", "Combustível", "Local", "R$/litro", "Litros", "Total R$", "Km", "Tanque cheio", "Km rodado", "Observação"];
     const num = (n: number | null | undefined, d = 2) => (n === null || n === undefined ? "" : Number(n).toFixed(d).replace(".", ","));
     const lines = rows.map((e) => [
       fmtWhen(e.fueled_at),
@@ -287,7 +283,7 @@ export default function AbastecimentoPage() {
       e.price_per_liter ? num(Number(e.price_per_liter) * Number(e.liters)) : "",
       String(e.odometer_km),
       e.full_tank ? "Sim" : "Não",
-      averages.has(e.id) ? num(averages.get(e.id)) : "",
+      e.fuel_type === "diesel" ? String(kmDeltas.get(e.id) ?? 0) : "",
       (e.notes ?? "").replace(/\s+/g, " "),
     ]);
     const csv = [head, ...lines].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
@@ -309,10 +305,16 @@ export default function AbastecimentoPage() {
     );
   }
 
-  const columns: Column<FuelEntry>[] = [
+  const baseColumns: Column<FuelEntry>[] = [
     { key: "when", header: "Data", mobile: "subtitle", cell: (e) => fmtWhen(e.fueled_at) },
     { key: "plate", header: "Placa", mobile: "title", cell: (e) => <span className="font-medium tracking-wide text-navy-900">{e.plate}</span> },
-    { key: "driver", header: "Motorista", mobile: "subtitle", cell: (e) => e.driver_name ?? "—" },
+    {
+      key: "driver",
+      header: "Motorista",
+      mobile: "subtitle",
+      className: "max-w-[13rem] truncate text-navy-600",
+      cell: (e) => <span title={e.driver_name ?? undefined}>{e.driver_name ?? "—"}</span>,
+    },
     {
       key: "type",
       header: "Tipo",
@@ -327,7 +329,16 @@ export default function AbastecimentoPage() {
         </span>
       ),
     },
-    { key: "where", header: "Local", mobile: "field", cell: (e) => (e.location_type === "patio" ? "Pátio" : e.location) },
+    {
+      key: "where",
+      header: "Local",
+      mobile: "field",
+      className: "max-w-[15rem] truncate text-navy-600",
+      cell: (e) => {
+        const text = e.location_type === "patio" ? "Pátio" : (e.location ?? "—");
+        return <span title={text}>{text}</span>;
+      },
+    },
     { key: "price", header: "R$/litro", mobile: "field", cell: (e) => (e.price_per_liter ? formatMoney(e.price_per_liter) : "—") },
     { key: "liters", header: "Litros", mobile: "highlight", cell: (e) => formatLiters(e.liters) },
     {
@@ -339,10 +350,17 @@ export default function AbastecimentoPage() {
     { key: "km", header: "Km", mobile: "field", cell: (e) => formatKm(e.odometer_km) },
     { key: "full", header: "Tanque cheio", mobile: "field", cell: (e) => (e.full_tank ? "Sim" : "Não") },
     {
-      key: "avg",
-      header: "Média",
+      key: "ran",
+      header: "Km rodado",
       mobile: "field",
-      cell: (e) => (averages.has(e.id) ? <span className="font-medium text-navy-900">{formatAverage(averages.get(e.id)!)}</span> : "—"),
+      cell: (e) =>
+        e.fuel_type === "diesel" && (kmDeltas.get(e.id) ?? 0) > 0 ? (
+          <span className="font-medium text-navy-900" title="Km desde o abastecimento anterior desta placa">
+            {formatKm(kmDeltas.get(e.id)!)}
+          </span>
+        ) : (
+          "—"
+        ),
     },
     {
       key: "actions",
@@ -374,6 +392,12 @@ export default function AbastecimentoPage() {
       ),
     },
   ];
+
+  // Nenhuma coluna quebra linha; as que têm corte (posto e motorista) já trazem "truncate".
+  const columns: Column<FuelEntry>[] = baseColumns.map((c) => ({
+    ...c,
+    className: `whitespace-nowrap ${c.className ?? "text-navy-600"}`,
+  }));
 
   const selectCls = "rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm text-navy-900";
 
@@ -484,7 +508,7 @@ export default function AbastecimentoPage() {
             </thead>
             <tbody className="divide-y divide-navy-100">
               {summary.map((s) => {
-                const ran = s.kmMax - s.kmMin;
+                const ran = s.ran;
                 return (
                   <tr key={s.plate}>
                     <td className="px-5 py-2 font-medium tracking-wide text-navy-900">{s.plate}</td>
@@ -495,9 +519,9 @@ export default function AbastecimentoPage() {
                     <td className="px-5 py-2 text-navy-700">{formatLiters(s.arla)}</td>
                     <td
                       className="px-5 py-2 font-medium text-navy-900"
-                      title="Soma dos km entre tanques cheios de diesel ÷ soma dos litros desses intervalos"
+                      title="Km rodados no período ÷ diesel total abastecido no período"
                     >
-                      {s.avgLiters > 0 ? formatAverage(s.avgKm / s.avgLiters) : "—"}
+                      {ran > 0 && s.diesel > 0 ? formatAverage(ran / s.diesel) : "—"}
                     </td>
                     <td className="px-5 py-2 text-navy-700">{s.spent > 0 ? formatMoney(s.spent) : "—"}</td>
                   </tr>
