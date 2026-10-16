@@ -91,3 +91,26 @@ export function parseDecimal(value: string): number | null {
   const n = Number(normalized);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+/**
+ * Km rodado entre abastecimentos (método "km total"): para cada abastecimento,
+ * quantos km a placa andou desde o abastecimento anterior (a diferença das
+ * leituras do painel). O primeiro registro da placa não tem anterior e conta 0.
+ * Leitura menor que a anterior (erro de digitação) conta 0 e não derruba as
+ * seguintes. A soma dos deltas de um período = último km do período − último km
+ * antes dele. Devolve id do abastecimento -> km rodado.
+ */
+export function fuelKmDeltas(entries: FuelEntry[]): Map<string, number> {
+  const out = new Map<string, number>();
+  const byPlate = new Map<string, FuelEntry[]>();
+  for (const e of entries) byPlate.set(e.plate, [...(byPlate.get(e.plate) ?? []), e]);
+  for (const list of byPlate.values()) {
+    list.sort((a, b) => a.fueled_at.localeCompare(b.fueled_at) || a.odometer_km - b.odometer_km);
+    let prevMax: number | null = null;
+    for (const e of list) {
+      out.set(e.id, prevMax === null ? 0 : Math.max(0, e.odometer_km - prevMax));
+      prevMax = prevMax === null ? e.odometer_km : Math.max(prevMax, e.odometer_km);
+    }
+  }
+  return out;
+}

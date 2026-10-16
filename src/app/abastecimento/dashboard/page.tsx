@@ -9,16 +9,18 @@ import {
   formatKm,
   formatLiters,
   formatMoney,
-  fuelIntervals,
+  fuelKmDeltas,
   type FuelEntry,
 } from "@/lib/fuel";
 import { PRESET_OPTIONS, presetRange, type Preset } from "@/lib/fuelPeriod";
 
-// Dashboard do abastecimento. A média é sempre a do DIESEL pelo método do
-// tanque cheio (soma dos km entre tanques cheios ÷ soma dos litros desses
-// intervalos). Cada intervalo conta para a placa e para o motorista do
-// abastecimento que COMPLETOU o tanque. O filtro por tipo existe porque a média
-// de um truck ou bitruck não se compara à de um cavalo mecânico.
+// Dashboard do abastecimento. A média é a do DIESEL pelo método do "km total":
+// km rodado no período ÷ diesel total abastecido no período. O km rodado de cada
+// abastecimento é a diferença da leitura do painel para o abastecimento anterior
+// da mesma placa (a soma no período = último km − km antes do período) e conta
+// para a placa e para o motorista que fez aquele abastecimento. O filtro por
+// tipo existe porque a média de um truck ou bitruck não se compara à de um
+// cavalo mecânico.
 
 const MONTHS_BACK = 8; // histórico buscado (o período escolhido e a evolução saem dele)
 const EVOLUTION_MONTHS = 6;
@@ -33,7 +35,7 @@ interface Agg {
   sub: string;
   km: number;
   liters: number;
-  stops: number;
+  fills: number;
   avg: number | null;
 }
 
@@ -88,7 +90,7 @@ function Bars({ rows, base, unit }: { rows: Agg[]; base: number | null; unit: st
               title={
                 r.avg === null
                   ? "Sem média no período"
-                  : `${formatAverage(r.avg)} · ${formatKm(r.km)} km em ${formatLiters(r.liters)} L (${r.stops} tanque(s) cheio(s))`
+                  : `${formatAverage(r.avg)} · ${formatKm(r.km)} km rodados ÷ ${formatLiters(r.liters)} L de diesel (${r.fills} abastecimento(s))`
               }
             >
               {r.avg !== null && (
@@ -97,7 +99,7 @@ function Bars({ rows, base, unit }: { rows: Agg[]; base: number | null; unit: st
             </span>
             <span className="w-40 text-right tabular-nums">
               {r.avg === null ? (
-                <span className="text-xs text-navy-500">sem tanque cheio</span>
+                <span className="text-xs text-navy-500">sem km no período</span>
               ) : (
                 <>
                   <span className="font-semibold text-navy-900">{formatAverage(r.avg)}</span>
@@ -162,7 +164,7 @@ export default function AbastecimentoDashboardPage() {
     () => (history ?? []).filter((e) => e.fuel_type === "diesel" && (!typeFilter || kinds.get(e.plate) === typeFilter)),
     [history, kinds, typeFilter]
   );
-  const intervals = useMemo(() => fuelIntervals(diesel), [diesel]);
+  const kmDeltas = useMemo(() => fuelKmDeltas(diesel), [diesel]);
 
   const fromMs = new Date(`${range.from}T00:00:00`).getTime();
   const toMs = new Date(`${range.to}T23:59:59`).getTime();
@@ -176,35 +178,33 @@ export default function AbastecimentoDashboardPage() {
 
   const periodDiesel = useMemo(() => diesel.filter(inRange), [diesel, inRange]);
 
-  // Agrupa os intervalos que FECHAM dentro do período.
+  // Km rodado e diesel abastecido do período, por placa e por motorista.
   const { trucks, drivers, total } = useMemo(() => {
     const t = new Map<string, Agg>();
     const d = new Map<string, Agg>();
     let km = 0;
     let liters = 0;
     for (const e of periodDiesel) {
-      const iv = intervals.get(e.id);
+      const kmRan = kmDeltas.get(e.id) ?? 0;
       const plateAgg =
         t.get(e.plate) ??
-        ({ key: e.plate, label: e.plate, sub: kindLabel(kinds.get(e.plate)), km: 0, liters: 0, stops: 0, avg: null } as Agg);
+        ({ key: e.plate, label: e.plate, sub: kindLabel(kinds.get(e.plate)), km: 0, liters: 0, fills: 0, avg: null } as Agg);
       const name = e.driver_name ?? "Sem nome";
       const drvAgg =
-        d.get(name) ?? ({ key: name, label: name, sub: "", km: 0, liters: 0, stops: 0, avg: null } as Agg);
-      if (iv) {
-        for (const a of [plateAgg, drvAgg]) {
-          a.km += iv.km;
-          a.liters += iv.liters;
-          a.stops += 1;
-        }
-        km += iv.km;
-        liters += iv.liters;
+        d.get(name) ?? ({ key: name, label: name, sub: "", km: 0, liters: 0, fills: 0, avg: null } as Agg);
+      for (const a of [plateAgg, drvAgg]) {
+        a.km += kmRan;
+        a.liters += Number(e.liters);
+        a.fills += 1;
       }
+      km += kmRan;
+      liters += Number(e.liters);
       t.set(e.plate, plateAgg);
       d.set(name, drvAgg);
     }
     const finish = (m: Map<string, Agg>) =>
       [...m.values()]
-        .map((a) => ({ ...a, avg: a.stops > 0 ? a.km / a.liters : null }))
+        .map((a) => ({ ...a, avg: a.km > 0 && a.liters > 0 ? a.km / a.liters : null }))
         .sort((x, y) => (y.avg ?? -1) - (x.avg ?? -1) || x.label.localeCompare(y.label, "pt-BR"));
     const drv = finish(d).map((a) => {
       // Tipos de caminhão que o motorista usou no período (contexto do ranking).
@@ -214,7 +214,7 @@ export default function AbastecimentoDashboardPage() {
       return { ...a, sub: kindsUsed.join(", ") };
     });
     return { trucks: finish(t), drivers: drv, total: { km, liters } };
-  }, [periodDiesel, intervals, kinds]);
+  }, [periodDiesel, kmDeltas, kinds]);
 
   const groupAvg = total.liters > 0 ? total.km / total.liters : null;
 
@@ -223,17 +223,14 @@ export default function AbastecimentoDashboardPage() {
     const all = (history ?? []).filter((e) => e.fuel_type === "diesel");
     return TYPES.map((k) => {
       const list = all.filter((e) => kinds.get(e.plate) === k.value);
-      const iv = fuelIntervals(list);
+      const deltas = fuelKmDeltas(list);
       let km = 0;
       let liters = 0;
       for (const e of list.filter(inRange)) {
-        const x = iv.get(e.id);
-        if (x) {
-          km += x.km;
-          liters += x.liters;
-        }
+        km += deltas.get(e.id) ?? 0;
+        liters += Number(e.liters);
       }
-      return { kind: k, km, liters, avg: liters > 0 ? km / liters : null };
+      return { kind: k, km, liters, avg: km > 0 && liters > 0 ? km / liters : null };
     });
   }, [history, kinds, inRange]);
 
@@ -249,19 +246,16 @@ export default function AbastecimentoDashboardPage() {
       for (const e of diesel) {
         const t = new Date(e.fueled_at);
         if (t < start || t >= end) continue;
-        const x = intervals.get(e.id);
-        if (x) {
-          km += x.km;
-          liters += x.liters;
-        }
+        km += kmDeltas.get(e.id) ?? 0;
+        liters += Number(e.liters);
       }
       out.push({
         label: start.toLocaleDateString("pt-BR", { month: "short" }).replace(".", ""),
-        avg: liters > 0 ? km / liters : null,
+        avg: km > 0 && liters > 0 ? km / liters : null,
       });
     }
     return out;
-  }, [diesel, intervals]);
+  }, [diesel, kmDeltas]);
 
   const spent = useMemo(
     () => periodDiesel.reduce((s, e) => s + (e.price_per_liter ? Number(e.price_per_liter) * Number(e.liters) : 0), 0),
@@ -291,9 +285,9 @@ export default function AbastecimentoDashboardPage() {
   const typeTitle = typeFilter ? FLEET_KINDS.find((k) => k.value === typeFilter)?.plural : "todos os tipos";
 
   const kpis: { label: string; value: string; hint?: string }[] = [
-    { label: "Média do grupo", value: groupAvg ? formatAverage(groupAvg) : "—", hint: `Diesel · ${typeTitle}` },
-    { label: "Km rodados (tanque cheio)", value: formatKm(total.km), hint: "Soma dos intervalos entre tanques cheios" },
-    { label: "Diesel abastecido", value: `${formatLiters(dieselLiters)} L` },
+    { label: "Média do grupo", value: groupAvg ? formatAverage(groupAvg) : "—", hint: `Km total ÷ diesel total · ${typeTitle}` },
+    { label: "Km rodados no período", value: formatKm(total.km), hint: "Soma do km rodado de todas as placas (leitura do painel − leitura do abastecimento anterior)" },
+    { label: "Diesel abastecido", value: `${formatLiters(dieselLiters)} L`, hint: "Total abastecido no período" },
     { label: "ARLA abastecido", value: `${formatLiters(arlaLiters)} L` },
     { label: "Gasto fora do pátio", value: spent > 0 ? formatMoney(spent) : "—", hint: "Só abastecimentos com preço informado" },
   ];
@@ -302,7 +296,7 @@ export default function AbastecimentoDashboardPage() {
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight text-navy-900">Dashboard do abastecimento</h1>
       <p className="mt-1 text-sm text-navy-500">
-        Médias de diesel (km/l) pelo método do tanque cheio. Compare dentro do mesmo tipo de veículo.
+        Média de diesel (km/l) = km total rodado ÷ diesel total abastecido. Compare dentro do mesmo tipo de veículo.
       </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -388,7 +382,7 @@ export default function AbastecimentoDashboardPage() {
                         {t.avg ? formatAverage(t.avg) : "—"}
                       </div>
                       <div className="text-xs text-navy-500">
-                        {t.liters > 0 ? `${formatKm(t.km)} km em ${formatLiters(t.liters)} L` : "sem tanque cheio no período"}
+                        {t.liters > 0 ? `${formatKm(t.km)} km ÷ ${formatLiters(t.liters)} L` : "sem abastecimento no período"}
                       </div>
                     </div>
                   ))}
@@ -427,7 +421,7 @@ export default function AbastecimentoDashboardPage() {
                         style={{ height: m.avg ? `${(m.avg / evMax) * 100}%` : "2px", opacity: m.avg ? 1 : 0.3 }}
                         role="img"
                         aria-label={`${m.label}: ${m.avg ? formatAverage(m.avg) : "sem média"}`}
-                        title={m.avg ? formatAverage(m.avg) : "Sem tanque cheio no mês"}
+                        title={m.avg ? formatAverage(m.avg) : "Sem km rodado no mês"}
                       />
                       <span className="text-xs text-navy-500">{m.label}</span>
                     </div>
@@ -436,9 +430,10 @@ export default function AbastecimentoDashboardPage() {
               </section>
 
               <p className="mt-4 text-xs text-navy-500">
-                Como a média é calculada: km rodados entre dois tanques cheios ÷ litros colocados nesse intervalo. Cada
-                intervalo conta para o caminhão e para o motorista do abastecimento que completou o tanque. Quem não tem
-                tanque cheio no período fica sem média. As setas comparam com a média do grupo filtrado.
+                Como a média é calculada: km total rodado no período ÷ diesel total abastecido no período. O km rodado de
+                cada abastecimento é a diferença da leitura do painel para o abastecimento anterior da mesma placa
+                (o primeiro registro de uma placa não tem anterior e não soma km). Cada abastecimento conta para o
+                caminhão e para o motorista que o fez. As setas comparam com a média do grupo filtrado.
               </p>
             </>
           )}
