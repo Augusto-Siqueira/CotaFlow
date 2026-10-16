@@ -214,7 +214,7 @@ export function SidebarMenu({
             {(role === "manutencao"
               ? NAV.filter((e) => e.key === "inicio" || e.key === "manutencao")
               : role === "abastecimento"
-                ? NAV.filter((e) => e.key === "inicio" || e.key === "abastecimento")
+                ? NAV.filter((e) => ["inicio", "programacao", "abastecimento"].includes(e.key))
                 : NAV.filter((e) => !e.fuelOnly || role === "admin")
             ).map((entry) => {
               if (entry.href) {
@@ -237,7 +237,9 @@ export function SidebarMenu({
                 (i) =>
                   (!i.adminOnly || role === "admin") &&
                   (!i.commercialOnly || role === "admin" || role === "comercial") &&
-                  (!i.fuelOnly || role === "admin" || role === "abastecimento")
+                  (!i.fuelOnly || role === "admin" || role === "abastecimento") &&
+                  // Perfil Abastecimento: da Programação, só a tela do dia (somente leitura).
+                  (role !== "abastecimento" || entry.key !== "programacao" || i.href === "/programacao")
               );
               if (items.length === 0) return null;
               const isOpen = expanded.has(entry.key);
