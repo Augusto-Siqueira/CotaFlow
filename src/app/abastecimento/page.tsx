@@ -355,7 +355,7 @@ export default function AbastecimentoPage() {
               type="button"
               onClick={() => openPhotos(e)}
               title={`Ver foto ${e.location_type === "externo" ? "do odômetro" : "da tela da bomba"} (${e.photos.length})`}
-              className="inline-flex items-center justify-center rounded-md border border-amber-400 bg-amber-50 px-1.5 py-1 text-[11px] font-medium leading-none text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-amber-400 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
             >
               {e.location_type === "externo" ? "Odômetro" : "Bomba"}
             </button>
