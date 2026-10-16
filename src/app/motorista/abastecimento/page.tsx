@@ -28,10 +28,9 @@ function pad(n: number) {
 function localDate(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-/** Valor para <input type="datetime-local"> com a hora de agora. */
-function nowLocalInput() {
-  const d = new Date();
-  return `${localDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/** Só a data (sem hora). Gravada ao meio-dia para nunca virar o dia por fuso. */
+function todayInput() {
+  return localDate(new Date());
 }
 
 function Toggle<T extends string>({
@@ -75,7 +74,7 @@ export default function AbastecimentoMotoristaPage() {
 
   const [fuelType, setFuelType] = useState<FuelType>("diesel");
   const [plate, setPlate] = useState("");
-  const [when, setWhen] = useState(nowLocalInput);
+  const [when, setWhen] = useState(todayInput);
   const [where, setWhere] = useState<"patio" | "externo">("patio");
   const [station, setStation] = useState("");
   const [price, setPrice] = useState("");
@@ -147,7 +146,7 @@ export default function AbastecimentoMotoristaPage() {
   }
 
   function resetForm() {
-    setWhen(nowLocalInput());
+    setWhen(todayInput());
     setWhere("patio");
     setStation("");
     setPrice("");
@@ -167,7 +166,7 @@ export default function AbastecimentoMotoristaPage() {
     const litersN = parseDecimal(liters);
     const priceN = parseDecimal(price);
     if (!chosenPlate || !knownPlate) return setError("Escolha a placa do caminhão na lista.");
-    if (!when) return setError("Informe a data e a hora do abastecimento.");
+    if (!when) return setError("Informe a data do abastecimento.");
     if (kmNumber <= 0) return setError("Informe o km do painel.");
     if (litersN === null) return setError("Informe quantos litros foram abastecidos.");
     if (where === "externo") {
@@ -184,7 +183,7 @@ export default function AbastecimentoMotoristaPage() {
         driver_name: driverName,
         plate: chosenPlate,
         fuel_type: fuelType,
-        fueled_at: new Date(when).toISOString(),
+        fueled_at: new Date(`${when}T12:00:00`).toISOString(),
         location_type: where,
         location: where === "externo" ? station.trim() : null,
         price_per_liter: where === "externo" ? priceN : null,
@@ -257,9 +256,16 @@ export default function AbastecimentoMotoristaPage() {
 
         <div>
           <label className={labelCls} htmlFor="ab-data">
-            Data e hora
+            Data
           </label>
-          <input id="ab-data" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={fieldCls} />
+          <input
+            id="ab-data"
+            type="date"
+            value={when}
+            max={todayInput()}
+            onChange={(e) => setWhen(e.target.value)}
+            className={fieldCls}
+          />
         </div>
 
         <div>
@@ -435,7 +441,7 @@ export default function AbastecimentoMotoristaPage() {
                   {FUEL_LABEL[m.fuel_type]} · {formatLiters(m.liters)} L
                 </span>
                 <span className="text-xs text-navy-500">
-                  {new Date(m.fueled_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                  {new Date(m.fueled_at).toLocaleDateString("pt-BR")}
                 </span>
               </div>
               <div className="text-xs text-navy-500">

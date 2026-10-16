@@ -35,12 +35,13 @@ function monthRange(month: string) {
   const [y, m] = month.split("-").map(Number);
   return { start: new Date(y, m - 1, 1), end: new Date(y, m, 1) };
 }
-function toLocalInput(iso: string) {
+function toDateInput(iso: string) {
   const d = new Date(iso);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+// Abastecimento guarda só a data (gravada ao meio-dia).
 function fmtWhen(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(iso).toLocaleDateString("pt-BR");
 }
 
 interface EditState {
@@ -84,7 +85,8 @@ export default function AbastecimentoPage() {
       .select("*")
       .gte("fueled_at", from.toISOString())
       .lt("fueled_at", end.toISOString())
-      .order("fueled_at", { ascending: false });
+      .order("fueled_at", { ascending: false })
+      .order("odometer_km", { ascending: false });
     if (error) toastError(`Não foi possível carregar (${error.message}).`);
     setEntries((data as FuelEntry[] | null) ?? []);
   }, [month, toastError]);
@@ -182,7 +184,7 @@ export default function AbastecimentoPage() {
     setForm({
       fuel_type: e.fuel_type,
       plate: e.plate,
-      fueled_at: toLocalInput(e.fueled_at),
+      fueled_at: toDateInput(e.fueled_at),
       location_type: e.location_type,
       location: e.location ?? "",
       price: e.price_per_liter ? String(e.price_per_liter).replace(".", ",") : "",
@@ -210,7 +212,7 @@ export default function AbastecimentoPage() {
       .update({
         fuel_type: form.fuel_type,
         plate: form.plate.trim().toUpperCase(),
-        fueled_at: new Date(form.fueled_at).toISOString(),
+        fueled_at: new Date(`${form.fueled_at}T12:00:00`).toISOString(),
         location_type: form.location_type,
         location: form.location_type === "externo" ? form.location.trim() : null,
         price_per_liter: form.location_type === "externo" ? price : null,
@@ -495,8 +497,8 @@ export default function AbastecimentoPage() {
                 <input id="ed-placa" value={form.plate} onChange={(e) => setForm({ ...form, plate: e.target.value })} className={`${inputCls} uppercase`} />
               </div>
               <div className="col-span-2">
-                <label htmlFor="ed-data" className="mb-1 block text-sm font-medium text-navy-700">Data e hora</label>
-                <input id="ed-data" type="datetime-local" value={form.fueled_at} onChange={(e) => setForm({ ...form, fueled_at: e.target.value })} className={inputCls} />
+                <label htmlFor="ed-data" className="mb-1 block text-sm font-medium text-navy-700">Data</label>
+                <input id="ed-data" type="date" value={form.fueled_at} onChange={(e) => setForm({ ...form, fueled_at: e.target.value })} className={inputCls} />
               </div>
               <div>
                 <label htmlFor="ed-onde" className="mb-1 block text-sm font-medium text-navy-700">Local</label>
