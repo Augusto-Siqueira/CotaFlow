@@ -59,6 +59,7 @@ export const NAV: NavEntry[] = [
       { href: "/clients", label: "Clientes" },
       { href: "/vehicles", label: "Veículos e motoristas" },
       { href: "/addresses", label: "Endereços" },
+      { href: "/oficinas", label: "Oficinas" },
     ],
   },
   {

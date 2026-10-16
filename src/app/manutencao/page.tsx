@@ -136,8 +136,6 @@ export default function ManutencaoPage() {
   const [releaseAt, setReleaseAt] = useState("");
   const [releaseError, setReleaseError] = useState<string | null>(null);
 
-  const [showWorkshops, setShowWorkshops] = useState(false);
-  const [newWorkshop, setNewWorkshop] = useState("");
 
   // Defeitos relatados (triagem -> agendada -> em oficina -> concluída)
   const [reports, setReports] = useState<MaintenanceReport[] | null>(null);
@@ -423,37 +421,6 @@ export default function ManutencaoPage() {
     await Promise.all([loadOrders(), loadReports()]);
   }
 
-  async function addWorkshop() {
-    const name = newWorkshop.trim();
-    if (!name) return;
-    const { error } = await supabase.from("maintenance_workshops").insert({ name });
-    if (error) {
-      toastError(
-        /duplicate|unique/i.test(error.message)
-          ? "Essa oficina já está cadastrada."
-          : `Não foi possível cadastrar (${error.message}).`
-      );
-      return;
-    }
-    setNewWorkshop("");
-    await loadWorkshops();
-  }
-
-  async function removeWorkshop(w: Workshop) {
-    const ok = await askConfirm(`Excluir a oficina ${w.name}?`);
-    if (!ok) return;
-    const { error } = await supabase.from("maintenance_workshops").delete().eq("id", w.id);
-    if (error) {
-      toastError(
-        /foreign key|violates/i.test(error.message)
-          ? "Essa oficina tem manutenções lançadas e não pode ser excluída."
-          : `Não foi possível excluir (${error.message}).`
-      );
-      return;
-    }
-    await loadWorkshops();
-  }
-
   function openNewReport() {
     setReportForm({ plate: "", category: "Freios", severity: 2, description: "" });
     setReportError(null);
@@ -703,13 +670,6 @@ export default function ManutencaoPage() {
             <>
               <button
                 type="button"
-                onClick={() => setShowWorkshops(true)}
-                className={buttonClasses("secondary", "md")}
-              >
-                Oficinas
-              </button>
-              <button
-                type="button"
                 onClick={openNew}
                 className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
               >
@@ -766,6 +726,15 @@ export default function ManutencaoPage() {
                   </option>
                 ))}
               </select>
+              {workshops.length === 0 && (
+                <p className="mt-1 text-xs text-navy-500">
+                  Cadastre as oficinas em{" "}
+                  <Link href="/oficinas" className="font-medium text-brand-700 underline">
+                    Cadastros › Oficinas
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
             <div>
               <label className={labelCls} htmlFor="man-tipo">
@@ -1420,63 +1389,6 @@ export default function ManutencaoPage() {
         </Modal>
       )}
 
-      {canEditMaintenance && showWorkshops && (
-        <Modal onClose={() => setShowWorkshops(false)} labelledBy="workshops-title" className="max-w-md">
-          <h2 id="workshops-title" className="text-base font-medium">
-            Oficinas
-          </h2>
-          <div className="mt-4 flex gap-2">
-            <input
-              type="text"
-              aria-label="Nome da nova oficina"
-              value={newWorkshop}
-              onChange={(e) => setNewWorkshop(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addWorkshop();
-                }
-              }}
-              className={inputCls}
-              placeholder="Nome da oficina"
-            />
-            <button
-              type="button"
-              onClick={addWorkshop}
-              disabled={!newWorkshop.trim()}
-              className={buttonClasses("primary", "md")}
-            >
-              Adicionar
-            </button>
-          </div>
-          <ul className="mt-4 max-h-72 divide-y divide-navy-100 overflow-y-auto">
-            {workshops.length === 0 && (
-              <li className="py-3 text-sm text-navy-500">Nenhuma oficina cadastrada.</li>
-            )}
-            {workshops.map((w) => (
-              <li key={w.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="min-w-0 truncate text-navy-900">{w.name}</span>
-                <button
-                  type="button"
-                  onClick={() => removeWorkshop(w)}
-                  className={buttonClasses("danger", "sm")}
-                >
-                  Excluir
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setShowWorkshops(false)}
-              className={buttonClasses("secondary", "md")}
-            >
-              Fechar
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
