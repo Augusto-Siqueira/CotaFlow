@@ -6,18 +6,29 @@ import { useAuth } from "@/lib/auth";
 import { VehiclesTabs } from "@/components/VehiclesTabs";
 import {
   FLEET_KINDS,
+  certStatuses,
+  certText,
   isValidPlate,
   normalizePlate,
+  type CertKey,
+  type CertLevel,
+  type FleetCertFields,
   type FleetKind,
 } from "@/lib/fleet";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 
-interface Unit {
+interface Unit extends FleetCertFields {
   id: string;
-  plate: string;
-  kind: FleetKind;
 }
+
+const LEVEL_CLS: Record<CertLevel, string> = {
+  vencida: "bg-red-100 text-red-800",
+  vencendo: "bg-amber-100 text-amber-800",
+  ok: "bg-teal-100 text-teal-800",
+  na: "bg-navy-100 text-navy-600",
+  sem_data: "bg-navy-100 text-navy-500",
+};
 
 const inputCls =
   "w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
@@ -37,7 +48,7 @@ export default function FleetPage() {
   async function loadUnits() {
     const { data, error } = await supabase
       .from("fleet_units")
-      .select("id, plate, kind")
+      .select("id, plate, kind, civ_due, civ_na, cipp_due, cipp_na")
       .order("plate");
     if (error) {
       setListError(error.message);
@@ -81,6 +92,17 @@ export default function FleetPage() {
     }
     setPlate("");
     await loadUnits();
+  }
+
+  // Grava a data (ou o "N/A") de uma capacitação da placa e atualiza a lista na hora.
+  async function saveCert(unit: Unit, cert: CertKey, due: string | null, na: boolean) {
+    const patch = { [`${cert}_due`]: na ? null : due, [`${cert}_na`]: na };
+    const { error } = await supabase.from("fleet_units").update(patch).eq("id", unit.id);
+    if (error) {
+      toastError(`Não foi possível salvar a capacitação (${error.message}).`);
+      return;
+    }
+    setUnits((prev) => (prev ?? []).map((u) => (u.id === unit.id ? { ...u, ...patch } : u)));
   }
 
   async function handleDelete(unit: Unit) {
@@ -209,24 +231,59 @@ export default function FleetPage() {
                         Nenhuma placa cadastrada.
                       </p>
                     ) : (
-                      <ul className="grid gap-px bg-navy-100 sm:grid-cols-2 lg:grid-cols-3">
+                      <ul className="grid gap-px bg-navy-100 sm:grid-cols-2 xl:grid-cols-3">
                         {items.map((u) => (
-                          <li
-                            key={u.id}
-                            className="flex items-center justify-between bg-white px-5 py-3"
-                          >
-                            <span className="font-medium tracking-wide text-navy-900">
-                              {u.plate}
-                            </span>
-                            {canEditSchedule && (
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(u)}
-                                className={buttonClasses("danger", "sm")}
-                              >
-                                Excluir
-                              </button>
-                            )}
+                          <li key={u.id} className="bg-white px-5 py-3">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium tracking-wide text-navy-900">
+                                {u.plate}
+                              </span>
+                              {canEditSchedule && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(u)}
+                                  className={buttonClasses("danger", "sm")}
+                                >
+                                  Excluir
+                                </button>
+                              )}
+                            </div>
+                            <ul className="mt-2 space-y-1.5">
+                              {certStatuses(u).map((c) => (
+                                <li key={c.cert} className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="w-9 font-semibold text-navy-700">{c.label}</span>
+                                  {canEditSchedule ? (
+                                    <>
+                                      <input
+                                        type="date"
+                                        aria-label={`${c.label} de ${u.plate}: vencimento`}
+                                        value={c.due ?? ""}
+                                        disabled={c.level === "na"}
+                                        onChange={(e) => saveCert(u, c.cert, e.target.value || null, false)}
+                                        className="rounded-md border border-navy-300 px-2 py-1 text-xs text-navy-900 disabled:cursor-not-allowed disabled:bg-navy-50"
+                                      />
+                                      <label className="flex items-center gap-1 text-navy-600">
+                                        <input
+                                          type="checkbox"
+                                          checked={c.level === "na"}
+                                          onChange={(e) => saveCert(u, c.cert, null, e.target.checked)}
+                                        />
+                                        N/A
+                                      </label>
+                                    </>
+                                  ) : null}
+                                  <span className={`rounded-full px-2 py-0.5 font-medium ${LEVEL_CLS[c.level]}`}>
+                                    {c.level === "na"
+                                      ? "N/A"
+                                      : c.level === "sem_data"
+                                        ? "sem data"
+                                        : c.level === "ok"
+                                          ? `vence em ${new Date(`${c.due}T12:00:00`).toLocaleDateString("pt-BR")}`
+                                          : certText(c).replace(`${c.label} `, "")}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
                           </li>
                         ))}
                       </ul>

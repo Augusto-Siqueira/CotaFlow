@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { normalizePlate } from "@/lib/fleet";
+import { certAlerts, certText, normalizePlate, type FleetCertFields } from "@/lib/fleet";
+import { FleetCertAlert } from "@/components/FleetCertAlert";
 import { SearchSelect } from "@/components/SearchSelect";
 import {
   LOADING_STATUSES,
@@ -204,6 +205,7 @@ export default function ProgramacaoPage() {
   const [pendingDestination, setPendingDestination] = useState("");
   const [tractorPlates, setTractorPlates] = useState<string[]>([]);
   const [trailerPlates, setTrailerPlates] = useState<string[]>([]);
+  const [fleetCerts, setFleetCerts] = useState<Map<string, FleetCertFields>>(new Map());
   const [drivers, setDrivers] = useState<{ nickname: string; name: string }[]>([]);
 
   const [showForm, setShowForm] = useState(false);
@@ -430,7 +432,7 @@ export default function ProgramacaoPage() {
           .eq("status", "vigente")
           .order("created_at", { ascending: false })
           .limit(300),
-        supabase.from("fleet_units").select("plate, kind").order("plate"),
+        supabase.from("fleet_units").select("plate, kind, civ_due, civ_na, cipp_due, cipp_na").order("plate"),
         supabase.from("drivers").select("name, nickname").order("nickname"),
       ]);
       setDrivers(
@@ -445,7 +447,8 @@ export default function ProgramacaoPage() {
           .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
       );
       setQuotes((quotesRes.data as unknown as QuoteOption[]) ?? []);
-      const fleet = fleetRes.data ?? [];
+      const fleet = (fleetRes.data ?? []) as FleetCertFields[];
+      setFleetCerts(new Map(fleet.map((f) => [f.plate, f])));
       setTractorPlates(
         fleet.filter((f) => f.kind !== "semirreboque").map((f) => f.plate)
       );
@@ -570,6 +573,23 @@ export default function ProgramacaoPage() {
 
   const clientLabels = useMemo(() => clients.map((c) => c.label), [clients]);
   const driverNicks = useMemo(() => drivers.map((d) => d.nickname), [drivers]);
+
+  // Capacitação vencida ou perto de vencer: só avisa, não impede de lançar.
+  function certHint(plate: string): string | undefined {
+    const u = fleetCerts.get(plate);
+    const a = u ? certAlerts(u) : [];
+    return a.length ? `⚠ ${a.map(certText).join("; ")}` : undefined;
+  }
+  function certWarning(plate: string | null | undefined) {
+    const u = plate ? fleetCerts.get(plate) : undefined;
+    const a = u ? certAlerts(u) : [];
+    if (a.length === 0) return null;
+    return (
+      <p className={`mt-1 text-xs font-medium ${a.some((c) => c.level === "vencida") ? "text-red-600" : "text-amber-700"}`}>
+        ⚠ {a.map(certText).join("; ")}.
+      </p>
+    );
+  }
 
   const fieldChecks = {
     client_name: resolve(form.client_name, clientLabels),
@@ -1017,6 +1037,7 @@ export default function ProgramacaoPage() {
         </div>
       </div>
 
+      <FleetCertAlert />
       <SyncIssuesAlert kinds={["comprovante"]} />
       <DayNotepad date={date} canEdit={canEditSchedule} />
 
@@ -1249,7 +1270,7 @@ export default function ProgramacaoPage() {
               <SearchSelect id="prog-placa-do-cavalo-truck"
                 value={form.plate}
                 onChange={(v) => updateForm("plate", normalizePlate(v))}
-                options={tractorPlates.map((p) => ({ value: p }))}
+                options={tractorPlates.map((p) => ({ value: p, hint: certHint(p) }))}
                 className={`${inputCls} uppercase tracking-wide`}
                 placeholder="ABC1D23"
               />
@@ -1258,6 +1279,7 @@ export default function ProgramacaoPage() {
                   Placa não cadastrada na frota.
                 </p>
               )}
+              {certWarning(fieldChecks.plate)}
               {fieldChecks.plate && inMaintenance.has(fieldChecks.plate) && (
                 <p className="mt-1 text-xs font-medium text-red-600">
                   ⚠ Em manutenção desde {fmtDateTime(inMaintenance.get(fieldChecks.plate)!.entry_at)}. Só Programado.
@@ -1271,7 +1293,7 @@ export default function ProgramacaoPage() {
               <SearchSelect id="prog-placa-do-semi-reboque"
                 value={form.trailer_plate}
                 onChange={(v) => updateForm("trailer_plate", normalizePlate(v))}
-                options={trailerPlates.map((p) => ({ value: p }))}
+                options={trailerPlates.map((p) => ({ value: p, hint: certHint(p) }))}
                 className={`${inputCls} uppercase tracking-wide`}
                 placeholder="ABC1D23"
               />
@@ -1280,6 +1302,7 @@ export default function ProgramacaoPage() {
                   Placa não cadastrada na frota.
                 </p>
               )}
+              {certWarning(fieldChecks.trailer_plate)}
               {fieldChecks.trailer_plate && inMaintenance.has(fieldChecks.trailer_plate) && (
                 <p className="mt-1 text-xs font-medium text-red-600">
                   ⚠ Em manutenção desde {fmtDateTime(inMaintenance.get(fieldChecks.trailer_plate)!.entry_at)}. Só Programado.
