@@ -5,12 +5,14 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { VehiclesTabs } from "@/components/VehiclesTabs";
 import {
+  FLEET_CERT_COLUMNS,
   FLEET_KINDS,
   certStatuses,
   certText,
   isValidPlate,
   normalizePlate,
   type CertKey,
+  type CronoStage,
   type CertLevel,
   type FleetCertFields,
   type FleetKind,
@@ -48,7 +50,7 @@ export default function FleetPage() {
   async function loadUnits() {
     const { data, error } = await supabase
       .from("fleet_units")
-      .select("id, plate, kind, civ_due, civ_na, cipp_due, cipp_na")
+      .select(`id, ${FLEET_CERT_COLUMNS}`)
       .order("plate");
     if (error) {
       setListError(error.message);
@@ -95,8 +97,12 @@ export default function FleetPage() {
   }
 
   // Grava a data (ou o "N/A") de uma capacitação da placa e atualiza a lista na hora.
-  async function saveCert(unit: Unit, cert: CertKey, due: string | null, na: boolean) {
-    const patch = { [`${cert}_due`]: na ? null : due, [`${cert}_na`]: na };
+  async function saveCert(unit: Unit, cert: CertKey, due: string | null, na: boolean, stage?: CronoStage | null) {
+    // Cronotacógrafo: vencimento + fase (preliminar ou definitivo); não tem "N/A".
+    const patch: Record<string, unknown> =
+      cert === "crono"
+        ? { crono_due: due, crono_stage: stage ?? null }
+        : { [`${cert}_due`]: na ? null : due, [`${cert}_na`]: na };
     const { error } = await supabase.from("fleet_units").update(patch).eq("id", unit.id);
     if (error) {
       toastError(`Não foi possível salvar a capacitação (${error.message}).`);
@@ -251,7 +257,7 @@ export default function FleetPage() {
                             <ul className="mt-2 space-y-1.5">
                               {certStatuses(u).map((c) => (
                                 <li key={c.cert} className="flex flex-wrap items-center gap-2 text-xs">
-                                  <span className="w-9 font-semibold text-navy-700">{c.label}</span>
+                                  <span className={`font-semibold text-navy-700 ${c.cert === "crono" ? "" : "w-9"}`}>{c.label}</span>
                                   {canEditSchedule ? (
                                     <>
                                       <input
@@ -259,17 +265,30 @@ export default function FleetPage() {
                                         aria-label={`${c.label} de ${u.plate}: vencimento`}
                                         value={c.due ?? ""}
                                         disabled={c.level === "na"}
-                                        onChange={(e) => saveCert(u, c.cert, e.target.value || null, false)}
+                                        onChange={(e) => saveCert(u, c.cert, e.target.value || null, false, u.crono_stage)}
                                         className="rounded-md border border-navy-300 px-2 py-1 text-xs text-navy-900 disabled:cursor-not-allowed disabled:bg-navy-50"
                                       />
-                                      <label className="flex items-center gap-1 text-navy-600">
-                                        <input
-                                          type="checkbox"
-                                          checked={c.level === "na"}
-                                          onChange={(e) => saveCert(u, c.cert, null, e.target.checked)}
-                                        />
-                                        N/A
-                                      </label>
+                                      {c.cert === "crono" ? (
+                                        (["preliminar", "definitivo"] as const).map((st) => (
+                                          <label key={st} className="flex items-center gap-1 text-navy-600">
+                                            <input
+                                              type="checkbox"
+                                              checked={u.crono_stage === st}
+                                              onChange={(e) => saveCert(u, "crono", u.crono_due, false, e.target.checked ? st : null)}
+                                            />
+                                            {st === "preliminar" ? "Preliminar" : "Definitivo"}
+                                          </label>
+                                        ))
+                                      ) : (
+                                        <label className="flex items-center gap-1 text-navy-600">
+                                          <input
+                                            type="checkbox"
+                                            checked={c.level === "na"}
+                                            onChange={(e) => saveCert(u, c.cert, null, e.target.checked)}
+                                          />
+                                          N/A
+                                        </label>
+                                      )}
                                     </>
                                   ) : null}
                                   <span className={`rounded-full px-2 py-0.5 font-medium ${LEVEL_CLS[c.level]}`}>
@@ -279,7 +298,7 @@ export default function FleetPage() {
                                         ? "sem data"
                                         : c.level === "ok"
                                           ? `vence em ${new Date(`${c.due}T12:00:00`).toLocaleDateString("pt-BR")}`
-                                          : certText(c).replace(`${c.label} `, "")}
+                                          : certText(c).replace(" — emitir o definitivo", "").replace(`${c.label} `, "")}
                                   </span>
                                 </li>
                               ))}

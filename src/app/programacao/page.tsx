@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { certAlerts, certText, normalizePlate, type FleetCertFields } from "@/lib/fleet";
+import { FLEET_CERT_COLUMNS, certAlerts, certText, normalizePlate, type FleetCertFields } from "@/lib/fleet";
 import { FleetCertAlert } from "@/components/FleetCertAlert";
 import { SearchSelect } from "@/components/SearchSelect";
 import {
@@ -432,7 +432,7 @@ export default function ProgramacaoPage() {
           .eq("status", "vigente")
           .order("created_at", { ascending: false })
           .limit(300),
-        supabase.from("fleet_units").select("plate, kind, civ_due, civ_na, cipp_due, cipp_na").order("plate"),
+        supabase.from("fleet_units").select(FLEET_CERT_COLUMNS).order("plate"),
         supabase.from("drivers").select("name, nickname").order("nickname"),
       ]);
       setDrivers(

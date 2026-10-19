@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import {
+  FLEET_CERT_COLUMNS,
   FLEET_KINDS,
   certStatuses,
   normalizePlate,
@@ -28,6 +29,7 @@ interface Item {
   kind: string;
   cert: CertKey;
   label: string;
+  stage: "preliminar" | "definitivo" | null;
   due: string | null;
   days: number | null;
   level: CertLevel;
@@ -66,7 +68,7 @@ export default function CapacitacoesPage() {
   useEffect(() => {
     supabase
       .from("fleet_units")
-      .select("plate, kind, civ_due, civ_na, cipp_due, cipp_na")
+      .select(FLEET_CERT_COLUMNS)
       .order("plate")
       .then(({ data, error: err }) => {
         if (err) setError(err.message);
@@ -85,7 +87,7 @@ export default function CapacitacoesPage() {
       for (const s of certStatuses(u)) {
         if (s.level === "na") continue;
         if (cert && s.cert !== cert) continue;
-        out.push({ plate: u.plate, kind: u.kind, kindLabel, cert: s.cert, label: s.label, due: s.due, days: s.days, level: s.level });
+        out.push({ plate: u.plate, kind: u.kind, kindLabel, cert: s.cert, label: s.label, stage: s.stage, due: s.due, days: s.days, level: s.level });
       }
     }
     return out;
@@ -106,14 +108,14 @@ export default function CapacitacoesPage() {
   // Vencimentos por mês: vencidas primeiro, depois os próximos meses (CIV e CIPP separados).
   const months = useMemo(() => {
     const now = new Date();
-    const cols: { label: string; civ: number; cipp: number; tone: "red" | "brand" }[] = [
-      { label: "Vencidas", civ: 0, cipp: 0, tone: "red" },
+    const cols: { label: string; civ: number; cipp: number; crono: number; tone: "red" | "brand" }[] = [
+      { label: "Vencidas", civ: 0, cipp: 0, crono: 0, tone: "red" },
     ];
     for (let i = 0; i < MONTHS_AHEAD; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      cols.push({ label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""), civ: 0, cipp: 0, tone: "brand" });
+      cols.push({ label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""), civ: 0, cipp: 0, crono: 0, tone: "brand" });
     }
-    cols.push({ label: "Depois", civ: 0, cipp: 0, tone: "brand" });
+    cols.push({ label: "Depois", civ: 0, cipp: 0, crono: 0, tone: "brand" });
     for (const i of items) {
       if (i.due === null || i.days === null) continue;
       let idx: number;
@@ -127,7 +129,7 @@ export default function CapacitacoesPage() {
     }
     return cols;
   }, [items]);
-  const monthMax = Math.max(...months.map((m) => m.civ + m.cipp), 1);
+  const monthMax = Math.max(...months.map((m) => m.civ + m.cipp + m.crono), 1);
 
   // Situação por tipo de veículo.
   const byKind = useMemo(
@@ -177,11 +179,11 @@ export default function CapacitacoesPage() {
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight text-navy-900">Capacitações</h1>
       <p className="mt-1 text-sm text-navy-500">
-        CIV e CIPP da frota. As datas são lançadas na tela{" "}
+        CIV, CIPP e cronotacógrafo da frota. As datas são lançadas na tela{" "}
         <Link href="/vehicles/frota" className="font-medium underline">
           Veículos
         </Link>
-        . Cavalo mecânico tem só CIV; truck, bitruck e semi-reboque têm CIV e CIPP.
+        . Cavalo mecânico: CIV e cronotacógrafo. Truck e bitruck: CIV, CIPP e cronotacógrafo. Semi-reboque: CIV e CIPP.
       </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -203,9 +205,10 @@ export default function CapacitacoesPage() {
             Capacitação
           </label>
           <select id="cap-cert" value={cert} onChange={(e) => setCert(e.target.value as "" | CertKey)} className={selectCls}>
-            <option value="">CIV e CIPP</option>
+            <option value="">Todas</option>
             <option value="civ">Só CIV</option>
             <option value="cipp">Só CIPP</option>
+            <option value="crono">Só cronotacógrafo</option>
           </select>
         </div>
         <div>
@@ -249,7 +252,7 @@ export default function CapacitacoesPage() {
               </h2>
               <div className="flex h-56 items-end gap-2 px-5 pb-3 pt-6">
                 {months.map((m) => {
-                  const total = m.civ + m.cipp;
+                  const total = m.civ + m.cipp + m.crono;
                   return (
                     <div key={m.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
                       <span className="text-xs tabular-nums text-navy-700">{total || ""}</span>
@@ -257,11 +260,12 @@ export default function CapacitacoesPage() {
                         className="flex w-full max-w-14 flex-col-reverse overflow-hidden rounded-t"
                         style={{ height: total ? `${(total / monthMax) * 100}%` : "2px", opacity: total ? 1 : 0.3 }}
                         role="img"
-                        aria-label={`${m.label}: ${m.civ} CIV e ${m.cipp} CIPP`}
-                        title={`${m.label}: ${m.civ} CIV · ${m.cipp} CIPP`}
+                        aria-label={`${m.label}: ${m.civ} CIV, ${m.cipp} CIPP e ${m.crono} cronotacógrafo`}
+                        title={`${m.label}: ${m.civ} CIV · ${m.cipp} CIPP · ${m.crono} cronotacógrafo`}
                       >
                         <div className={m.tone === "red" ? "bg-red-600" : "bg-brand-600"} style={{ flex: m.civ }} />
                         <div className={m.tone === "red" ? "bg-red-300" : "bg-brand-300"} style={{ flex: m.cipp }} />
+                        <div className={m.tone === "red" ? "bg-red-400" : "bg-sky-500"} style={{ flex: m.crono }} />
                       </div>
                       <span className={`text-xs ${m.tone === "red" ? "font-medium text-red-700" : "text-navy-500"}`}>{m.label}</span>
                     </div>
@@ -269,7 +273,7 @@ export default function CapacitacoesPage() {
                 })}
               </div>
               <p className="border-t border-navy-100 px-5 py-2 text-xs text-navy-500">
-                Cor escura = CIV, cor clara = CIPP. “Vencidas” soma tudo o que já passou da data.
+                Verde escuro = CIV, verde claro = CIPP, azul = cronotacógrafo. “Vencidas” soma tudo o que já passou da data.
               </p>
             </section>
 
@@ -345,7 +349,10 @@ export default function CapacitacoesPage() {
                       <tr key={`${i.plate}-${i.cert}`}>
                         <td className="px-5 py-2 font-medium tracking-wide text-navy-900">{i.plate}</td>
                         <td className="px-3 py-2 text-navy-600">{i.kindLabel}</td>
-                        <td className="px-3 py-2 text-navy-800">{i.label}</td>
+                        <td className="px-3 py-2 text-navy-800">
+                          {i.label}
+                          {i.stage && <span className="ml-1.5 rounded bg-navy-100 px-1.5 py-0.5 text-[11px] text-navy-600">{i.stage === "preliminar" ? "Preliminar" : "Definitivo"}</span>}
+                        </td>
                         <td className="px-3 py-2 tabular-nums text-navy-800">{i.due ? fmtDate(i.due) : "—"}</td>
                         <td className="px-5 py-2">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${LEVEL_BADGE[i.level]}`}>{situation(i)}</span>

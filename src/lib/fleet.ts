@@ -17,22 +17,33 @@ export function isValidPlate(value: string): boolean {
   return /^[A-Z0-9]{7}$/.test(value);
 }
 
-// ---------- Capacitações (CIV e CIPP) ----------
+// ---------- Capacitações (CIV, CIPP e cronotacógrafo) ----------
 
-export type CertKey = "civ" | "cipp";
+export type CertKey = "civ" | "cipp" | "crono";
 
 export const CERTS: { key: CertKey; label: string }[] = [
   { key: "civ", label: "CIV" },
   { key: "cipp", label: "CIPP" },
+  { key: "crono", label: "Cronotacógrafo" },
 ];
+
+/** Colunas de fleet_units que as telas de capacitação leem. */
+export const FLEET_CERT_COLUMNS = "plate, kind, civ_due, civ_na, cipp_due, cipp_na, crono_due, crono_stage";
 
 /** Avisa a partir de quantos dias antes do vencimento. */
 export const CERT_ALERT_DAYS = 7;
 
-/** Cavalo mecânico só tem CIV; truck, bitruck e semi-reboque têm CIV e CIPP. */
+/**
+ * CIV: todos. CIPP: tudo, menos cavalo mecânico. Cronotacógrafo: só quem tem
+ * motor (cavalo, truck e bitruck), nunca o semi-reboque.
+ */
 export function requiredCerts(kind: FleetKind): CertKey[] {
-  return kind === "cavalo" ? ["civ"] : ["civ", "cipp"];
+  if (kind === "cavalo") return ["civ", "crono"];
+  if (kind === "semirreboque") return ["civ", "cipp"];
+  return ["civ", "cipp", "crono"];
 }
+
+export type CronoStage = "preliminar" | "definitivo";
 
 export interface FleetCertFields {
   plate: string;
@@ -41,6 +52,9 @@ export interface FleetCertFields {
   civ_na: boolean;
   cipp_due: string | null;
   cipp_na: boolean;
+  /** Vencimento do cronotacógrafo; no preliminar é o fim dos 30 dias dele. */
+  crono_due: string | null;
+  crono_stage: CronoStage | null;
 }
 
 export type CertLevel = "vencida" | "vencendo" | "ok" | "na" | "sem_data";
@@ -52,6 +66,8 @@ export interface CertStatus {
   level: CertLevel;
   /** Dias até vencer (negativo = vencida há N dias). */
   days: number | null;
+  /** Só do cronotacógrafo. */
+  stage: CronoStage | null;
 }
 
 function today0(): number {
@@ -62,14 +78,15 @@ function today0(): number {
 export function certStatuses(u: FleetCertFields): CertStatus[] {
   const t = today0();
   return requiredCerts(u.kind).map((cert) => {
-    const label = cert === "civ" ? "CIV" : "CIPP";
-    const na = cert === "civ" ? u.civ_na : u.cipp_na;
-    const due = cert === "civ" ? u.civ_due : u.cipp_due;
-    if (na) return { cert, label, due: null, level: "na", days: null };
-    if (!due) return { cert, label, due: null, level: "sem_data", days: null };
+    const label = CERTS.find((c) => c.key === cert)!.label;
+    const stage = cert === "crono" ? u.crono_stage : null;
+    const na = cert === "civ" ? u.civ_na : cert === "cipp" ? u.cipp_na : false;
+    const due = cert === "civ" ? u.civ_due : cert === "cipp" ? u.cipp_due : u.crono_due;
+    if (na) return { cert, label, due: null, level: "na", days: null, stage };
+    if (!due) return { cert, label, due: null, level: "sem_data", days: null, stage };
     const days = Math.round((new Date(`${due}T00:00:00`).getTime() - t) / 86400000);
     const level: CertLevel = days < 0 ? "vencida" : days <= CERT_ALERT_DAYS ? "vencendo" : "ok";
-    return { cert, label, due, level, days };
+    return { cert, label, due, level, days, stage };
   });
 }
 
@@ -80,10 +97,15 @@ export function certAlerts(u: FleetCertFields): CertStatus[] {
     .sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
 }
 
+/** "CIV vence em 3 dias (23/10/2026)"; o cronotacógrafo preliminar acrescenta o que fazer. */
 export function certText(s: CertStatus): string {
   if (s.days === null || s.due === null) return s.label;
   const date = new Date(`${s.due}T12:00:00`).toLocaleDateString("pt-BR");
-  if (s.days < 0) return `${s.label} vencida em ${date} (há ${-s.days} ${-s.days === 1 ? "dia" : "dias"})`;
-  if (s.days === 0) return `${s.label} vence hoje (${date})`;
-  return `${s.label} vence em ${s.days} ${s.days === 1 ? "dia" : "dias"} (${date})`;
+  const crono = s.cert === "crono";
+  const name = crono && s.stage === "preliminar" ? `${s.label} preliminar` : s.label;
+  const expired = crono ? "vencido" : "vencida";
+  const tail = crono && s.stage === "preliminar" ? " — emitir o definitivo" : "";
+  if (s.days < 0) return `${name} ${expired} em ${date} (há ${-s.days} ${-s.days === 1 ? "dia" : "dias"})${tail}`;
+  if (s.days === 0) return `${name} vence hoje (${date})${tail}`;
+  return `${name} vence em ${s.days} ${s.days === 1 ? "dia" : "dias"} (${date})${tail}`;
 }

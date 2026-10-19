@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { buttonClasses } from "@/components/Button";
-import { certAlerts, certText, type FleetCertFields } from "@/lib/fleet";
+import { FLEET_CERT_COLUMNS, certAlerts, certText, type FleetCertFields } from "@/lib/fleet";
 
 /**
  * Faixa da Programação: placas com CIV/CIPP vencida ou vencendo (até 7 dias).
@@ -18,7 +18,7 @@ export function FleetCertAlert() {
     let cancel = false;
     supabase
       .from("fleet_units")
-      .select("plate, kind, civ_due, civ_na, cipp_due, cipp_na")
+      .select(FLEET_CERT_COLUMNS)
       .order("plate")
       .then(({ data }) => {
         if (!cancel) setRows((data as FleetCertFields[] | null) ?? []);
