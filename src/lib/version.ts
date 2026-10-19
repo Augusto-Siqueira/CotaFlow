@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.11";
+export const APP_VERSION = "1.12";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.12",
+    date: "2026-10-19",
+    notes: [
+      "App do motorista offline: abre sem internet (depois de aberto uma vez com sinal), com as telas e os dados de apoio guardados no celular.",
+      "Fila de envio: abastecimento, relato de defeito, comprovante de entrega e check-list podem ser lançados sem sinal, com fotos e a hora real do preenchimento, e seguem sozinhos quando o sinal volta, sem duplicar.",
+      "Lançamento recusado ao enviar: o motorista corrige no próprio app (ou descarta) e a equipe é avisada por uma faixa na Programação, no Abastecimento e na Manutenção.",
+      "Capacitações por placa: CIV, CIPP e cronotacógrafo (preliminar ou definitivo) com data de vencimento, lançadas na tela Veículos; cavalo tem CIV e cronotacógrafo, truck e bitruck têm os três, semi-reboque tem CIV e CIPP.",
+      "Alertas de vencimento (7 dias antes e vencidas) na faixa da Programação, que pode ser recolhida, e ao escolher a placa na carga; sem bloquear o lançamento.",
+      "Nova tela Programação > Capacitações: painel com vencidas, vencendo e em dia, vencimentos por mês, situação por tipo de veículo e lista do mais urgente ao mais distante.",
+    ],
+  },
   {
     version: "1.11",
     date: "2026-10-16",
