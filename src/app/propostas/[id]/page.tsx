@@ -44,6 +44,8 @@ function Preview({ id }: { id: string }) {
           title={proposal.title}
           srcDoc={prepareProposalHtml(proposal.html)}
           sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          // Dá o foco à proposta ao abrir: sem isso, as setas do teclado só funcionam depois do primeiro clique.
+          onLoad={(e) => e.currentTarget.contentWindow?.focus()}
           className="w-full flex-1 border-0 bg-white"
           style={{ minHeight: "calc(100vh - 100px)" }}
         />

@@ -78,6 +78,8 @@ export default function PublicProposalPage({
         title={state.proposal.title}
         srcDoc={prepareProposalHtml(state.proposal.html)}
         sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+        // Dá o foco à proposta ao abrir: sem isso, as setas do teclado só funcionam depois do primeiro clique.
+        onLoad={(e) => e.currentTarget.contentWindow?.focus()}
         className="w-full flex-1 border-0 bg-white"
         style={{ minHeight: "calc(100vh - 48px)" }}
       />

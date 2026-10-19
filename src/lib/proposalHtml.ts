@@ -7,6 +7,8 @@ const HEAD_FIX =
   '<base target="_blank"><style>html{scroll-behavior:smooth;scroll-padding-top:72px}</style>';
 
 const ANCHOR_SCRIPT = `<script>
+// Foco na proposta ao abrir, para as setas do teclado passarem de página sem clicar antes.
+window.focus();
 document.addEventListener("click", function (e) {
   var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
   if (!a) return;
