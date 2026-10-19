@@ -9,6 +9,7 @@ import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
 import { useFeedback } from "@/components/Feedback";
 import { SearchSelect, type SearchOption } from "@/components/SearchSelect";
+import { SyncIssuesAlert } from "@/components/SyncIssuesAlert";
 import {
   FUEL_LABEL,
   formatAverage,
@@ -418,6 +419,8 @@ export default function AbastecimentoPage() {
           Exportar planilha
         </button>
       </div>
+
+      <SyncIssuesAlert kinds={["abastecimento"]} />
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <div>

@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth, MANUAL_LOGOUT_KEY } from "@/lib/auth";
 import { roleLabel } from "@/lib/roles";
+import { listOutbox } from "@/lib/offline/outbox";
+import { useFeedback } from "@/components/Feedback";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SidebarMenu, currentPageTitle } from "@/components/SidebarMenu";
@@ -13,10 +15,24 @@ import { SidebarMenu, currentPageTitle } from "@/components/SidebarMenu";
 export function SiteHeader() {
   const pathname = usePathname();
   const { user, role, isDriver } = useAuth();
+  const { confirm: askConfirm } = useFeedback();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
 
   async function handleLogout() {
+    // Itens salvos sem sinal e ainda não enviados: avisa e mantém a fila.
+    if (user) {
+      const waiting = (await listOutbox(user.id).catch(() => [])).length;
+      if (
+        waiting > 0 &&
+        !(await askConfirm(
+          `Há ${waiting} ${waiting === 1 ? "lançamento" : "lançamentos"} aguardando envio. Eles continuam salvos no celular e serão enviados quando você entrar de novo com sinal. Sair mesmo assim?`,
+          { confirmLabel: "Sair" }
+        ))
+      ) {
+        return;
+      }
+    }
     try {
       sessionStorage.setItem(MANUAL_LOGOUT_KEY, "1");
     } catch {}

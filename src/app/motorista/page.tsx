@@ -7,6 +7,17 @@ import { useAuth } from "@/lib/auth";
 import { loadingStatusBadge, loadingStatusLabel } from "@/lib/loadingStatus";
 import { DestinationsCell } from "@/components/Destinations";
 import { reportStageLabel, severityBadge, severityLabel } from "@/lib/maintenance";
+import { agoLabel, cached } from "@/lib/offline/refdata";
+import { OutboxPanel } from "@/components/OutboxPanel";
+
+interface HomeData {
+  /** Dia (AAAA-MM-DD) a que as cargas se referem. */
+  forDate: string;
+  name: string | null;
+  loads: Load[];
+  checklistDone: boolean;
+  reports: MyReport[];
+}
 
 interface Load {
   id: string;
@@ -37,43 +48,66 @@ function localDate(d: Date): string {
 
 export default function MotoristaHome() {
   const { user, isDriver, loading: authLoading } = useAuth();
-  const [name, setName] = useState<string | null>(null);
-  const [loads, setLoads] = useState<Load[] | null>(null);
-  const [checklistDone, setChecklistDone] = useState<boolean | null>(null);
-  const [reports, setReports] = useState<MyReport[]>([]);
+  const [home, setHome] = useState<{ data: HomeData; at: number; stale: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !isDriver) return;
+    let cancel = false;
     const today = new Date();
     const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    Promise.all([
-      supabase.from("drivers").select("name, nickname").maybeSingle(),
-      supabase
-        .from("loading_schedules")
-        .select(
-          "id, client_name, cargo, origin, destination, weight, plate, trailer_plate, loading_time, status"
-        )
-        .eq("schedule_date", localDate(today))
-        .order("loading_time", { ascending: true, nullsFirst: false }),
-      supabase
-        .from("driver_checklists")
-        .select("id", { count: "exact", head: true })
-        .gte("finished_at", dayStart.toISOString()),
-      supabase
-        .from("maintenance_reports")
-        .select("id, plate, category, severity, status, reported_at")
-        .order("reported_at", { ascending: false })
-        .limit(5),
-    ]).then(([d, l, c, r]) => {
-      if (l.error) setError(l.error.message);
+    cached<HomeData>(`${user.id}:home`, async () => {
+      const [d, l, c, r] = await Promise.all([
+        supabase.from("drivers").select("name, nickname").maybeSingle(),
+        supabase
+          .from("loading_schedules")
+          .select(
+            "id, client_name, cargo, origin, destination, weight, plate, trailer_plate, loading_time, status"
+          )
+          .eq("schedule_date", localDate(today))
+          .order("loading_time", { ascending: true, nullsFirst: false }),
+        supabase
+          .from("driver_checklists")
+          .select("id", { count: "exact", head: true })
+          .gte("finished_at", dayStart.toISOString()),
+        supabase
+          .from("maintenance_reports")
+          .select("id, plate, category, severity, status, reported_at")
+          .order("reported_at", { ascending: false })
+          .limit(5),
+      ]);
+      if (l.error) throw new Error(l.error.message);
       const driver = d.data as { name: string; nickname: string | null } | null;
-      setName(driver ? driver.nickname?.trim() || driver.name : null);
-      setLoads((l.data as Load[] | null) ?? []);
-      setChecklistDone((c.count ?? 0) > 0);
-      setReports((r.data as MyReport[] | null) ?? []);
-    });
+      return {
+        forDate: localDate(today),
+        name: driver ? driver.nickname?.trim() || driver.name : null,
+        loads: (l.data as Load[] | null) ?? [],
+        checklistDone: (c.count ?? 0) > 0,
+        reports: (r.data as MyReport[] | null) ?? [],
+      };
+    })
+      .then((res) => {
+        if (!cancel) setHome(res);
+      })
+      .catch((e) => {
+        if (!cancel) setError(e instanceof Error ? e.message : "erro");
+      });
+    return () => {
+      cancel = true;
+    };
   }, [user, isDriver]);
+
+  const name = home?.data.name ?? null;
+  const loads = home ? home.data.loads : null;
+  const checklistDone = home ? home.data.checklistDone : null;
+  const reports = home?.data.reports ?? [];
+  // Dados guardados no celular: avisa de quando são (e se as cargas são de outro dia).
+  const staleNote = home?.stale
+    ? `Dados guardados no celular (${agoLabel(home.at)}).` +
+      (home.data.forDate !== localDate(new Date())
+        ? ` As cargas são do dia ${new Date(`${home.data.forDate}T12:00:00`).toLocaleDateString("pt-BR")}.`
+        : "")
+    : null;
 
   if (authLoading) return null;
   if (!isDriver) {
@@ -154,7 +188,10 @@ export default function MotoristaHome() {
         </Link>
       </div>
 
+      <OutboxPanel />
+
       <h2 className="mt-6 text-sm font-medium text-navy-900">Minhas cargas de hoje</h2>
+      {staleNote && <p className="mt-1 text-xs text-amber-700">{staleNote}</p>}
       {error && (
         <div role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           Não foi possível carregar suas cargas ({error}).

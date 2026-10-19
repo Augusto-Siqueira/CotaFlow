@@ -19,6 +19,7 @@ import { fetchAllCityNames, isCityWithUf, normalizeCityText } from "@/lib/cities
 import { DestinationsInput, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 import { DayNotepad } from "@/components/DayNotepad";
+import { SyncIssuesAlert } from "@/components/SyncIssuesAlert";
 import { Modal } from "@/components/Modal";
 import { StepperControl } from "@/components/StepperControl";
 
@@ -1016,6 +1017,7 @@ export default function ProgramacaoPage() {
         </div>
       </div>
 
+      <SyncIssuesAlert kinds={["comprovante"]} />
       <DayNotepad date={date} canEdit={canEditSchedule} />
 
       {canEditSchedule && mdfeAlerts.length > 0 && (

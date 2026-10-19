@@ -3,9 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { uploadPhoto } from "@/lib/photos";
+import { compressImage } from "@/lib/photos";
 import { ButtonLink } from "@/components/Button";
 import { SearchSelect, type SearchOption } from "@/components/SearchSelect";
+import { agoLabel, cached, must } from "@/lib/offline/refdata";
+import {
+  enqueue,
+  getOutboxItem,
+  listOutbox,
+  newPhotoPath,
+  reviseItem,
+  subscribeOutbox,
+  syncNow,
+  type OutboxItem,
+  type OutboxPhoto,
+} from "@/lib/offline/outbox";
+import { useOffline } from "@/lib/offline/OfflineProvider";
 import {
   FUEL_LABEL,
   formatKm,
@@ -17,6 +30,8 @@ import {
 } from "@/lib/fuel";
 
 const MAX_PHOTOS = 3;
+// Quanto a tela espera o envio terminar antes de dizer "salvo, enviando em segundo plano".
+const SEND_WAIT_MS = 12000;
 
 const fieldCls =
   "w-full rounded-lg border border-navy-300 bg-white px-3 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
@@ -31,6 +46,12 @@ function localDate(d: Date) {
 /** Só a data (sem hora). Gravada ao meio-dia para nunca virar o dia por fuso. */
 function todayInput() {
   return localDate(new Date());
+}
+
+interface FuelRef {
+  driverName: string | null;
+  todayPlates: string[];
+  fleet: { plate: string; kind: string }[];
 }
 
 function Toggle<T extends string>({
@@ -68,9 +89,10 @@ function Toggle<T extends string>({
 
 export default function AbastecimentoMotoristaPage() {
   const { user, isDriver, loading: authLoading } = useAuth();
-  const [driverName, setDriverName] = useState<string | null>(null);
-  const [plateOptions, setPlateOptions] = useState<SearchOption[]>([]);
+  const { offline } = useOffline();
+  const [ref, setRef] = useState<{ data: FuelRef; at: number; stale: boolean } | null>(null);
   const [mine, setMine] = useState<FuelEntry[]>([]);
+  const [queued, setQueued] = useState<OutboxItem[]>([]);
 
   const [fuelType, setFuelType] = useState<FuelType>("diesel");
   const [plate, setPlate] = useState("");
@@ -82,67 +104,169 @@ export default function AbastecimentoMotoristaPage() {
   const [km, setKm] = useState("");
   const [fullTank, setFullTank] = useState<"sim" | "nao">("sim");
   const [notes, setNotes] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [lastKm, setLastKm] = useState<number | null>(null);
+  const [photos, setPhotos] = useState<OutboxPhoto[]>([]);
+  const [serverLastKm, setServerLastKm] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<{ text: string; saved: boolean } | null>(null);
+  // Corrigindo um lançamento recusado da fila (mesmo item, mesmo código).
+  const [redo, setRedo] = useState<OutboxItem | null>(null);
+
+  const monthKey = useMemo(() => todayInput().slice(0, 7), []);
 
   const loadMine = useCallback(async () => {
+    if (!user) return;
     const first = new Date();
     first.setDate(1);
     first.setHours(0, 0, 0, 0);
-    const { data } = await supabase
-      .from("fuel_entries")
-      .select("*")
-      .gte("fueled_at", first.toISOString())
-      .order("fueled_at", { ascending: false });
-    setMine((data as FuelEntry[] | null) ?? []);
-  }, []);
+    try {
+      const res = await cached(`${user.id}:fuel-mine:${monthKey}`, async () =>
+        must(
+          await supabase
+            .from("fuel_entries")
+            .select("*")
+            .gte("fueled_at", first.toISOString())
+            .order("fueled_at", { ascending: false })
+        ) as FuelEntry[]
+      );
+      setMine(res.data);
+    } catch {
+      setMine([]);
+    }
+  }, [user, monthKey]);
+
+  const loadQueue = useCallback(async () => {
+    if (!user) return;
+    setQueued((await listOutbox(user.id).catch(() => [])).filter((i) => i.kind === "fuel"));
+  }, [user]);
 
   useEffect(() => {
     if (!user || !isDriver) return;
-    Promise.all([
-      supabase.from("drivers").select("name").maybeSingle(),
-      supabase.from("loading_schedules").select("plate").eq("schedule_date", localDate(new Date())),
-      supabase.rpc("fleet_plates"),
-    ]).then(([d, today, fleet]) => {
-      setDriverName((d.data as { name: string } | null)?.name ?? null);
-      // Diesel e ARLA vão no cavalo/truck: a carreta não aparece.
-      const opts: SearchOption[] = [];
-      for (const l of (today.data ?? []) as { plate: string | null }[]) {
-        if (l.plate && !opts.some((o) => o.value === l.plate)) opts.push({ value: l.plate, hint: "Cavalo da carga de hoje" });
+    let cancel = false;
+    (async () => {
+      const key = `${user.id}:fuel-ref`;
+      try {
+        const res = await cached<FuelRef>(key, async () => {
+          const [d, today, fleet] = await Promise.all([
+            supabase.from("drivers").select("name").maybeSingle(),
+            supabase.from("loading_schedules").select("plate").eq("schedule_date", localDate(new Date())),
+            supabase.rpc("fleet_plates"),
+          ]);
+          if (d.error) throw new Error(d.error.message);
+          if (today.error) throw new Error(today.error.message);
+          if (fleet.error) throw new Error(fleet.error.message);
+          return {
+            driverName: (d.data as { name: string } | null)?.name ?? null,
+            todayPlates: ((today.data ?? []) as { plate: string | null }[])
+              .map((l) => l.plate)
+              .filter((p): p is string => Boolean(p)),
+            fleet: (fleet.data ?? []) as { plate: string; kind: string }[],
+          };
+        });
+        if (!cancel) setRef(res);
+      } catch {
+        if (!cancel) setRef(null);
       }
-      for (const f of (fleet.data ?? []) as { plate: string; kind: string }[]) {
-        if (f.kind !== "semirreboque" && !opts.some((o) => o.value === f.plate)) opts.push({ value: f.plate, hint: "Cavalo/truck" });
-      }
-      setPlateOptions(opts);
-      if (opts[0]) setPlate((cur) => cur || opts[0].value);
-    });
+    })();
     queueMicrotask(() => {
       loadMine();
+      loadQueue();
     });
-  }, [user, isDriver, loadMine]);
+    const off = subscribeOutbox(() => {
+      loadQueue();
+      loadMine();
+    });
+    return () => {
+      cancel = true;
+      off();
+    };
+  }, [user, isDriver, loadMine, loadQueue]);
+
+  // Diesel e ARLA vão no cavalo/truck: a carreta não aparece.
+  const plateOptions = useMemo<SearchOption[]>(() => {
+    if (!ref) return [];
+    const opts: SearchOption[] = [];
+    for (const p of ref.data.todayPlates) {
+      if (!opts.some((o) => o.value === p)) opts.push({ value: p, hint: "Cavalo da carga de hoje" });
+    }
+    for (const f of ref.data.fleet) {
+      if (f.kind !== "semirreboque" && !opts.some((o) => o.value === f.plate)) opts.push({ value: f.plate, hint: "Cavalo/truck" });
+    }
+    return opts;
+  }, [ref]);
+
+  useEffect(() => {
+    if (!plateOptions[0] || redo) return;
+    queueMicrotask(() => setPlate((cur) => cur || plateOptions[0].value));
+  }, [plateOptions, redo]);
 
   const chosenPlate = useMemo(() => plate.trim().replace(/[\s-]/g, "").toUpperCase(), [plate]);
   const knownPlate = plateOptions.length === 0 || plateOptions.some((o) => o.value === chosenPlate);
 
-  // Último km da placa (de qualquer motorista), para avisar km digitado menor.
+  // Último km da placa (de qualquer motorista), guardado no celular para avisar km menor sem sinal.
   useEffect(() => {
-    if (!knownPlate || chosenPlate.length < 7) return;
+    if (!user || !knownPlate || chosenPlate.length < 7) return;
     let cancel = false;
-    supabase.rpc("fuel_last_km", { p_plate: chosenPlate }).then(({ data }) => {
-      if (!cancel) setLastKm((data as number | null) ?? null);
-    });
+    cached<number | null>(`${user.id}:lastkm:${chosenPlate}`, async () => {
+      const r = await supabase.rpc("fuel_last_km", { p_plate: chosenPlate });
+      if (r.error) throw new Error(r.error.message);
+      return (r.data as number | null) ?? null;
+    })
+      .then((r) => {
+        if (!cancel) setServerLastKm(r.data);
+      })
+      .catch(() => {
+        if (!cancel) setServerLastKm(null);
+      });
     return () => {
       cancel = true;
     };
-  }, [chosenPlate, knownPlate]);
+  }, [user, chosenPlate, knownPlate]);
 
-  function addFiles(list: FileList | null) {
-    if (!list) return;
+  // O que ainda está na fila também conta como "último km" (o motorista pode ter abastecido sem sinal).
+  const queuedMaxKm = useMemo(
+    () =>
+      queued
+        .filter((i) => i.id !== redo?.id && i.payload.plate === chosenPlate)
+        .reduce((max, i) => Math.max(max, Number(i.payload.odometer_km) || 0), 0),
+    [queued, chosenPlate, redo]
+  );
+  const lastKm = Math.max(serverLastKm ?? 0, queuedMaxKm) || null;
+
+  // Abriu pelo botão "Corrigir e lançar de novo" da fila de envio.
+  useEffect(() => {
+    if (!user) return;
+    const id = new URLSearchParams(window.location.search).get("refazer");
+    if (!id) return;
+    getOutboxItem(id).then((item) => {
+      if (!item || item.userId !== user.id || item.kind !== "fuel") return;
+      const p = item.payload as Record<string, unknown>;
+      setRedo(item);
+      setFuelType(p.fuel_type as FuelType);
+      setPlate(String(p.plate ?? ""));
+      setWhen(localDate(new Date(String(p.fueled_at))));
+      setWhere(p.location_type as "patio" | "externo");
+      setStation(String(p.location ?? ""));
+      setPrice(p.price_per_liter ? String(p.price_per_liter).replace(".", ",") : "");
+      setLiters(String(p.liters ?? "").replace(".", ","));
+      setKm(String(p.odometer_km ?? ""));
+      setFullTank(p.full_tank ? "sim" : "nao");
+      setNotes(String(p.notes ?? ""));
+      setPhotos(item.photos);
+    });
+  }, [user]);
+
+  async function addFiles(list: FileList | null) {
+    if (!list || !user) return;
     const picked = Array.from(list);
-    setFiles((prev) => [...prev, ...picked].slice(0, MAX_PHOTOS));
+    try {
+      // Reduz a foto agora (a câmera gera vários MB) e já define o nome com que ela vai subir.
+      const added: OutboxPhoto[] = [];
+      for (const f of picked) added.push({ path: newPhotoPath(user.id), blob: await compressImage(f) });
+      setPhotos((prev) => [...prev, ...added].slice(0, MAX_PHOTOS));
+    } catch {
+      setError("Não foi possível usar essa foto. Tire outra.");
+    }
   }
 
   function resetForm() {
@@ -154,7 +278,9 @@ export default function AbastecimentoMotoristaPage() {
     setKm("");
     setFullTank("sim");
     setNotes("");
-    setFiles([]);
+    setPhotos([]);
+    setRedo(null);
+    if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
   }
 
   const kmNumber = Number(km.replace(/\D/g, "")) || 0;
@@ -173,13 +299,14 @@ export default function AbastecimentoMotoristaPage() {
       if (!station.trim()) return setError("Informe o posto (nome e cidade).");
       if (priceN === null) return setError("Informe o valor por litro.");
     }
-    if (files.length === 0) return setError("Tire a foto do odômetro.");
+    if (photos.length === 0) return setError("Tire a foto do odômetro.");
     setSaving(true);
     setError(null);
     try {
-      const paths: string[] = [];
-      for (const f of files) paths.push(await uploadPhoto(user.id, f));
-      const { error: err } = await supabase.from("fuel_entries").insert({
+      const id = redo?.id ?? crypto.randomUUID();
+      const driverName = ref?.data.driverName ?? redo?.driverName ?? null;
+      const payload = {
+        id,
         driver_name: driverName,
         plate: chosenPlate,
         fuel_type: fuelType,
@@ -190,24 +317,43 @@ export default function AbastecimentoMotoristaPage() {
         liters: litersN,
         odometer_km: kmNumber,
         full_tank: fullTank === "sim",
-        photos: paths,
+        photos: photos.map((p) => p.path),
         notes: notes.trim() || null,
-      });
-      if (err) {
-        setError(`Não foi possível enviar (${err.message}).`);
+      };
+      const summary = `${FUEL_LABEL[fuelType]} · ${formatLiters(litersN)} L · ${chosenPlate}`;
+      if (redo) {
+        await reviseItem(id, { summary, payload, photos });
+      } else {
+        await enqueue({ id, userId: user.id, kind: "fuel", createdAt: Date.now(), summary, driverName, payload, photos });
+      }
+      // Tenta enviar já; sem sinal, o item fica na fila e segue sozinho depois.
+      await Promise.race([syncNow(user.id, true), new Promise((r) => setTimeout(r, SEND_WAIT_MS))]);
+      const left = await getOutboxItem(id);
+      if (!left) {
+        setDone({ text: `${summary} registrado.`, saved: false });
+      } else if (left.status === "rejected") {
+        setDone(null);
+        setError(`O servidor não aceitou este lançamento: ${left.reason} Corrija e envie de novo. A equipe foi avisada.`);
         setSaving(false);
         return;
+      } else {
+        setDone({
+          text: `${summary} salvo no celular. Será enviado quando houver sinal.`,
+          saved: true,
+        });
       }
-      setDone(`${FUEL_LABEL[fuelType]} de ${formatLiters(litersN)} L registrado na placa ${chosenPlate}.`);
       resetForm();
       await loadMine();
+      await loadQueue();
     } catch (ex) {
-      setError(`Não foi possível enviar. Confira o sinal e tente de novo (${ex instanceof Error ? ex.message : "erro"}).`);
+      setError(`Não foi possível salvar no celular (${ex instanceof Error ? ex.message : "erro"}). Libere espaço e tente de novo.`);
     }
     setSaving(false);
   }
 
   if (authLoading || !isDriver) return null;
+
+  const offlineHint = ref?.stale ? `Dados guardados no celular (${agoLabel(ref.at)}).` : null;
 
   return (
     <div className="mx-auto w-full max-w-md flex-1 px-4 py-6">
@@ -216,10 +362,20 @@ export default function AbastecimentoMotoristaPage() {
       </ButtonLink>
       <h1 className="mt-3 text-xl font-semibold text-navy-900">Abastecimento</h1>
       <p className="text-sm text-navy-500">Registre cada abastecimento de diesel ou ARLA.</p>
+      {offlineHint && <p className="mt-1 text-xs text-amber-700">{offlineHint}</p>}
+
+      {redo && (
+        <div role="status" className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Corrigindo um lançamento recusado: {redo.reason}
+        </div>
+      )}
 
       {done && (
-        <div role="status" className="mt-4 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">
-          ✓ {done}
+        <div
+          role="status"
+          className={`mt-4 rounded-lg px-3 py-2 text-sm ${done.saved ? "bg-amber-50 text-amber-900" : "bg-teal-50 text-teal-800"}`}
+        >
+          {done.saved ? "💾" : "✓"} {done.text}
         </div>
       )}
 
@@ -366,17 +522,17 @@ export default function AbastecimentoMotoristaPage() {
           <span className={labelCls}>
             Foto do odômetro <span className="font-normal text-red-700">(obrigatória)</span>
           </span>
-          {files.length > 0 && (
+          {photos.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-2">
-              {files.map((f, i) => (
+              {photos.map((p, i) => (
                 <li
-                  key={`${f.name}-${i}`}
+                  key={p.path}
                   className="inline-flex items-center gap-1 rounded-full bg-brand-100 py-1 pl-3 pr-1.5 text-xs font-medium text-brand-800"
                 >
                   📷 Foto {i + 1}
                   <button
                     type="button"
-                    onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                    onClick={() => setPhotos((prev) => prev.filter((x) => x.path !== p.path))}
                     aria-label={`Remover foto ${i + 1}`}
                     className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-200"
                   >
@@ -386,9 +542,9 @@ export default function AbastecimentoMotoristaPage() {
               ))}
             </ul>
           )}
-          {files.length < MAX_PHOTOS && (
+          {photos.length < MAX_PHOTOS && (
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-navy-300 px-3 py-3 text-sm font-medium text-navy-700 hover:border-brand-500">
-              📷 {files.length === 0 ? "Tirar foto" : "Tirar outra foto"}
+              📷 {photos.length === 0 ? "Tirar foto" : "Tirar outra foto"}
               <input
                 type="file"
                 accept="image/*"
@@ -420,24 +576,45 @@ export default function AbastecimentoMotoristaPage() {
           disabled={saving}
           className="w-full rounded-lg bg-brand-700 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {saving ? "Enviando..." : "Registrar abastecimento"}
+          {saving
+            ? "Salvando..."
+            : redo
+              ? "Enviar correção"
+              : offline
+                ? "Salvar (envia quando tiver sinal)"
+                : "Registrar abastecimento"}
         </button>
       </form>
 
       <h2 className="mt-8 text-sm font-medium text-navy-900">Meus abastecimentos deste mês</h2>
-      {mine.length === 0 ? (
+      {queued.length === 0 && mine.length === 0 ? (
         <p className="mt-2 text-sm text-navy-500">Nenhum ainda.</p>
       ) : (
         <ul className="mt-2 space-y-2">
+          {queued.map((q) => {
+            const p = q.payload as Record<string, unknown>;
+            return (
+              <li key={q.id} className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-navy-900">{q.summary}</span>
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                    {q.status === "rejected" ? "Recusado" : "Aguardando envio"}
+                  </span>
+                </div>
+                <div className="text-xs text-navy-500">
+                  {formatKm(Number(p.odometer_km))} km ·{" "}
+                  {p.location_type === "patio" ? "Pátio" : String(p.location ?? "")}
+                </div>
+              </li>
+            );
+          })}
           {mine.map((m) => (
             <li key={m.id} className="rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-navy-900">
                   {FUEL_LABEL[m.fuel_type]} · {formatLiters(m.liters)} L
                 </span>
-                <span className="text-xs text-navy-500">
-                  {new Date(m.fueled_at).toLocaleDateString("pt-BR")}
-                </span>
+                <span className="text-xs text-navy-500">{new Date(m.fueled_at).toLocaleDateString("pt-BR")}</span>
               </div>
               <div className="text-xs text-navy-500">
                 {m.plate} · {formatKm(m.odometer_km)} km · {m.location_type === "patio" ? "Pátio" : m.location}
