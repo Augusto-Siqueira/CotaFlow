@@ -1037,39 +1037,6 @@ export default function ProgramacaoPage() {
         </div>
       </div>
 
-      <FleetCertAlert />
-      <SyncIssuesAlert kinds={["comprovante"]} />
-      <DayNotepad date={date} canEdit={canEditSchedule} />
-
-      {canEditSchedule && mdfeAlerts.length > 0 && (
-        <section
-          aria-label="MDF-e para encerrar"
-          className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 print:hidden"
-        >
-          <h2 className="text-sm font-medium text-amber-800">
-            📄 Encerrar MDF-e ({mdfeAlerts.length}) — todos os comprovantes de entrega já chegaram
-          </h2>
-          <ul className="mt-2 space-y-2">
-            {mdfeAlerts.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900">
-                <span>
-                  <span className="font-medium">{a.client_name}</span> · {a.cargo} · {a.plate || "—"} ·{" "}
-                  {new Date(`${a.schedule_date}T12:00:00`).toLocaleDateString("pt-BR")}
-                  {a.destination ? ` · ${a.destination}` : ""}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => closeMdfe(a.id)}
-                  className={buttonClasses("soft", "sm")}
-                >
-                  MDF-e encerrado
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {(inMaintenance.size > 0 || defects.size > 0) && (
         <section
           aria-label="Veículos em manutenção"
@@ -1183,6 +1150,39 @@ export default function ProgramacaoPage() {
             )}
             </>
           )}
+        </section>
+      )}
+
+      <FleetCertAlert />
+      <DayNotepad date={date} canEdit={canEditSchedule} />
+      <SyncIssuesAlert kinds={["comprovante"]} />
+
+      {canEditSchedule && mdfeAlerts.length > 0 && (
+        <section
+          aria-label="MDF-e para encerrar"
+          className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 print:hidden"
+        >
+          <h2 className="text-sm font-medium text-amber-800">
+            📄 Encerrar MDF-e ({mdfeAlerts.length}) — todos os comprovantes de entrega já chegaram
+          </h2>
+          <ul className="mt-2 space-y-2">
+            {mdfeAlerts.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900">
+                <span>
+                  <span className="font-medium">{a.client_name}</span> · {a.cargo} · {a.plate || "—"} ·{" "}
+                  {new Date(`${a.schedule_date}T12:00:00`).toLocaleDateString("pt-BR")}
+                  {a.destination ? ` · ${a.destination}` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => closeMdfe(a.id)}
+                  className={buttonClasses("soft", "sm")}
+                >
+                  MDF-e encerrado
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
