@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { buttonClasses } from "@/components/Button";
 import { certAlerts, certText, type FleetCertFields } from "@/lib/fleet";
 
 /**
@@ -11,6 +12,7 @@ import { certAlerts, certText, type FleetCertFields } from "@/lib/fleet";
  */
 export function FleetCertAlert() {
   const [rows, setRows] = useState<FleetCertFields[] | null>(null);
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
     let cancel = false;
@@ -42,10 +44,21 @@ export function FleetCertAlert() {
           ⚠ Capacitações dos veículos ({items.length})
           {expired > 0 ? ` — ${expired} vencida(s)` : ""}
         </h2>
-        <Link href="/vehicles/frota" className="text-xs font-medium underline">
-          Ver frota
-        </Link>
+        <span className="flex items-center gap-2">
+          <Link href="/vehicles/frota" className="text-xs font-medium underline">
+            Ver frota
+          </Link>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className={buttonClasses("secondary", "sm")}
+          >
+            {open ? "Recolher" : "Mostrar"}
+          </button>
+        </span>
       </div>
+      {open && (
       <ul className="mt-2 space-y-1 text-sm">
         {items.map(({ plate, c }) => (
           <li key={`${plate}-${c.cert}`} className={c.level === "vencida" ? "text-red-800" : "text-amber-900"}>
@@ -53,6 +66,7 @@ export function FleetCertAlert() {
           </li>
         ))}
       </ul>
+      )}
     </section>
   );
 }
