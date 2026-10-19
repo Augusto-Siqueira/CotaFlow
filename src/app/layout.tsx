@@ -6,6 +6,7 @@ import { RoleRedirect } from "@/components/RoleRedirect";
 import { AuthProvider } from "@/lib/auth";
 import { FeedbackProvider } from "@/components/Feedback";
 import { THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
+import { RegisterServiceWorker } from "@/components/RegisterServiceWorker";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col bg-navy-50 text-navy-900">
+        <RegisterServiceWorker />
         <FeedbackProvider>
           <AuthProvider>
             <SiteHeader />

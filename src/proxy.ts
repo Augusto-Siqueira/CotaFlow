@@ -69,8 +69,10 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// manifest.webmanifest e sw.js ficam abertos (sem exigir login): é o que o
+// Chrome lê para oferecer "Instalar app" antes de a pessoa entrar.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest\\.webmanifest|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
