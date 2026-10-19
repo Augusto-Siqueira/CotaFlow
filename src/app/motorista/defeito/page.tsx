@@ -3,18 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ButtonLink } from "@/components/Button";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { REPORT_CATEGORIES, SEVERITIES } from "@/lib/maintenance";
-import { uploadPhoto } from "@/lib/photos";
+import { compressImage } from "@/lib/photos";
 import { SearchSelect, type SearchOption } from "@/components/SearchSelect";
+import { loadPlateOptions } from "@/lib/offline/plates";
+import { agoLabel } from "@/lib/offline/refdata";
+import { enqueue, getOutboxItem, newPhotoPath, reviseItem, syncNow, type OutboxItem, type OutboxPhoto } from "@/lib/offline/outbox";
+import { useOffline } from "@/lib/offline/OfflineProvider";
 
 const MAX_PHOTOS = 3;
-
-function localDate(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const SEND_WAIT_MS = 12000;
 
 export default function RelatarDefeitoPage() {
   const { user, isDriver, loading: authLoading } = useAuth();
@@ -24,46 +23,57 @@ export default function RelatarDefeitoPage() {
   const [category, setCategory] = useState("Freios");
   const [severity, setSeverity] = useState(2);
   const [description, setDescription] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const { offline } = useOffline();
+  const [files, setFiles] = useState<OutboxPhoto[]>([]);
+  const [staleAt, setStaleAt] = useState<number | null>(null);
+  const [redo, setRedo] = useState<OutboxItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<"sent" | "saved" | null>(null);
 
   useEffect(() => {
     if (!user || !isDriver) return;
-    Promise.all([
-      supabase
-        .from("loading_schedules")
-        .select("plate, trailer_plate")
-        .eq("schedule_date", localDate(new Date())),
-      supabase.rpc("fleet_plates"),
-    ]).then(([today, fleet]) => {
-      const opts: SearchOption[] = [];
-      const add = (p: string | null, hint: string) => {
-        if (p && !opts.some((o) => o.value === p)) opts.push({ value: p, hint });
-      };
-      for (const l of (today.data ?? []) as { plate: string | null; trailer_plate: string | null }[]) {
-        add(l.plate, "Cavalo da carga de hoje");
-        add(l.trailer_plate, "Carreta da carga de hoje");
-      }
-      for (const f of (fleet.data ?? []) as { plate: string; kind: string }[]) {
-        add(f.plate, f.kind === "semirreboque" ? "Semi-reboque" : "Cavalo/truck");
-      }
-      setPlateOptions(opts);
-      if (opts[0]) setPlate((cur) => cur || opts[0].value);
-    });
+    loadPlateOptions(user.id)
+      .then((r) => {
+        setPlateOptions(r.options);
+        setStaleAt(r.stale ? r.at : null);
+        if (r.options[0]) setPlate((cur) => cur || r.options[0].value);
+      })
+      .catch(() => {});
   }, [user, isDriver]);
+
+  // Abriu pelo botão "Corrigir e lançar de novo" da fila de envio.
+  useEffect(() => {
+    if (!user) return;
+    const id = new URLSearchParams(window.location.search).get("refazer");
+    if (!id) return;
+    getOutboxItem(id).then((item) => {
+      if (!item || item.userId !== user.id || item.kind !== "defect") return;
+      const p = item.payload as Record<string, unknown>;
+      setRedo(item);
+      setPlate(String(p.plate ?? ""));
+      setCategory(String(p.category ?? "Freios"));
+      setSeverity(Number(p.severity) || 2);
+      setDescription(String(p.description ?? ""));
+      setFiles(item.photos);
+    });
+  }, [user]);
 
   const chosenPlate = useMemo(() => plate.trim().replace(/[\s-]/g, "").toUpperCase(), [plate]);
   const knownPlate =
     plateOptions.length === 0 || plateOptions.some((o) => o.value === chosenPlate);
 
-  // Copia os arquivos AGORA: a lista do campo é "viva" e fica vazia assim que o
-  // campo é limpo (o que acontece logo depois, no onChange).
-  function addFiles(list: FileList | null) {
-    if (!list) return;
+  // Reduz a foto agora (a câmera gera vários MB) e já define o nome com que ela vai subir.
+  async function addFiles(list: FileList | null) {
+    if (!list || !user) return;
     const picked = Array.from(list);
-    setFiles((prev) => [...prev, ...picked].slice(0, MAX_PHOTOS));
+    try {
+      const added: OutboxPhoto[] = [];
+      for (const f of picked) added.push({ path: newPhotoPath(user.id), blob: await compressImage(f) });
+      setFiles((prev) => [...prev, ...added].slice(0, MAX_PHOTOS));
+    } catch {
+      setError("Não foi possível usar essa foto. Tire outra.");
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -84,32 +94,31 @@ export default function RelatarDefeitoPage() {
     setSaving(true);
     setError(null);
     try {
-      const paths: string[] = [];
-      for (const f of files) paths.push(await uploadPhoto(user.id, f));
-      const { error: err } = await supabase.from("maintenance_reports").insert({
+      const id = redo?.id ?? crypto.randomUUID();
+      const payload = {
+        id,
         plate: chosenPlate,
         category,
         severity,
         description: description.trim(),
         source: "motorista",
-        photos: paths,
-      });
-      if (err) {
-        setError(
-          /foreign key|violates/i.test(err.message)
-            ? `A placa ${chosenPlate} não está cadastrada na frota.`
-            : `Não foi possível enviar (${err.message}).`
-        );
+        photos: files.map((f) => f.path),
+        reported_at: redo ? (redo.payload.reported_at as string) : new Date().toISOString(),
+      };
+      const summary = `Defeito · ${category} · ${chosenPlate}`;
+      if (redo) await reviseItem(id, { summary, payload, photos: files });
+      else await enqueue({ id, userId: user.id, kind: "defect", createdAt: Date.now(), summary, driverName: null, payload, photos: files });
+      await Promise.race([syncNow(user.id, true), new Promise((r) => setTimeout(r, SEND_WAIT_MS))]);
+      const left = await getOutboxItem(id);
+      if (left?.status === "rejected") {
+        setError(`O servidor não aceitou este relato: ${left.reason} Corrija e envie de novo. A equipe foi avisada.`);
         setSaving(false);
         return;
       }
-      setDone(true);
+      if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
+      setDone(left ? "saved" : "sent");
     } catch (ex) {
-      setError(
-        `Não foi possível enviar. Confira o sinal e tente de novo (${
-          ex instanceof Error ? ex.message : "erro"
-        }).`
-      );
+      setError(`Não foi possível salvar no celular (${ex instanceof Error ? ex.message : "erro"}). Libere espaço e tente de novo.`);
     }
     setSaving(false);
   }
@@ -123,9 +132,13 @@ export default function RelatarDefeitoPage() {
         <div className="text-5xl" aria-hidden="true">
           ✅
         </div>
-        <h1 className="mt-3 text-lg font-semibold text-navy-900">Relato enviado!</h1>
+        <h1 className="mt-3 text-lg font-semibold text-navy-900">
+          {done === "sent" ? "Relato enviado!" : "Relato salvo no celular"}
+        </h1>
         <p className="mt-1 text-sm text-navy-500">
-          A manutenção já foi avisada e vai avaliar. Você acompanha o andamento na tela inicial.
+          {done === "sent"
+            ? "A manutenção já foi avisada e vai avaliar. Você acompanha o andamento na tela inicial."
+            : "Será enviado para a manutenção assim que houver sinal. Você acompanha na tela inicial."}
         </p>
         <Link
           href="/motorista"
@@ -145,6 +158,12 @@ export default function RelatarDefeitoPage() {
     <form onSubmit={submit} className="mx-auto w-full max-w-md flex-1 px-4 py-6">
       <ButtonLink href="/motorista" variant="secondary" size="sm" aria-label="Voltar para Voltar">Voltar</ButtonLink>
       <h1 className="mt-3 text-xl font-semibold text-navy-900">Relatar defeito</h1>
+      {staleAt && <p className="mt-1 text-xs text-amber-700">Dados guardados no celular ({agoLabel(staleAt)}).</p>}
+      {redo && (
+        <div role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Corrigindo um relato recusado: {redo.reason}
+        </div>
+      )}
 
       <div className="mt-4 space-y-4">
         <div>
@@ -229,13 +248,13 @@ export default function RelatarDefeitoPage() {
             <ul className="mb-2 flex flex-wrap gap-2">
               {files.map((f, i) => (
                 <li
-                  key={`${f.name}-${i}`}
+                  key={f.path}
                   className="inline-flex items-center gap-1 rounded-full bg-brand-100 py-1 pl-3 pr-1.5 text-xs font-medium text-brand-800"
                 >
                   📷 Foto {i + 1}
                   <button
                     type="button"
-                    onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                    onClick={() => setFiles((prev) => prev.filter((x) => x.path !== f.path))}
                     aria-label={`Remover foto ${i + 1}`}
                     className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-200"
                   >
@@ -274,7 +293,7 @@ export default function RelatarDefeitoPage() {
         disabled={saving}
         className="mt-5 w-full rounded-lg bg-brand-700 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
       >
-        {saving ? "Enviando..." : "Enviar relato"}
+        {saving ? "Salvando..." : redo ? "Enviar correção" : offline ? "Salvar (envia quando tiver sinal)" : "Enviar relato"}
       </button>
     </form>
   );

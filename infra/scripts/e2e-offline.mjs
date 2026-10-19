@@ -151,6 +151,13 @@ try {
   await go(`${SITE}/motorista/abastecimento`);
   check("abastecimento carrega com sinal", await waitFor(async () => (await text()).includes("Registre cada abastecimento"), 20000));
   await sleep(2500);
+  // defeito e entrega também guardam seus dados de apoio quando visitados com sinal
+  await go(`${SITE}/motorista/defeito`);
+  await waitFor(async () => (await text()).includes("Relatar defeito"), 20000);
+  await sleep(2000);
+  await go(`${SITE}/motorista/entrega`);
+  await waitFor(async () => (await text()).includes("Comprovante de entrega"), 20000);
+  await sleep(2000);
 
   console.log("\n== 2) SEM SINAL de verdade: site e servidor de dados desligados");
   stopSite();
@@ -261,6 +268,89 @@ try {
   await js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Descartar' && b.closest('[role=alertdialog],[role=dialog]'))?.click()");
   check("descartar remove da fila", await waitFor(async () => (await outboxRows()).length === 0, 20000));
   check("descartar fecha o aviso da equipe", await waitFor(() => psql(`select resolution from driver_sync_issues where id = '${badId}'`) === "descartado", 20000));
+
+  console.log("\n== 8) Defeito sem sinal, digitado na tela");
+  const mark = `E2E defeito ${Date.now()}`;
+  stopSite();
+  gateway("stop");
+  await sleep(1500);
+  await go(`${SITE}/motorista/defeito`);
+  await waitFor(() => js("!!document.getElementById('d-desc')"), 20000);
+  await sleep(1500);
+  await setValue("#d-plate", "TST1A11");
+  await setValue("#d-desc", mark);
+  await attachPhoto("input[type=file]");
+  await waitFor(() => js("document.body.innerText.includes('Foto 1')"), 10000);
+  await js("document.querySelector('form').requestSubmit()");
+  check("defeito: avisa 'salvo no celular'", await waitFor(async () => (await text()).includes("salvo no celular"), 30000), (await text()).slice(0, 200));
+  const qd = await outboxRows();
+  check("defeito: ficou na fila com a foto", qd.length === 1 && qd[0].photos === 1, JSON.stringify(qd));
+  await startSite();
+  gateway("start");
+  await sleep(6000);
+  await go(`${SITE}/motorista`);
+  await js("window.dispatchEvent(new Event('online'))");
+  check("defeito: fila esvaziou sozinha", await waitFor(async () => (await outboxRows()).length === 0, 90000, 1000));
+  check("defeito: chegou à manutenção (origem motorista)", psql(`select count(*) || '|' || min(source) from maintenance_reports where description = '${mark}'`) === "1|motorista");
+  check("defeito: foto no armazenamento", psql(`select count(*) from storage.objects where bucket_id='driver-photos' and name in (select unnest(photos) from maintenance_reports where description = '${mark}')`) === "1");
+
+  console.log("\n== 9) Check-list com 1 problema e comprovante de entrega (fila)");
+  const ckId = crypto.randomUUID();
+  const repId = crypto.randomUUID();
+  const sched = psql("select id from loading_schedules where plate = 'TST1A11' and driver = 'MOT TESTE' limit 1");
+  const proofId = crypto.randomUUID();
+  // Coloca um item na fila do celular. "@UID/" nos textos vira "<id do motorista>/2026-10/".
+  const inject = (item) =>
+    js(`new Promise((res) => {
+    const open = indexedDB.open('cotaflow-offline');
+    open.onsuccess = () => {
+      const uid = JSON.parse(localStorage.getItem('cotaflow:identity')).id;
+      const blob = new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
+      const it = ${JSON.stringify(item)};
+      it.userId = uid;
+      it.photos = it.photos.map((p) => ({ path: uid + '/2026-10/' + p, blob }));
+      it.payload = JSON.parse(JSON.stringify(it.payload).split('@UID/').join(uid + '/2026-10/'));
+      open.result.transaction('outbox', 'readwrite').objectStore('outbox').put({ ...it, uploaded: [], status: 'pending', attempts: 0, nextAttemptAt: 0, createdAt: Date.now() }).transaction.oncomplete = () => res(true);
+    };
+  })`);
+  await inject({
+    id: ckId, kind: "checklist", summary: "Check-list · TST1A11 · 1 problema(s)", driverName: null,
+    photos: [`ck-${ckId}.jpg`],
+    payload: {
+      checklist: { id: ckId, plate: "TST1A11", trailer_plate: null, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), answers: { a: "prob" }, notes: {}, photos: { a: [`@UID/ck-${ckId}.jpg`] }, nonconformities: 1, lat: null, lon: null },
+      reports: [{ id: repId, plate: "TST1A11", category: "Freios", severity: 3, description: "[Check-list] E2E problema", source: "checklist", photos: [`@UID/ck-${ckId}.jpg`], reported_at: new Date().toISOString() }],
+    },
+  });
+  await inject({
+    id: proofId, kind: "proof", summary: "Comprovante · NF 123 · E2E", driverName: null,
+    photos: [`pf-${proofId}.jpg`],
+    payload: { id: proofId, schedule_id: sched, destination: "E2E destino", client_name: "CLIENTE E2E", invoice_number: "123", cte_number: "456", notes: null, invoice_weight_kg: 1000, unloaded_weight_kg: 990, photos: [`@UID/pf-${proofId}.jpg`], created_at: new Date().toISOString() },
+  });
+  await js("window.dispatchEvent(new Event('online'))");
+  check("fila esvaziou (check-list e comprovante enviados)", await waitFor(async () => (await outboxRows()).length === 0, 90000, 1000), JSON.stringify(await outboxRows()));
+  check("check-list chegou (1 linha)", psql(`select count(*) from driver_checklists where id = '${ckId}'`) === "1");
+  check("o problema do check-list virou defeito (1 linha)", psql(`select count(*) from maintenance_reports where id = '${repId}'`) === "1");
+  check("comprovante chegou (1 linha, peso certo)", /^1\|1000(\.0+)?$/.test(psql(`select count(*) || '|' || max(invoice_weight_kg) from delivery_proofs where id = '${proofId}'`)));
+
+  console.log("\n== 10) Check-list com placa errada: recusado, equipe avisada, motorista corrige a placa");
+  const bad = crypto.randomUUID();
+  await inject({
+    id: bad, kind: "checklist", summary: "Check-list · ZZZ9Z99", driverName: null, photos: [],
+    payload: {
+      checklist: { id: bad, plate: "ZZZ9Z99", trailer_plate: null, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), answers: {}, notes: {}, photos: {}, nonconformities: 0, lat: null, lon: null },
+      reports: [],
+    },
+  });
+  await js("window.dispatchEvent(new Event('online'))");
+  check("check-list: fica recusado com motivo de placa", await waitFor(async () => (await outboxRows()).some((r) => r.id === bad && r.status === "rejected" && /placa/i.test(r.reason ?? "")), 60000, 1000), JSON.stringify(await outboxRows()));
+  check("check-list: equipe avisada", await waitFor(() => psql(`select kind || '|' || coalesce(resolved_at::text, 'aberto') from driver_sync_issues where id = '${bad}'`) === "checklist|aberto", 20000));
+  await go(`${SITE}/motorista`);
+  await waitFor(async () => (await text()).includes("Corrigir placas e reenviar"), 20000);
+  await js(`(() => { const el = [...document.querySelectorAll('li input')][0]; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, 'TST1A11'); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Corrigir placas e reenviar').click()");
+  check("check-list: placa corrigida e enviada", await waitFor(async () => (await outboxRows()).length === 0, 60000, 1000), JSON.stringify(await outboxRows()));
+  check("check-list corrigido chegou ao servidor", psql(`select plate from driver_checklists where id = '${bad}'`) === "TST1A11");
+  check("aviso da equipe fechado sozinho", await waitFor(() => psql(`select resolution from driver_sync_issues where id = '${bad}'`) === "enviado", 20000));
 } catch (e) {
   console.log("ERRO no teste:", e.message);
   failures++;
@@ -271,6 +361,10 @@ try {
     execSync("docker start cotaflow-infra-gateway-1", { stdio: "ignore" });
     psql("delete from fuel_entries where odometer_km >= 480000 and plate = 'TST1A11'");
     psql("delete from driver_sync_issues where id = '11111111-2222-4333-8444-555555555555'");
+    psql("delete from maintenance_reports where description like 'E2E defeito %' or description = '[Check-list] E2E problema'");
+    psql("delete from driver_checklists where plate = 'TST1A11' and nonconformities <= 1 and notes = '{}'::jsonb");
+    psql("delete from delivery_proofs where destination = 'E2E destino'");
+    psql("delete from driver_sync_issues where kind = 'checklist'");
   } catch {}
   chrome.kill();
   console.log(failures === 0 ? "\nTUDO CERTO" : `\n${failures} verificação(ões) falharam`);

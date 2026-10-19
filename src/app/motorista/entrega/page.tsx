@@ -6,10 +6,24 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { splitDestinations } from "@/components/Destinations";
 import { loadingStatusBadge, loadingStatusLabel } from "@/lib/loadingStatus";
-import { uploadPhoto } from "@/lib/photos";
+import { compressImage } from "@/lib/photos";
 import { formatKg, parseKg } from "@/lib/deliveryProof";
+import { agoLabel, cached } from "@/lib/offline/refdata";
+import {
+  enqueue,
+  getOutboxItem,
+  listOutbox,
+  newPhotoPath,
+  reviseItem,
+  subscribeOutbox,
+  syncNow,
+  type OutboxItem,
+  type OutboxPhoto,
+} from "@/lib/offline/outbox";
+import { useOffline } from "@/lib/offline/OfflineProvider";
 
 const MAX_PHOTOS = 4;
+const SEND_WAIT_MS = 12000;
 
 interface Load {
   id: string;
@@ -49,53 +63,101 @@ const fieldCls =
   "w-full rounded-lg border border-navy-300 bg-white px-3 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 const labelCls = "mb-1.5 block text-sm font-medium text-navy-700";
 
+interface EntregaData {
+  loads: Load[];
+  proofs: Proof[];
+  notes: LoadNote[];
+}
+
 export default function ComprovanteEntregaPage() {
   const { user, isDriver, loading: authLoading } = useAuth();
-  const [loads, setLoads] = useState<Load[] | null>(null);
-  const [proofs, setProofs] = useState<Proof[]>([]);
-  const [loadNotes, setLoadNotes] = useState<LoadNote[]>([]);
+  const { offline } = useOffline();
+  const [data, setData] = useState<{ data: EntregaData; at: number; stale: boolean } | null>(null);
+  const [queued, setQueued] = useState<OutboxItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; saved: boolean } | null>(null);
   // "<id da carga>|<destino>" do formulário aberto.
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Corrigindo um comprovante recusado da fila.
+  const [redo, setRedo] = useState<OutboxItem | null>(null);
 
   const load = useCallback(async () => {
-    // Cargas de hoje + as de dias anteriores que ainda não foram concluídas
-    // (viagem que atravessa a virada do dia).
-    const today = localDate(new Date());
-    const [l, p] = await Promise.all([
-      supabase
-        .from("loading_schedules")
-        .select("id, schedule_date, client_name, cargo, origin, destination, plate, status")
-        .or(`schedule_date.eq.${today},and(schedule_date.lt.${today},status.neq.entregue)`)
-        .order("schedule_date", { ascending: false })
-        .order("loading_time", { ascending: true, nullsFirst: false }),
-      supabase
-        .from("delivery_proofs")
-        .select("schedule_id, destination, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg"),
-    ]);
-    if (l.error) setError(l.error.message);
-    const list = (l.data as Load[] | null) ?? [];
-    const ids = list.map((x) => x.id);
-    const n = ids.length
-      ? await supabase
-          .from("loading_schedule_notes")
-          .select("id, schedule_id, body, source, created_at")
-          .in("schedule_id", ids)
-          .order("created_at")
-      : { data: [] };
-    setLoadNotes((n.data as LoadNote[] | null) ?? []);
-    setLoads(list);
-    setProofs((p.data as Proof[] | null) ?? []);
-  }, []);
+    if (!user) return;
+    try {
+      const res = await cached<EntregaData>(`${user.id}:entrega`, async () => {
+        // Cargas de hoje + as de dias anteriores que ainda não foram concluídas
+        // (viagem que atravessa a virada do dia).
+        const today = localDate(new Date());
+        const [l, p] = await Promise.all([
+          supabase
+            .from("loading_schedules")
+            .select("id, schedule_date, client_name, cargo, origin, destination, plate, status")
+            .or(`schedule_date.eq.${today},and(schedule_date.lt.${today},status.neq.entregue)`)
+            .order("schedule_date", { ascending: false })
+            .order("loading_time", { ascending: true, nullsFirst: false }),
+          supabase
+            .from("delivery_proofs")
+            .select("schedule_id, destination, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg"),
+        ]);
+        if (l.error) throw new Error(l.error.message);
+        if (p.error) throw new Error(p.error.message);
+        const list = (l.data as Load[] | null) ?? [];
+        const ids = list.map((x) => x.id);
+        const n = ids.length
+          ? await supabase
+              .from("loading_schedule_notes")
+              .select("id, schedule_id, body, source, created_at")
+              .in("schedule_id", ids)
+              .order("created_at")
+          : { data: [] };
+        return {
+          loads: list,
+          proofs: (p.data as Proof[] | null) ?? [],
+          notes: (n.data as LoadNote[] | null) ?? [],
+        };
+      });
+      setData(res);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    }
+  }, [user]);
+
+  const loadQueue = useCallback(async () => {
+    if (!user) return;
+    setQueued((await listOutbox(user.id).catch(() => [])).filter((i) => i.kind === "proof"));
+  }, [user]);
 
   useEffect(() => {
     if (!user || !isDriver) return;
     queueMicrotask(() => {
       load();
+      loadQueue();
     });
-  }, [user, isDriver, load]);
+    return subscribeOutbox(() => {
+      loadQueue();
+      load();
+    });
+  }, [user, isDriver, load, loadQueue]);
+
+  // Abriu pelo botão "Corrigir e lançar de novo" da fila de envio.
+  useEffect(() => {
+    if (!user) return;
+    const id = new URLSearchParams(window.location.search).get("refazer");
+    if (!id) return;
+    getOutboxItem(id).then((item) => {
+      if (!item || item.userId !== user.id || item.kind !== "proof") return;
+      setRedo(item);
+      setOpenKey(`${item.payload.schedule_id}|${item.payload.destination}`);
+    });
+  }, [user]);
 
   if (authLoading || !isDriver) return null;
+
+  const loads = data?.data.loads ?? null;
+  const proofs = data?.data.proofs ?? [];
+  const loadNotes = data?.data.notes ?? [];
+  const staleNote = data?.stale ? `Dados guardados no celular (${agoLabel(data.at)}).` : null;
 
   return (
     <div className="mx-auto w-full max-w-md flex-1 px-4 py-6">
@@ -105,9 +167,23 @@ export default function ComprovanteEntregaPage() {
         Para cada destino, lance os dados e a foto do canhoto e do ticket de pesagem.
       </p>
 
-      {error && (
+      {staleNote && <p className="mt-1 text-xs text-amber-700">{staleNote}</p>}
+      {error && !data && (
         <div role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           Não foi possível carregar suas cargas ({error}).
+        </div>
+      )}
+      {notice && (
+        <div
+          role="status"
+          className={`mt-3 rounded-lg px-3 py-2 text-sm ${notice.saved ? "bg-amber-50 text-amber-900" : "bg-teal-50 text-teal-800"}`}
+        >
+          {notice.saved ? "💾" : "✓"} {notice.text}
+        </div>
+      )}
+      {redo && (
+        <div role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Corrigindo um comprovante recusado: {redo.reason}
         </div>
       )}
 
@@ -159,6 +235,9 @@ export default function ComprovanteEntregaPage() {
                   {list.map((dest) => {
                     const key = `${l.id}|${dest}`;
                     const proof = proofs.find((p) => p.schedule_id === l.id && p.destination === dest);
+                    const wait = queued.find((q) => q.payload.schedule_id === l.id && q.payload.destination === dest);
+                    // Na fila e sem recusa: já foi lançado (só falta enviar). Recusado: só reabre pela correção.
+                    const waiting = !proof && wait && wait.status !== "rejected";
                     const label = dest || "Destino da carga";
                     return (
                       <li key={key} className="rounded-lg border border-navy-200 px-3 py-2.5">
@@ -167,6 +246,10 @@ export default function ComprovanteEntregaPage() {
                           {proof ? (
                             <span className="shrink-0 rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800">
                               ✓ enviado
+                            </span>
+                          ) : waiting ? (
+                            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                              {offline ? "💾 aguardando sinal" : "💾 aguardando envio"}
                             </span>
                           ) : (
                             <button
@@ -186,14 +269,19 @@ export default function ComprovanteEntregaPage() {
                             {formatKg(proof.unloaded_weight_kg)} kg
                           </p>
                         )}
-                        {!proof && openKey === key && user && (
+                        {!proof && !waiting && openKey === key && user && (
                           <ProofForm
                             userId={user.id}
                             scheduleId={l.id}
                             destination={dest}
-                            onSaved={() => {
+                            redo={redo && `${redo.payload.schedule_id}|${redo.payload.destination}` === key ? redo : null}
+                            onSaved={(text, saved) => {
                               setOpenKey(null);
+                              setRedo(null);
+                              setNotice({ text, saved });
+                              if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
                               load();
+                              loadQueue();
                             }}
                           />
                         )}
@@ -214,29 +302,38 @@ function ProofForm({
   userId,
   scheduleId,
   destination,
+  redo,
   onSaved,
 }: {
   userId: string;
   scheduleId: string;
   destination: string;
-  onSaved: () => void;
+  redo: OutboxItem | null;
+  onSaved: (text: string, saved: boolean) => void;
 }) {
-  const [clientName, setClientName] = useState("");
-  const [invoice, setInvoice] = useState("");
-  const [cte, setCte] = useState("");
-  const [notes, setNotes] = useState("");
-  const [invoiceKg, setInvoiceKg] = useState("");
-  const [unloadedKg, setUnloadedKg] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const rp = (redo?.payload ?? {}) as Record<string, unknown>;
+  const kgText = (v: unknown) => (v === undefined || v === null ? "" : String(v).replace(".", ","));
+  const [clientName, setClientName] = useState(String(rp.client_name ?? ""));
+  const [invoice, setInvoice] = useState(String(rp.invoice_number ?? ""));
+  const [cte, setCte] = useState(String(rp.cte_number ?? ""));
+  const [notes, setNotes] = useState(String(rp.notes ?? ""));
+  const [invoiceKg, setInvoiceKg] = useState(kgText(rp.invoice_weight_kg));
+  const [unloadedKg, setUnloadedKg] = useState(kgText(rp.unloaded_weight_kg));
+  const [files, setFiles] = useState<OutboxPhoto[]>(redo?.photos ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Copia os arquivos AGORA: a lista do campo é "viva" e esvazia quando o
-  // campo é limpo (mesmo cuidado do relato de defeito).
-  function addFiles(list: FileList | null) {
+  // Reduz a foto agora (a câmera gera vários MB) e já define o nome com que ela vai subir.
+  async function addFiles(list: FileList | null) {
     if (!list) return;
     const picked = Array.from(list);
-    setFiles((prev) => [...prev, ...picked].slice(0, MAX_PHOTOS));
+    try {
+      const added: OutboxPhoto[] = [];
+      for (const f of picked) added.push({ path: newPhotoPath(userId), blob: await compressImage(f) });
+      setFiles((prev) => [...prev, ...added].slice(0, MAX_PHOTOS));
+    } catch {
+      setError("Não foi possível usar essa foto. Tire outra.");
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -253,9 +350,9 @@ function ProofForm({
     setSaving(true);
     setError(null);
     try {
-      const paths: string[] = [];
-      for (const f of files) paths.push(await uploadPhoto(userId, f));
-      const { error: err } = await supabase.from("delivery_proofs").insert({
+      const id = redo?.id ?? crypto.randomUUID();
+      const payload = {
+        id,
         schedule_id: scheduleId,
         destination,
         client_name: clientName.trim(),
@@ -264,24 +361,25 @@ function ProofForm({
         notes: notes.trim() || null,
         invoice_weight_kg: invKg,
         unloaded_weight_kg: unlKg,
-        photos: paths,
-      });
-      if (err) {
-        setError(
-          /duplicate|unique/i.test(err.message)
-            ? "Este destino já tem comprovante enviado."
-            : `Não foi possível enviar (${err.message}).`
-        );
+        photos: files.map((f) => f.path),
+        created_at: redo ? (redo.payload.created_at as string) : new Date().toISOString(),
+      };
+      const summary = `Comprovante · NF ${invoice.trim()} · ${destination || "destino da carga"}`;
+      if (redo) await reviseItem(id, { summary, payload, photos: files });
+      else await enqueue({ id, userId, kind: "proof", createdAt: Date.now(), summary, driverName: null, payload, photos: files });
+      await Promise.race([syncNow(userId, true), new Promise((r) => setTimeout(r, SEND_WAIT_MS))]);
+      const left = await getOutboxItem(id);
+      if (left?.status === "rejected") {
+        setError(`O servidor não aceitou este comprovante: ${left.reason} Corrija e envie de novo. A equipe foi avisada.`);
         setSaving(false);
         return;
       }
-      onSaved();
-    } catch (ex) {
-      setError(
-        `Não foi possível enviar. Confira o sinal e tente de novo (${
-          ex instanceof Error ? ex.message : "erro"
-        }).`
+      onSaved(
+        left ? `${summary} salvo no celular. Será enviado quando houver sinal.` : `${summary} enviado.`,
+        Boolean(left)
       );
+    } catch (ex) {
+      setError(`Não foi possível salvar no celular (${ex instanceof Error ? ex.message : "erro"}). Libere espaço e tente de novo.`);
       setSaving(false);
     }
   }
@@ -371,13 +469,13 @@ function ProofForm({
           <ul className="mb-2 flex flex-wrap gap-2">
             {files.map((f, i) => (
               <li
-                key={`${f.name}-${i}`}
+                key={f.path}
                 className="inline-flex items-center gap-1 rounded-full bg-brand-100 py-1 pl-3 pr-1.5 text-xs font-medium text-brand-800"
               >
                 📷 Foto {i + 1}
                 <button
                   type="button"
-                  onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                  onClick={() => setFiles((prev) => prev.filter((x) => x.path !== f.path))}
                   aria-label={`Remover foto ${i + 1}`}
                   className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-200"
                 >
@@ -431,7 +529,7 @@ function ProofForm({
         disabled={saving}
         className="w-full rounded-lg bg-brand-700 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {saving ? "Enviando..." : "Enviar comprovante"}
+        {saving ? "Salvando..." : redo ? "Enviar correção" : "Enviar comprovante"}
       </button>
     </form>
   );

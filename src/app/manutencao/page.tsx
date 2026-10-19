@@ -11,6 +11,7 @@ import { Modal } from "@/components/Modal";
 import { SearchSelect } from "@/components/SearchSelect";
 import { photoUrl } from "@/lib/photos";
 import { ChecklistTodayAlert } from "@/components/ChecklistTodayAlert";
+import { SyncIssuesAlert } from "@/components/SyncIssuesAlert";
 import {
   ORDER_COLUMNS,
   REPORT_CATEGORIES,
@@ -1012,6 +1013,7 @@ export default function ManutencaoPage() {
       </section>
 
       <ChecklistTodayAlert compact />
+      <SyncIssuesAlert kinds={["defeito", "checklist"]} />
 
       <section className="mt-6">
         <h2 className="mb-2 text-sm font-medium text-navy-900">

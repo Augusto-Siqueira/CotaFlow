@@ -12,7 +12,8 @@ import { setReachable } from "@/lib/offline/connection";
 
 const BUCKET = "driver-photos";
 
-export type OutboxKind = "fuel";
+/** fuel = abastecimento, defect = relato de defeito, proof = comprovante de entrega, checklist = check-list diário. */
+export type OutboxKind = "fuel" | "defect" | "proof" | "checklist";
 
 export interface OutboxPhoto {
   path: string;
@@ -28,7 +29,10 @@ export interface OutboxItem {
   /** Resumo para mostrar na fila e no aviso à equipe. */
   summary: string;
   driverName: string | null;
-  /** Linha a gravar no servidor (já com `id` e a lista final de caminhos das fotos). */
+  /**
+   * O que gravar no servidor, já com os códigos (`id`) e os caminhos das fotos.
+   * fuel/defect/proof: uma linha. checklist: { checklist: linha, reports: linhas de defeito }.
+   */
   payload: Record<string, unknown> & { photos?: string[] };
   /** Fotos do lançamento. Ficam guardadas até o envio dar certo (se o servidor recusar, o motorista reaproveita). */
   photos: OutboxPhoto[];
@@ -146,6 +150,22 @@ export async function retryItem(id: string): Promise<void> {
   emit();
 }
 
+/**
+ * Check-list recusado por placa errada: troca as placas (no check-list e nos
+ * defeitos que ele gera) e volta para a fila.
+ */
+export async function reviseChecklistPlates(id: string, plate: string, trailer: string | null): Promise<void> {
+  const item = await getOutboxItem(id);
+  if (!item || item.kind !== "checklist") return;
+  const p = item.payload as { checklist: Record<string, unknown>; reports: Record<string, unknown>[] };
+  const payload = {
+    checklist: { ...p.checklist, plate, trailer_plate: trailer },
+    reports: p.reports.map((r) => ({ ...r, plate })),
+  };
+  await idbPut("outbox", { ...item, payload, status: "pending", reason: undefined, attempts: 0, nextAttemptAt: 0 });
+  emit();
+}
+
 // ---------- classificação dos erros ----------
 
 interface ErrLike {
@@ -169,10 +189,16 @@ function isAuthProblem(e: ErrLike): boolean {
 
 function friendlyInsertError(table: string, e: ErrLike): string {
   const m = e.message ?? "erro";
-  if (e.code === "23503") return "A placa não está cadastrada na frota.";
+  if (table === "delivery_proofs") {
+    if (e.code === "23505") return "Este destino já tem comprovante enviado (por você ou por outra pessoa).";
+    if (e.code === "23503") return "A carga deste comprovante não está mais disponível para você.";
+    if (e.code === "42501") return "Esta carga não é sua ou já foi encerrada.";
+  } else {
+    if (e.code === "23503") return "A placa não está cadastrada na frota. Confira a placa do caminhão e da carreta.";
+    if (e.code === "23505") return "Este lançamento já foi enviado por outra pessoa.";
+    if (e.code === "42501") return "Sem permissão para este lançamento.";
+  }
   if (e.code === "23514") return "O servidor não aceitou os dados (confira foto, posto e valor por litro).";
-  if (e.code === "23505") return "Este lançamento já foi enviado por outra pessoa.";
-  if (e.code === "42501") return "Sem permissão para este lançamento.";
   return `${table}: ${m}`;
 }
 
@@ -197,25 +223,55 @@ async function uploadPhotos(item: OutboxItem): Promise<Outcome | null> {
   return null;
 }
 
-async function sendFuel(item: OutboxItem): Promise<Outcome> {
-  const up = await uploadPhotos(item);
-  if (up) return up;
-  const { error } = await supabase.from("fuel_entries").insert(item.payload);
-  if (!error) return { type: "sent" };
+/**
+ * Grava uma linha. Devolve null se gravou (ou se ela já estava lá: o envio
+ * anterior chegou e só a resposta se perdeu) ou o resultado a seguir.
+ */
+async function insertRow(table: string, row: Record<string, unknown>): Promise<Outcome | null> {
+  const { error } = await supabase.from(table).insert(row);
+  if (!error) return null;
   const e = error as ErrLike;
-  // Mesmo código de linha: este item já tinha chegado antes (a resposta se perdeu).
-  if (e.code === "23505" && /pkey/i.test(e.message ?? "")) return { type: "sent" };
+  // Mesmo código de linha: este item já tinha chegado antes.
+  if (e.code === "23505" && /pkey/i.test(e.message ?? "")) return null;
   if (isNetwork(e) || isAuthProblem(e) || /^5/.test(String(e.status ?? ""))) {
     return { type: "retry", error: e.message ?? "sem conexão" };
   }
-  return { type: "rejected", reason: friendlyInsertError("Abastecimento", e) };
+  return { type: "rejected", reason: friendlyInsertError(table, e) };
+}
+
+async function sendSingleRow(item: OutboxItem, table: string): Promise<Outcome> {
+  const up = await uploadPhotos(item);
+  if (up) return up;
+  return (await insertRow(table, item.payload)) ?? { type: "sent" };
+}
+
+/** Check-list: grava o check-list e depois um defeito para cada problema marcado (cada um com o seu código). */
+async function sendChecklist(item: OutboxItem): Promise<Outcome> {
+  const up = await uploadPhotos(item);
+  if (up) return up;
+  const p = item.payload as { checklist: Record<string, unknown>; reports: Record<string, unknown>[] };
+  const first = await insertRow("driver_checklists", p.checklist);
+  if (first) return first;
+  for (const report of p.reports) {
+    const r = await insertRow("maintenance_reports", report);
+    if (r) return r;
+  }
+  return { type: "sent" };
 }
 
 const HANDLERS: Record<OutboxKind, (item: OutboxItem) => Promise<Outcome>> = {
-  fuel: sendFuel,
+  fuel: (item) => sendSingleRow(item, "fuel_entries"),
+  defect: (item) => sendSingleRow(item, "maintenance_reports"),
+  proof: (item) => sendSingleRow(item, "delivery_proofs"),
+  checklist: sendChecklist,
 };
 
-const ISSUE_KIND: Record<OutboxKind, string> = { fuel: "abastecimento" };
+const ISSUE_KIND: Record<OutboxKind, string> = {
+  fuel: "abastecimento",
+  defect: "defeito",
+  proof: "comprovante",
+  checklist: "checklist",
+};
 
 /** Avisa a equipe de um item recusado (o mesmo item não gera dois avisos). */
 async function reportIssue(item: OutboxItem): Promise<boolean> {

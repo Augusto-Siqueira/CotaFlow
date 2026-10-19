@@ -9,6 +9,7 @@ import { DestinationsCell } from "@/components/Destinations";
 import { reportStageLabel, severityBadge, severityLabel } from "@/lib/maintenance";
 import { agoLabel, cached } from "@/lib/offline/refdata";
 import { OutboxPanel } from "@/components/OutboxPanel";
+import { useOffline } from "@/lib/offline/OfflineProvider";
 
 interface HomeData {
   /** Dia (AAAA-MM-DD) a que as cargas se referem. */
@@ -50,6 +51,7 @@ export default function MotoristaHome() {
   const { user, isDriver, loading: authLoading } = useAuth();
   const [home, setHome] = useState<{ data: HomeData; at: number; stale: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { items: outbox } = useOffline();
 
   useEffect(() => {
     if (!user || !isDriver) return;
@@ -99,7 +101,10 @@ export default function MotoristaHome() {
 
   const name = home?.data.name ?? null;
   const loads = home ? home.data.loads : null;
-  const checklistDone = home ? home.data.checklistDone : null;
+  // Check-list salvo no celular (ainda na fila) também vale como feito hoje.
+  const todayStart = new Date().setHours(0, 0, 0, 0);
+  const queuedChecklist = outbox.some((i) => i.kind === "checklist" && i.createdAt >= todayStart);
+  const checklistDone = home ? home.data.checklistDone || queuedChecklist : queuedChecklist ? true : null;
   const reports = home?.data.reports ?? [];
   // Dados guardados no celular: avisa de quando são (e se as cargas são de outro dia).
   const staleNote = home?.stale

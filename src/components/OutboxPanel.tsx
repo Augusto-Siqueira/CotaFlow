@@ -1,14 +1,44 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useOffline } from "@/lib/offline/OfflineProvider";
-import { discardItem, type OutboxKind } from "@/lib/offline/outbox";
+import { discardItem, reviseChecklistPlates, type OutboxKind } from "@/lib/offline/outbox";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 
-const REDO_HREF: Record<OutboxKind, string> = {
+const REDO_HREF: Record<Exclude<OutboxKind, "checklist">, string> = {
   fuel: "/motorista/abastecimento",
+  defect: "/motorista/defeito",
+  proof: "/motorista/entrega",
 };
+
+/** Check-list recusado: o erro é sempre de placa, então corrige aqui mesmo. */
+function ChecklistFix({ id, plate, trailer }: { id: string; plate: string; trailer: string }) {
+  const [p, setP] = useState(plate);
+  const [t, setT] = useState(trailer);
+  const input = "w-28 rounded-lg border border-navy-300 px-2 py-1 text-sm uppercase";
+  return (
+    <div className="mt-2 flex flex-wrap items-end gap-2">
+      <label className="text-xs text-navy-600">
+        Cavalo
+        <input value={p} onChange={(e) => setP(e.target.value.toUpperCase())} className={`${input} block`} />
+      </label>
+      <label className="text-xs text-navy-600">
+        Carreta
+        <input value={t} onChange={(e) => setT(e.target.value.toUpperCase())} className={`${input} block`} />
+      </label>
+      <button
+        type="button"
+        disabled={!p.trim()}
+        onClick={() => reviseChecklistPlates(id, p.trim(), t.trim() || null)}
+        className={buttonClasses("soft", "sm")}
+      >
+        Corrigir placas e reenviar
+      </button>
+    </div>
+  );
+}
 
 /**
  * Fila de envio do motorista: o que está aguardando sinal e o que o servidor
@@ -56,9 +86,11 @@ export function OutboxPanel() {
               <>
                 <p className="mt-1 text-xs text-red-700">{i.reason} A equipe já foi avisada.</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Link href={`${REDO_HREF[i.kind]}?refazer=${i.id}`} className={buttonClasses("soft", "sm")}>
-                    Corrigir e lançar de novo
-                  </Link>
+                  {i.kind !== "checklist" && (
+                    <Link href={`${REDO_HREF[i.kind]}?refazer=${i.id}`} className={buttonClasses("soft", "sm")}>
+                      Corrigir e lançar de novo
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={async () => {
@@ -71,6 +103,13 @@ export function OutboxPanel() {
                     Descartar
                   </button>
                 </div>
+                {i.kind === "checklist" && (
+                  <ChecklistFix
+                    id={i.id}
+                    plate={String((i.payload as { checklist: { plate?: string } }).checklist.plate ?? "")}
+                    trailer={String((i.payload as { checklist: { trailer_plate?: string } }).checklist.trailer_plate ?? "")}
+                  />
+                )}
               </>
             )}
           </li>
