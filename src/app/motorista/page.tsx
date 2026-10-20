@@ -18,6 +18,8 @@ interface HomeData {
   loads: Load[];
   checklistDone: boolean;
   reports: MyReport[];
+  /** Cargas que já têm ordem de embarque (PDF). */
+  orderIds?: string[];
 }
 
 interface Load {
@@ -51,7 +53,7 @@ export default function MotoristaHome() {
   const { user, isDriver, loading: authLoading } = useAuth();
   const [home, setHome] = useState<{ data: HomeData; at: number; stale: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { items: outbox } = useOffline();
+  const { items: outbox, offline } = useOffline();
 
   useEffect(() => {
     if (!user || !isDriver) return;
@@ -79,6 +81,10 @@ export default function MotoristaHome() {
           .limit(5),
       ]);
       if (l.error) throw new Error(l.error.message);
+      const loadIds = ((l.data as Load[] | null) ?? []).map((x) => x.id);
+      const orders = loadIds.length
+        ? await supabase.from("loading_orders").select("schedule_id").in("schedule_id", loadIds)
+        : { data: [] };
       const driver = d.data as { name: string; nickname: string | null } | null;
       return {
         forDate: localDate(today),
@@ -86,6 +92,7 @@ export default function MotoristaHome() {
         loads: (l.data as Load[] | null) ?? [],
         checklistDone: (c.count ?? 0) > 0,
         reports: (r.data as MyReport[] | null) ?? [],
+        orderIds: ((orders.data as { schedule_id: string }[] | null) ?? []).map((o) => o.schedule_id),
       };
     })
       .then((res) => {
@@ -253,6 +260,16 @@ export default function MotoristaHome() {
                   <dd className="text-navy-800">{l.weight ? `${l.weight} t` : "—"}</dd>
                 </div>
               </dl>
+              {!offline && home?.data.orderIds?.includes(l.id) && (
+                <a
+                  href={`/api/programacao/${l.id}/ordem`}
+                  target="_blank"
+                  rel="noopener"
+                  className="mt-3 block rounded-lg border border-brand-600 px-3 py-2 text-center text-sm font-medium text-brand-700 hover:bg-brand-50"
+                >
+                  Baixar ordem de embarque (PDF)
+                </a>
+              )}
             </div>
           ))
         )}

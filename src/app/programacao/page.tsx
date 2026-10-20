@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { FLEET_CERT_COLUMNS, certAlerts, certText, normalizePlate, type FleetCertFields } from "@/lib/fleet";
 import { FleetCertAlert } from "@/components/FleetCertAlert";
+import { LoadingOrderModal } from "@/components/LoadingOrderModal";
+import { hasLoadingOrder, type OrderLine } from "@/lib/loadingOrder";
 import { SearchSelect } from "@/components/SearchSelect";
 import {
   LOADING_STATUSES,
@@ -184,6 +186,9 @@ export default function ProgramacaoPage() {
   // Destinos que já têm comprovante do motorista, por carga.
   const [proofMap, setProofMap] = useState<Map<string, string[]>>(new Map());
   const [noteMap, setNoteMap] = useState<Map<string, ScheduleNote[]>>(new Map());
+  // Ordem de embarque (Btech): linhas já lançadas, por carga, e a carga cuja janela está aberta.
+  const [orderMap, setOrderMap] = useState<Map<string, OrderLine[]>>(new Map());
+  const [orderFor, setOrderFor] = useState<Load | null>(null);
   const [clients, setClients] = useState<{ label: string; name: string }[]>([]);
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
   const [showMaint, setShowMaint] = useState(true);
@@ -335,7 +340,13 @@ export default function ProgramacaoPage() {
           .in("schedule_id", ids)
           .order("created_at")
       : { data: [] };
+    const { data: orderRows } = ids.length
+      ? await supabase.from("loading_orders").select("schedule_id, lines").in("schedule_id", ids)
+      : { data: [] };
     if (d !== latestDate.current) return;
+    setOrderMap(
+      new Map(((orderRows as { schedule_id: string; lines: OrderLine[] }[] | null) ?? []).map((o) => [o.schedule_id, o.lines]))
+    );
     const nm = new Map<string, ScheduleNote[]>();
     for (const n of (noteRows as ScheduleNote[] | null) ?? []) {
       nm.set(n.schedule_id, [...(nm.get(n.schedule_id) ?? []), n]);
@@ -1674,7 +1685,7 @@ export default function ProgramacaoPage() {
                       </div>
                     )}
 
-                    {(l.quote_id || canEditSchedule || (noteMap.get(l.id)?.length ?? 0) > 0) && (
+                    {(l.quote_id || canEditSchedule || (noteMap.get(l.id)?.length ?? 0) > 0 || (orderMap.get(l.id)?.length ?? 0) > 0) && (
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                         {l.quote_id && (
                           <Link
@@ -1685,6 +1696,16 @@ export default function ProgramacaoPage() {
                               ? `Cotação ${l.quotes.client_quote_number.trim()}`
                               : "Ver cotação"}
                           </Link>
+                        )}
+                        {(orderMap.get(l.id)?.length ?? 0) > 0 && (
+                          <a
+                            href={`/api/programacao/${l.id}/ordem`}
+                            target="_blank"
+                            rel="noopener"
+                            className={`${buttonClasses("soft", "sm")} print:hidden`}
+                          >
+                            Baixar ordem (PDF)
+                          </a>
                         )}
                         {!canEditSchedule && (noteMap.get(l.id)?.length ?? 0) > 0 && (
                           <button
@@ -1705,6 +1726,15 @@ export default function ProgramacaoPage() {
                             >
                               Editar
                             </button>
+                            {hasLoadingOrder(l.client_name) && (
+                              <button
+                                type="button"
+                                onClick={() => setOrderFor(l)}
+                                className={buttonClasses("soft", "sm")}
+                              >
+                                {(orderMap.get(l.id)?.length ?? 0) > 0 ? "Editar ordem" : "Ordem de embarque"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => openNotes(l)}
@@ -1737,6 +1767,15 @@ export default function ProgramacaoPage() {
           })
         )}
       </div>
+
+      {orderFor && (
+        <LoadingOrderModal
+          load={orderFor}
+          existing={orderMap.get(orderFor.id) ?? null}
+          onClose={() => setOrderFor(null)}
+          onSaved={() => fetchRows(date)}
+        />
+      )}
 
       {notesFor && (
         <Modal onClose={() => setNotesFor(null)} labelledBy="notes-modal-title" className="max-w-lg">
