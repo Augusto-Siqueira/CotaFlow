@@ -174,7 +174,6 @@ export default function MonthlyChecklistView({ params }: { params: Promise<{ id:
             const extraText = [
               ex.due && `venc. ${fmtDateBr(ex.due)}`,
               ex.due2 && `2º venc. ${fmtDateBr(ex.due2)}`,
-              ex.points && `${ex.points} pontos`,
               ex.validity && `validade ${fmtDateBr(ex.validity)}`,
               ex.date && `última regulagem ${fmtDateBr(ex.date)}`,
             ]

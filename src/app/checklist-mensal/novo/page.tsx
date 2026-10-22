@@ -291,15 +291,6 @@ export default function NewMonthlyChecklist() {
                       {it.extra === "cnh" && (
                         <>
                           <label className="flex items-center gap-1">
-                            Pontos na CNH
-                            <input
-                              inputMode="numeric"
-                              value={ex.points ?? ""}
-                              onChange={(e) => setExtra(it.id, { points: e.target.value.replace(/\D/g, "").slice(0, 2) })}
-                              className={`${dateCls} w-16`}
-                            />
-                          </label>
-                          <label className="flex items-center gap-1">
                             Validade{a !== "NA" && <span className="text-red-600">*</span>}
                             <input
                               type="date"

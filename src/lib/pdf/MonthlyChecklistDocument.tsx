@@ -29,7 +29,7 @@ function extraText(c: MonthlyChecklist, it: MonthlyItem): string {
   const parts: string[] = [];
   if (it.extra === "due" || it.extra === "due2") parts.push(`VENCIMENTO: ${ex.due ? fmtDateBr(ex.due) : "—"}`);
   if (it.extra === "due2") parts.push(`VENCIMENTO: ${ex.due2 ? fmtDateBr(ex.due2) : "—"}`);
-  if (it.extra === "cnh") parts.push(`PONTOS NA CNH: ${ex.points || "—"}   VALIDADE: ${ex.validity ? fmtDateBr(ex.validity) : "—"}`);
+  if (it.extra === "cnh") parts.push(`VALIDADE: ${ex.validity ? fmtDateBr(ex.validity) : "—"}`);
   if (it.extra === "date") parts.push(`DATA DA ÚLTIMA REGULAGEM DE FREIOS: ${ex.date ? fmtDateBr(ex.date) : "—"}`);
   return parts.join("    ");
 }
