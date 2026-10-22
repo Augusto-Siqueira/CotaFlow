@@ -15,6 +15,21 @@ export function splitDestinations(value: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * A mesma cidade pode ter mais de uma entrega na carga: a segunda vira "Cidade/UF (2)",
+ * a terceira "(3)". O número só distingue as entregas (cada uma tem o seu comprovante);
+ * a cidade em si é o texto sem ele.
+ */
+export function baseCity(destination: string): string {
+  return destination.replace(/\s*\(\d+\)\s*$/, "").trim();
+}
+
+/** Nome da próxima entrega nesta cidade: a própria cidade na primeira vez, "(2)", "(3)"... nas seguintes. */
+export function nextDeliveryName(list: string[], city: string): string {
+  const same = list.filter((d) => baseCity(d).toLowerCase() === city.toLowerCase()).length;
+  return same === 0 ? city : `${city} (${same + 1})`;
+}
+
 export function joinDestinations(list: string[]): string {
   return list.join(SEP);
 }
@@ -76,7 +91,8 @@ export function DestinationsInput({
         invalid.push(raw);
         continue;
       }
-      if (!next.some((d) => d.toLowerCase() === item.toLowerCase())) next.push(item);
+      // A mesma cidade pode ser outra entrega: entra numerada ("Cidade/UF (2)").
+      next.push(nextDeliveryName(next, item));
     }
     if (next.length !== list.length) onChange(joinDestinations(next));
     if (invalid.length > 0) {
@@ -111,7 +127,7 @@ export function DestinationsInput({
               commit();
             }
           }}
-          placeholder={list.length > 0 ? "Outro destino (Enter para adicionar)" : (placeholder ?? "")}
+          placeholder={list.length > 0 ? "Outra entrega (Enter para adicionar)" : (placeholder ?? "")}
           cities={cities}
           addresses={[]}
           hideBasesButton
@@ -124,7 +140,7 @@ export function DestinationsInput({
           disabled={!draft.trim()}
           className="shrink-0 rounded-lg border border-navy-300 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700"
         >
-          Adicionar
+          Adicionar entrega
         </button>
       </div>
       {list.length > 0 && (

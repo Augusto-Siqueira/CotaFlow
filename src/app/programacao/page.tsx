@@ -19,7 +19,7 @@ import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
 import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf, normalizeCityText } from "@/lib/cities";
-import { DestinationsInput, splitDestinations } from "@/components/Destinations";
+import { DestinationsInput, baseCity, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 import { DayNotepad } from "@/components/DayNotepad";
 import { SyncIssuesAlert } from "@/components/SyncIssuesAlert";
@@ -703,7 +703,7 @@ export default function ProgramacaoPage() {
     }
     const badOrigin = form.origin.trim() && resolveCity(form.origin) === null;
     const badDestinations = splitDestinations(form.destination).filter(
-      (d) => resolveCity(d) === null
+      (d) => resolveCity(baseCity(d)) === null
     );
     if (badOrigin) {
       setFormError(`Origem inválida: escolha uma cidade da lista (Cidade/UF). Recebido: "${form.origin.trim()}".`);
@@ -712,7 +712,7 @@ export default function ProgramacaoPage() {
     if (badDestinations.length > 0 || pendingDestination.trim()) {
       const names = [...badDestinations, pendingDestination.trim()].filter(Boolean);
       setFormError(
-        `Destino inválido: escolha cidades da lista (Cidade/UF) e clique em Adicionar. Corrija: ${names.join("; ")}.`
+        `Entrega inválida: escolha cidades da lista (Cidade/UF) e clique em Adicionar entrega. Corrija: ${names.join("; ")}.`
       );
       return;
     }
@@ -735,7 +735,13 @@ export default function ProgramacaoPage() {
       cargo: form.cargo.trim(),
       origin: form.origin.trim() ? resolveCity(form.origin) : null,
       destination: form.destination.trim()
-        ? splitDestinations(form.destination).map((d) => resolveCity(d) ?? d).join("; ")
+        ? splitDestinations(form.destination)
+            .map((d) => {
+              // Mantém o número da entrega ("(2)") depois do nome oficial da cidade.
+              const base = baseCity(d);
+              return (resolveCity(base) ?? base) + d.slice(base.length);
+            })
+            .join("; ")
         : null,
       weight: normalizeWeight(form.weight) || null,
       plate: fieldChecks.plate || null,
@@ -1345,7 +1351,7 @@ export default function ProgramacaoPage() {
             </div>
             <div className="lg:col-span-2">
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="prog-destino-opcional">
-                Destino <span className="text-navy-500">(opcional)</span>
+                Entregas <span className="text-navy-500">(opcional)</span>
               </label>
               <DestinationsInput id="prog-destino-opcional"
                 value={form.destination}
@@ -1538,7 +1544,7 @@ export default function ProgramacaoPage() {
               >
                 <span>Carga</span>
                 {hasOrigin && <span>Origem</span>}
-                {hasDestination && <span>Destino</span>}
+                {hasDestination && <span>Entregas</span>}
                 <span>Peso</span>
                 <span>Cavalo</span>
                 {hasTrailer && <span>Carreta</span>}
@@ -1590,7 +1596,7 @@ export default function ProgramacaoPage() {
                               className={`min-w-0 text-navy-700 ${l.destination?.trim() ? "" : "max-lg:hidden"}`}
                             >
                               <span className="block text-[11px] uppercase text-navy-500 lg:hidden">
-                                Destino
+                                Entregas
                               </span>
                               <DeliveryProofDestinations
                                 scheduleId={l.id}

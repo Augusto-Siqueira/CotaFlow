@@ -65,7 +65,8 @@ export function linesFromDestination(destination: string | null): OrderLine[] {
     .filter(Boolean)
     .slice(0, ORDER_MAX_LINES);
   if (parts.length === 0) return [{ ...EMPTY_LINE }];
-  return parts.map((p) => {
+  return parts.map((raw) => {
+    const p = raw.replace(/\s*\(\d+\)\s*$/, ""); // tira o número da entrega repetida
     const m = p.match(/^(.*?)[\s]*\/[\s]*([A-Za-z]{2})$/);
     return { ...EMPTY_LINE, city: (m ? m[1] : p).toUpperCase(), uf: m ? m[2].toUpperCase() : "" };
   });
