@@ -43,6 +43,7 @@ export const NAV: NavEntry[] = [
       { href: "/programacao", label: "Programação do dia" },
       { href: "/programacao/dashboard", label: "Dashboard" },
       { href: "/programacao/capacitacoes", label: "Capacitações" },
+      { href: "/programacao/comprovantes", label: "Comprovantes" },
     ],
   },
   {
