@@ -7,6 +7,7 @@ import { photoUrl } from "@/lib/photos";
 import { ButtonLink, buttonClasses } from "@/components/Button";
 import {
   CERT_LABEL,
+  MONTHLY_CREATES_DEFECTS,
   MONTHLY_TEMPLATE_LABEL,
   fmtDateBr,
   monthlyStatus,
@@ -88,7 +89,9 @@ export default function MonthlyChecklistView({ params }: { params: Promise<{ id:
           ✓ Check-list salvo.
           {c.defects_created > 0
             ? ` ${c.defects_created} ${c.defects_created === 1 ? "defeito foi enviado" : "defeitos foram enviados"} para a triagem da Manutenção.`
-            : " Nenhum defeito de manutenção."}
+            : c.nonconformities > 0
+              ? ` ${c.nonconformities} ${c.nonconformities === 1 ? "item ficou" : "itens ficaram"} com N.`
+              : " Nenhum item com N."}
         </div>
       )}
 
@@ -115,10 +118,12 @@ export default function MonthlyChecklistView({ params }: { params: Promise<{ id:
           <dt className="text-[11px] uppercase text-navy-500">Itens com N</dt>
           <dd className={`font-medium ${c.nonconformities > 0 ? "text-red-700" : "text-navy-900"}`}>{c.nonconformities}</dd>
         </div>
-        <div>
-          <dt className="text-[11px] uppercase text-navy-500">Defeitos na manutenção</dt>
-          <dd className="font-medium text-navy-900">{c.defects_created}</dd>
-        </div>
+        {MONTHLY_CREATES_DEFECTS || c.defects_created > 0 ? (
+          <div>
+            <dt className="text-[11px] uppercase text-navy-500">Defeitos na manutenção</dt>
+            <dd className="font-medium text-navy-900">{c.defects_created}</dd>
+          </div>
+        ) : null}
       </dl>
 
       {c.divergences.length > 0 && (
@@ -141,7 +146,7 @@ export default function MonthlyChecklistView({ params }: { params: Promise<{ id:
             {nItems.map((i) => (
               <li key={i.id}>
                 <span className="font-semibold">{i.number}</span> {i.text}
-                {i.maintenance && <span className="ml-1 text-xs text-red-700">(defeito: {i.category})</span>}
+                {i.maintenance && <span className="ml-1 text-xs text-red-700">(manutenção: {i.category})</span>}
                 {c.item_notes[i.id] && <span className="block text-red-900">— {c.item_notes[i.id]}</span>}
                 {(c.photos[i.id] ?? []).length > 0 && (
                   <span className="mt-1 flex flex-wrap gap-2">

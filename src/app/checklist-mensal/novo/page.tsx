@@ -11,6 +11,7 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { FLEET_KINDS, normalizePlate, type FleetCertFields } from "@/lib/fleet";
 import {
   CERT_LABEL,
+  MONTHLY_CREATES_DEFECTS,
   MONTHLY_TEMPLATE_LABEL,
   fmtDateBr,
   templateOf,
@@ -327,7 +328,7 @@ export default function NewMonthlyChecklist() {
                   </div>
                   {a === "N" && (
                     <div className="mt-2">
-                      {it.maintenance && (
+                      {it.maintenance && MONTHLY_CREATES_DEFECTS && (
                         <p className="mb-1 text-xs font-medium text-red-700">Vai para a triagem da Manutenção como defeito ({it.category}).</p>
                       )}
                       <textarea

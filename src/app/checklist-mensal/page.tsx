@@ -8,6 +8,7 @@ import { ButtonLink, buttonClasses } from "@/components/Button";
 import { FLEET_KINDS, normalizePlate } from "@/lib/fleet";
 import {
   MONTHLY_ALERT_DAYS,
+  MONTHLY_CREATES_DEFECTS,
   MONTHLY_CYCLE_DAYS,
   fmtDateBr,
   monthlyStatus,
@@ -129,8 +130,8 @@ export default function MonthlyChecklistPanel() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-navy-900">Check-list mensal</h1>
           <p className="mt-1 text-sm text-navy-500">
-            Cada placa passa por uma inspeção a cada {MONTHLY_CYCLE_DAYS} dias. Itens de manutenção marcados com N viram defeito na
-            triagem da Manutenção.
+            Cada placa passa por uma inspeção a cada {MONTHLY_CYCLE_DAYS} dias.
+            {MONTHLY_CREATES_DEFECTS ? " Itens de manutenção marcados com N viram defeito na triagem da Manutenção." : ""}
           </p>
         </div>
         {canDoMonthlyChecklist && <ButtonLink href="/checklist-mensal/novo">Fazer check-list</ButtonLink>}

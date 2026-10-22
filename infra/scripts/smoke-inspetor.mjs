@@ -130,13 +130,15 @@ try {
   created.checklists.push(id);
   const saved = must(await admin.from("monthly_checklists").select("*").eq("id", id).single(), "check-list salvo");
   check("conta 2 itens com N", saved.nonconformities === 2, String(saved.nonconformities));
-  check("1 defeito (só o item de manutenção: freios)", saved.defects_created === 1, String(saved.defects_created));
+  // Geração de defeito pelo check-list mensal está DESLIGADA (v_create_defects = false).
+  check("nenhum defeito criado (opção desligada)", saved.defects_created === 0, String(saved.defects_created));
   check("divergência do CIV registrada", saved.divergences.length === 1 && saved.divergences[0].cert === "civ", JSON.stringify(saved.divergences));
   const reps = must(await admin.from("maintenance_reports").select("id, category, severity, source").eq("plate", plate), "defeitos");
-  check("defeito na triagem com origem check-list mensal", reps.length === 1 && reps[0].source === "checklist_mensal" && reps[0].severity === 3, JSON.stringify(reps));
+  check("nada foi para a triagem da manutenção", reps.length === 0, JSON.stringify(reps));
   const again = await insp.client.rpc("submit_monthly_checklist", { p: payload });
   const reps2 = must(await admin.from("maintenance_reports").select("id").eq("plate", plate), "defeitos 2");
-  check("reenviar o mesmo check-list não duplica", !again.error && reps2.length === 1);
+  const twice = must(await admin.from("monthly_checklists").select("id").eq("id", id), "check-list 2");
+  check("reenviar o mesmo check-list não duplica", !again.error && reps2.length === 0 && twice.length === 1);
   const cad = must(await admin.from("fleet_units").select("civ_due").eq("plate", plate).single(), "cadastro");
   check("cadastro da placa não foi alterado", cad.civ_due === "2030-01-01", cad.civ_due);
 

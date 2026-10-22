@@ -4,7 +4,10 @@
 --   semi  = semirreboques (inclui as carretas de bi-trem, uma por placa)
 --   motor = truck, bitruck e cavalo mecânico ("Truck e outros")
 -- Respostas: S (atende), N (defeito) ou NA (não se aplica ao implemento).
--- Itens de manutenção respondidos com N viram defeito na triagem da Manutenção.
+-- Itens de manutenção respondidos com N PODEM virar defeito na triagem da
+-- Manutenção: por decisão da empresa isso começa DESLIGADO (v_create_defects
+-- na função submit_monthly_checklist). A classificação dos itens (maintenance /
+-- category) já fica pronta para religar.
 --
 -- Perfil novo "inspetor" (Check-list mensal): só faz e consulta os check-lists
 -- mensais. O banco nega a ele todas as outras tabelas (regra restritiva), como
@@ -152,6 +155,8 @@ declare
   v_div jsonb := '[]'::jsonb;
   v_nc integer := 0;
   v_defects integer := 0;
+  -- Gerar defeito na manutenção a partir do check-list mensal: desligado por enquanto.
+  v_create_defects constant boolean := false;
   it record;
   v_typed date;
   v_reg date;
@@ -186,8 +191,8 @@ begin
         v_div := v_div || jsonb_build_object('item', it.number, 'cert', it.cert_key, 'checklist', v_typed, 'cadastro', v_reg);
       end if;
     end if;
-    -- Defeito na triagem para item de manutenção com N.
-    if it.maintenance and (v_answers ->> it.id) = 'N' then
+    -- Defeito na triagem para item de manutenção com N (só com a opção ligada).
+    if v_create_defects and it.maintenance and (v_answers ->> it.id) = 'N' then
       insert into maintenance_reports (id, plate, category, severity, description, source, photos, reported_at)
       values (
         gen_random_uuid(),

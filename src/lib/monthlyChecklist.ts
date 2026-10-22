@@ -15,6 +15,12 @@ export function templateOf(kind: string): MonthlyTemplate {
 
 /** Nova inspeção a cada 30 dias; avisa a partir de 7 dias antes. */
 export const MONTHLY_CYCLE_DAYS = 30;
+
+/**
+ * Itens de manutenção com N viram defeito na triagem? Desligado por decisão da
+ * empresa (mesma chave no banco: v_create_defects em submit_monthly_checklist).
+ */
+export const MONTHLY_CREATES_DEFECTS = false;
 export const MONTHLY_ALERT_DAYS = 7;
 
 export interface MonthlyItem {
