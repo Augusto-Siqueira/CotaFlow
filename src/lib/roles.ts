@@ -7,6 +7,7 @@ export const ROLES = [
   { value: "logistica", label: "Logística", hint: "Programação" },
   { value: "manutencao", label: "Manutenção", hint: "Manutenção e check-lists" },
   { value: "abastecimento", label: "Abastecimento", hint: "Acompanha e corrige os abastecimentos" },
+  { value: "inspetor", label: "Check-list mensal", hint: "Só faz e consulta os check-lists mensais das placas" },
   { value: "motorista", label: "Motorista", hint: "Só o app do motorista" },
   { value: "cliente", label: "Cliente", hint: "Só o portal de comprovantes das empresas dele" },
 ] as const;

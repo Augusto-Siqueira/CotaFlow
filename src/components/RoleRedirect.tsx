@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
  * evita telas vazias). No primeiro acesso, ele precisa trocar a senha inicial.
  */
 export function RoleRedirect() {
-  const { isDriver, isPortalClient, mustChangePassword, user } = useAuth();
+  const { isDriver, isPortalClient, isInspector, mustChangePassword, user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -26,7 +26,11 @@ export function RoleRedirect() {
     if (isPortalClient && !pathname.startsWith("/portal") && pathname !== "/login") {
       router.replace("/portal");
     }
-  }, [isDriver, isPortalClient, pathname, router]);
+    // Funcionário da base só usa os check-lists mensais.
+    if (isInspector && !pathname.startsWith("/checklist-mensal") && pathname !== "/login") {
+      router.replace("/checklist-mensal");
+    }
+  }, [isDriver, isPortalClient, isInspector, pathname, router]);
 
   if (user && mustChangePassword) return <ForcePasswordChange />;
   return null;

@@ -1155,7 +1155,9 @@ export default function ManutencaoPage() {
               </h2>
               <p className="mt-0.5 text-xs text-navy-500">
                 Relatado em {formatDateTime(detail.reported_at)}
-                {detail.source !== "manual" ? ` · via ${detail.source}` : ""}
+                {detail.source !== "manual"
+                  ? ` · via ${({ motorista: "app do motorista", checklist: "check-list diário", checklist_mensal: "check-list mensal" } as Record<string, string>)[detail.source] ?? detail.source}`
+                  : ""}
               </p>
             </div>
             <span className="flex shrink-0 flex-col items-end gap-1">

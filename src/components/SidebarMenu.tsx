@@ -11,6 +11,8 @@ interface NavLeaf {
   adminOnly?: boolean;
   commercialOnly?: boolean;
   fuelOnly?: boolean;
+  /** Check-list mensal: admin, manutenção e logística. */
+  monthlyOnly?: boolean;
 }
 
 interface NavEntry {
@@ -54,6 +56,7 @@ export const NAV: NavEntry[] = [
       { href: "/manutencao", label: "Lançamentos" },
       { href: "/manutencao/dashboard", label: "Dashboard" },
       { href: "/manutencao/checklists", label: "Check-lists" },
+      { href: "/checklist-mensal", label: "Check-list mensal", monthlyOnly: true },
     ],
   },
   {
@@ -240,6 +243,7 @@ export function SidebarMenu({
                   (!i.adminOnly || role === "admin") &&
                   (!i.commercialOnly || role === "admin" || role === "comercial") &&
                   (!i.fuelOnly || role === "admin" || role === "abastecimento") &&
+                  (!i.monthlyOnly || role === "admin" || role === "manutencao" || role === "logistica") &&
                   // Perfil Abastecimento: da Programação, só a tela do dia (somente leitura).
                   (role !== "abastecimento" || entry.key !== "programacao" || i.href === "/programacao")
               );

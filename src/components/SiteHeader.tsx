@@ -14,9 +14,9 @@ import { SidebarMenu, currentPageTitle } from "@/components/SidebarMenu";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const { user, role, isDriver, isPortalClient } = useAuth();
-  // Motorista e cliente externo não usam o menu do sistema.
-  const hasMenu = Boolean(user) && !isDriver && !isPortalClient;
+  const { user, role, isDriver, isPortalClient, isInspector } = useAuth();
+  // Motorista, cliente externo e inspetor não usam o menu do sistema.
+  const hasMenu = Boolean(user) && !isDriver && !isPortalClient && !isInspector;
   const { confirm: askConfirm } = useFeedback();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -74,7 +74,7 @@ export function SiteHeader() {
             </button>
           )}
           <Link
-            href={isDriver ? "/motorista" : isPortalClient ? "/portal" : "/"}
+            href={isDriver ? "/motorista" : isPortalClient ? "/portal" : isInspector ? "/checklist-mensal" : "/"}
             className="flex items-center gap-2 text-lg font-bold tracking-tight text-white"
           >
             <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
@@ -96,7 +96,7 @@ export function SiteHeader() {
               {roleLabel(role)}
             </span>
             <ThemeToggle className="text-chrome-300 hover:text-brand-400" />
-            {isPortalClient && (
+            {(isPortalClient || isInspector) && (
               <button
                 type="button"
                 onClick={() => setPasswordOpen(true)}
