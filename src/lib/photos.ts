@@ -38,3 +38,9 @@ export async function photoUrl(path: string, seconds = 3600): Promise<string | n
   const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, seconds);
   return data?.signedUrl ?? null;
 }
+
+/** Link temporário que faz o navegador BAIXAR a foto (com o nome de arquivo dado) em vez de abri-la. */
+export async function photoDownloadUrl(path: string, filename: string, seconds = 300): Promise<string | null> {
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, seconds, { download: filename });
+  return data?.signedUrl ?? null;
+}

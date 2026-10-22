@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { photoUrl } from "@/lib/photos";
+import { photoDownloadUrl, photoUrl } from "@/lib/photos";
 import { buildProofEmail, formatKg } from "@/lib/deliveryProof";
 import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
@@ -131,6 +131,7 @@ function ProofModal({
   const [mailNote, setMailNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const { confirm: askConfirm } = useFeedback();
 
   useEffect(() => {
@@ -173,6 +174,30 @@ function ProofModal({
     }
     onChanged();
     onClose();
+  }
+
+  // Baixa as fotos do canhoto/ticket (uma por vez, com nome de arquivo identificável).
+  async function download() {
+    if (!proof) return;
+    setDownloading(true);
+    const base = `comprovante-${(proof.cte_number || proof.invoice_number || "entrega").replace(/[^A-Za-z0-9.-]+/g, "_")}-${destination
+      .replace(/[^A-Za-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "")}`;
+    for (let i = 0; i < proof.photos.length; i++) {
+      const name = `${base}${proof.photos.length > 1 ? `-${i + 1}` : ""}.jpg`;
+      const url = await photoDownloadUrl(proof.photos[i], name);
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Pequena pausa: o navegador ignora downloads disparados todos no mesmo instante.
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    setDownloading(false);
   }
 
   async function sendByEmail() {
@@ -280,6 +305,17 @@ function ProofModal({
           <span />
         )}
         <span className="flex gap-2">
+          {proof && proof.photos.length > 0 && (
+            <button
+              type="button"
+              onClick={download}
+              disabled={downloading}
+              title="Baixa a foto do canhoto e do ticket de pesagem"
+              className={buttonClasses("soft")}
+            >
+              {downloading ? "Baixando..." : proof.photos.length > 1 ? `Baixar (${proof.photos.length} fotos)` : "Baixar"}
+            </button>
+          )}
           {proof && (
             <button
               type="button"
