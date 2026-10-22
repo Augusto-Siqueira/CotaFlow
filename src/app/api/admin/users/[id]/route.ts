@@ -5,6 +5,7 @@ import {
   requireAdmin,
   supabaseAdmin,
   temporaryPassword,
+  validPortalClients,
 } from "@/lib/supabaseAdmin";
 import { isRole } from "@/lib/roles";
 
@@ -17,7 +18,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
   const { id } = await ctx.params;
 
   const body = (await request.json().catch(() => null)) as
-    | { action?: string; role?: string; name?: string }
+    | { action?: string; role?: string; name?: string; clients?: unknown }
     | null;
   const action = body?.action;
   const admin = supabaseAdmin();
@@ -35,6 +36,13 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
     if (isSelf && role !== "admin") {
       return Response.json({ error: "Você não pode tirar o seu próprio perfil de admin." }, { status: 400 });
     }
+    // Cliente do portal é um acesso externo: entra e sai só pelo formulário próprio.
+    if (role === "cliente" || target.app_metadata?.role === "cliente") {
+      return Response.json(
+        { error: "O perfil Cliente não troca com os perfis da equipe. Para tirar o acesso, bloqueie o usuário." },
+        { status: 400 }
+      );
+    }
     if ((role === "motorista") !== isDriverLogin) {
       return Response.json(
         { error: "O perfil motorista é só para logins de motorista (criados pelo cadastro de motoristas)." },
@@ -47,6 +55,22 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
     });
     if (error) return Response.json({ error: error.message }, { status: 500 });
     await logUserAdmin(auth.user, "perfil", { id, email }, { de: before, para: role });
+    return Response.json({ ok: true });
+  }
+
+  if (action === "clients") {
+    if (target.app_metadata?.role !== "cliente") {
+      return Response.json({ error: "Só usuários do perfil Cliente têm empresas." }, { status: 400 });
+    }
+    const clients = await validPortalClients(body?.clients);
+    if (clients.length === 0) return Response.json({ error: "Escolha pelo menos uma empresa." }, { status: 400 });
+    const { error: delError } = await admin.from("client_portal_links").delete().eq("user_id", id);
+    if (delError) return Response.json({ error: delError.message }, { status: 500 });
+    const { error } = await admin
+      .from("client_portal_links")
+      .insert(clients.map((client_name) => ({ user_id: id, client_name })));
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    await logUserAdmin(auth.user, "empresas do cliente", { id, email }, { empresas: clients });
     return Response.json({ ok: true });
   }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { roleLabel, STAFF_ROLES } from "@/lib/roles";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -17,7 +18,10 @@ interface UserRow {
   last_sign_in_at: string | null;
   banned: boolean;
   must_change_password: boolean;
+  clients: string[];
 }
+
+type Tab = "equipe" | "motoristas" | "clientes";
 
 const DRIVER_DOMAIN = "@motorista.transbochnia.com.br";
 const inputCls =
@@ -47,7 +51,13 @@ export default function UsuariosPage() {
   const { toastSuccess, toastError, confirm: askConfirm } = useFeedback();
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"equipe" | "motoristas">("equipe");
+  const [tab, setTab] = useState<Tab>("equipe");
+  // Empresas do cadastro de clientes (nome como aparece na Programação), para o perfil Cliente.
+  const [clientLabels, setClientLabels] = useState<string[]>([]);
+  const [newClients, setNewClients] = useState<string[]>([]);
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientsFor, setClientsFor] = useState<UserRow | null>(null);
+  const [editClients, setEditClients] = useState<string[]>([]);
   const [search, setSearch] = useState("");
 
   const [showNew, setShowNew] = useState(false);
@@ -77,12 +87,27 @@ export default function UsuariosPage() {
     queueMicrotask(() => {
       load();
     });
+    supabase
+      .from("clients")
+      .select("name, trade_name")
+      .then(({ data }) =>
+        setClientLabels(
+          Array.from(new Set(((data ?? []) as { name: string; trade_name: string | null }[]).map((c) => c.trade_name?.trim() || c.name))).sort(
+            (a, b) => a.localeCompare(b, "pt-BR")
+          )
+        )
+      );
   }, [isAdmin, load]);
+
+  function tabOf(u: UserRow): Tab {
+    if (u.email.endsWith(DRIVER_DOMAIN)) return "motoristas";
+    return u.role === "cliente" ? "clientes" : "equipe";
+  }
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (users ?? [])
-      .filter((u) => (tab === "motoristas") === u.email.endsWith(DRIVER_DOMAIN))
+      .filter((u) => tabOf(u) === tab)
       .filter(
         (u) =>
           !q ||
@@ -114,12 +139,13 @@ export default function UsuariosPage() {
     try {
       const r = await api<{ password: string }>("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ name: newName, email: newEmail, role: newRole }),
+        body: JSON.stringify({ name: newName, email: newEmail, role: newRole, clients: newRole === "cliente" ? newClients : undefined }),
       });
       setShowNew(false);
       setShownPassword({ who: newName, password: r.password });
       setNewName("");
       setNewEmail("");
+      setNewClients([]);
       await load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Não foi possível criar.");
@@ -157,6 +183,11 @@ export default function UsuariosPage() {
       cell: (u) =>
         tab === "motoristas" ? (
           "Motorista"
+        ) : tab === "clientes" ? (
+          <span className="text-sm">
+            Cliente
+            <span className="block text-xs text-navy-500">{u.clients.length ? u.clients.join(", ") : "sem empresas"}</span>
+          </span>
         ) : (
           <select
             aria-label={`Perfil de ${u.name ?? u.email}`}
@@ -199,7 +230,20 @@ export default function UsuariosPage() {
       mobile: "actions",
       cell: (u) => (
         <span className="flex flex-wrap gap-2">
-          {tab === "equipe" && (
+          {tab === "clientes" && (
+            <button
+              type="button"
+              onClick={() => {
+                setClientsFor(u);
+                setEditClients(u.clients);
+                setClientSearch("");
+              }}
+              className={buttonClasses("soft", "sm")}
+            >
+              Empresas
+            </button>
+          )}
+          {tab !== "motoristas" && (
             <button
               type="button"
               onClick={() => {
@@ -254,9 +298,47 @@ export default function UsuariosPage() {
   ];
 
   const counts = {
-    equipe: (users ?? []).filter((u) => !u.email.endsWith(DRIVER_DOMAIN)).length,
-    motoristas: (users ?? []).filter((u) => u.email.endsWith(DRIVER_DOMAIN)).length,
+    equipe: (users ?? []).filter((u) => tabOf(u) === "equipe").length,
+    motoristas: (users ?? []).filter((u) => tabOf(u) === "motoristas").length,
+    clientes: (users ?? []).filter((u) => tabOf(u) === "clientes").length,
   };
+
+  // Lista de empresas com marcação (criar cliente e editar as empresas dele).
+  function clientPicker(selected: string[], setSelected: (v: string[]) => void) {
+    const q = clientSearch.trim().toLowerCase();
+    const shown = clientLabels.filter((c) => !q || c.toLowerCase().includes(q) || selected.includes(c));
+    return (
+      <div className="mt-2">
+        <label htmlFor="cli-busca" className="sr-only">
+          Buscar empresa
+        </label>
+        <input
+          id="cli-busca"
+          type="search"
+          value={clientSearch}
+          onChange={(e) => setClientSearch(e.target.value)}
+          placeholder="Buscar empresa (ex.: btech)"
+          className={inputCls}
+        />
+        <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-navy-200 p-2">
+          {shown.length === 0 && <p className="px-1 text-xs text-navy-500">Nenhuma empresa encontrada.</p>}
+          {shown.map((c) => (
+            <label key={c} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+              <input
+                type="checkbox"
+                checked={selected.includes(c)}
+                onChange={(e) => setSelected(e.target.checked ? [...selected, c] : selected.filter((x) => x !== c))}
+              />
+              {c}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-navy-500">
+          {selected.length} {selected.length === 1 ? "empresa escolhida" : "empresas escolhidas"}. O cliente vê só os comprovantes delas.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
@@ -281,7 +363,7 @@ export default function UsuariosPage() {
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div role="tablist" className="flex gap-1 rounded-lg border border-navy-200 bg-white p-1">
-          {(["equipe", "motoristas"] as const).map((t) => (
+          {(["equipe", "motoristas", "clientes"] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -292,7 +374,7 @@ export default function UsuariosPage() {
                 tab === t ? "bg-brand-700 text-white" : "text-navy-700 hover:bg-navy-50"
               }`}
             >
-              {t === "equipe" ? "Equipe" : "Motoristas"} ({counts[t]})
+              {t === "equipe" ? "Equipe" : t === "motoristas" ? "Motoristas" : "Clientes"} ({counts[t]})
             </button>
           ))}
         </div>
@@ -308,6 +390,11 @@ export default function UsuariosPage() {
           className={`${inputCls} max-w-xs`}
         />
       </div>
+      {tab === "clientes" && (
+        <p className="mt-2 text-xs text-navy-500">
+          Clientes entram só no portal de comprovantes e veem apenas as cargas das empresas escolhidas. Para criar, use Novo usuário › Cliente.
+        </p>
+      )}
       {tab === "motoristas" && (
         <p className="mt-2 text-xs text-navy-500">
           O acesso do motorista nasce sozinho ao cadastrá-lo em Veículos e motoristas › Motoristas (login = CPF, senha = 6 primeiros dígitos); ao excluir o motorista, o acesso é bloqueado.
@@ -367,7 +454,25 @@ export default function UsuariosPage() {
                   </span>
                 </label>
               ))}
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-navy-200 px-3 py-2 text-sm">
+                <input
+                  type="radio"
+                  name="nu-role"
+                  value="cliente"
+                  checked={newRole === "cliente"}
+                  onChange={() => {
+                    setNewRole("cliente");
+                    setClientSearch("");
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-navy-900">Cliente (acesso externo)</span>
+                  <span className="block text-xs text-navy-500">Só o portal com os comprovantes das empresas escolhidas</span>
+                </span>
+              </label>
             </div>
+            {newRole === "cliente" && clientPicker(newClients, setNewClients)}
             {formError && (
               <div role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
                 {formError}
@@ -382,6 +487,32 @@ export default function UsuariosPage() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {clientsFor && (
+        <Modal onClose={() => setClientsFor(null)} labelledBy="clients-title" className="max-w-md">
+          <h2 id="clients-title" className="text-base font-medium text-navy-900">
+            Empresas de {clientsFor.name ?? clientsFor.email}
+          </h2>
+          {clientPicker(editClients, setEditClients)}
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={() => setClientsFor(null)} className={buttonClasses("secondary")}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={editClients.length === 0}
+              onClick={() => {
+                const u = clientsFor;
+                setClientsFor(null);
+                act(u, { action: "clients", clients: editClients }, "Empresas do cliente atualizadas.");
+              }}
+              className={`${buttonClasses("primary")} disabled:cursor-not-allowed`}
+            >
+              Salvar
+            </button>
+          </div>
         </Modal>
       )}
 

@@ -8,12 +8,16 @@ export const ROLES = [
   { value: "manutencao", label: "Manutenção", hint: "Manutenção e check-lists" },
   { value: "abastecimento", label: "Abastecimento", hint: "Acompanha e corrige os abastecimentos" },
   { value: "motorista", label: "Motorista", hint: "Só o app do motorista" },
+  { value: "cliente", label: "Cliente", hint: "Só o portal de comprovantes das empresas dele" },
 ] as const;
 
 export type Role = (typeof ROLES)[number]["value"];
 
-/** Perfis que o admin escolhe ao criar um usuário da equipe (motorista nasce do cadastro de motoristas). */
-export const STAFF_ROLES = ROLES.filter((r) => r.value !== "motorista");
+/**
+ * Perfis da equipe que o admin escolhe ao criar um usuário. Motorista nasce do
+ * cadastro de motoristas; cliente (portal externo) tem formulário próprio.
+ */
+export const STAFF_ROLES = ROLES.filter((r) => r.value !== "motorista" && r.value !== "cliente");
 
 export function isRole(value: unknown): value is Role {
   return ROLES.some((r) => r.value === value);

@@ -3,6 +3,7 @@ import {
   requireAdmin,
   supabaseAdmin,
   temporaryPassword,
+  validPortalClients,
 } from "@/lib/supabaseAdmin";
 import { STAFF_ROLES } from "@/lib/roles";
 
@@ -15,6 +16,8 @@ export interface AdminUserRow {
   last_sign_in_at: string | null;
   banned: boolean;
   must_change_password: boolean;
+  /** Perfil cliente: empresas que ele enxerga no portal. */
+  clients: string[];
 }
 
 // Lista todos os usuários (equipe e motoristas).
@@ -28,6 +31,11 @@ export async function GET() {
   const driverName = new Map(
     ((drivers ?? []) as { name: string; user_id: string }[]).map((d) => [d.user_id, d.name])
   );
+  const { data: links } = await admin.from("client_portal_links").select("user_id, client_name");
+  const clientsOf = new Map<string, string[]>();
+  for (const l of (links ?? []) as { user_id: string; client_name: string }[]) {
+    clientsOf.set(l.user_id, [...(clientsOf.get(l.user_id) ?? []), l.client_name].sort());
+  }
   const rows: AdminUserRow[] = [];
   for (let page = 1; ; page++) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
@@ -42,6 +50,7 @@ export async function GET() {
         last_sign_in_at: u.last_sign_in_at ?? null,
         banned: Boolean(u.banned_until && new Date(u.banned_until) > new Date()),
         must_change_password: u.user_metadata?.must_change_password === true,
+        clients: clientsOf.get(u.id) ?? [],
       });
     }
     if (data.users.length < 1000) break;
@@ -55,7 +64,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = (await request.json().catch(() => null)) as
-    | { email?: string; name?: string; role?: string }
+    | { email?: string; name?: string; role?: string; clients?: unknown }
     | null;
   const email = body?.email?.trim().toLowerCase() ?? "";
   const name = body?.name?.trim() ?? "";
@@ -64,8 +73,14 @@ export async function POST(request: Request) {
     return Response.json({ error: "E-mail inválido." }, { status: 400 });
   }
   if (!name) return Response.json({ error: "Informe o nome." }, { status: 400 });
-  if (!STAFF_ROLES.some((r) => r.value === role)) {
+  const isClient = role === "cliente";
+  if (!isClient && !STAFF_ROLES.some((r) => r.value === role)) {
     return Response.json({ error: "Perfil inválido." }, { status: 400 });
+  }
+  // Cliente do portal: precisa de pelo menos uma empresa do cadastro de clientes.
+  const clients = isClient ? await validPortalClients(body?.clients) : [];
+  if (isClient && clients.length === 0) {
+    return Response.json({ error: "Escolha pelo menos uma empresa para o cliente." }, { status: 400 });
   }
 
   const password = temporaryPassword();
@@ -82,6 +97,16 @@ export async function POST(request: Request) {
       : error.message;
     return Response.json({ error: msg }, { status: 400 });
   }
-  await logUserAdmin(auth.user, "criar", { id: data.user.id, email }, { role, name });
+  if (isClient) {
+    const { error: linkError } = await supabaseAdmin()
+      .from("client_portal_links")
+      .insert(clients.map((client_name) => ({ user_id: data.user.id, client_name })));
+    if (linkError) {
+      // Sem as empresas o usuário não serve: desfaz a criação.
+      await supabaseAdmin().auth.admin.deleteUser(data.user.id);
+      return Response.json({ error: `Não foi possível ligar as empresas (${linkError.message}).` }, { status: 500 });
+    }
+  }
+  await logUserAdmin(auth.user, "criar", { id: data.user.id, email }, { role, name, ...(isClient ? { empresas: clients } : {}) });
   return Response.json({ id: data.user.id, password });
 }

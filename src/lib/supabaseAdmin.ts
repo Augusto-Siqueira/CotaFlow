@@ -45,6 +45,20 @@ export function temporaryPassword(): string {
 
 export const DRIVER_EMAIL_DOMAIN = "motorista.transbochnia.com.br";
 
+/**
+ * Empresas válidas para o portal do cliente: o nome como aparece na Programação
+ * (nome fantasia, ou a razão social quando não há fantasia). Devolve só as que
+ * existem no cadastro de clientes, sem repetir.
+ */
+export async function validPortalClients(names: unknown): Promise<string[]> {
+  if (!Array.isArray(names)) return [];
+  const wanted = new Set(names.map((n) => String(n).trim()).filter(Boolean));
+  if (wanted.size === 0) return [];
+  const { data } = await supabaseAdmin().from("clients").select("name, trade_name");
+  const labels = new Set(((data ?? []) as { name: string; trade_name: string | null }[]).map((c) => c.trade_name?.trim() || c.name));
+  return [...wanted].filter((n) => labels.has(n));
+}
+
 export async function logUserAdmin(
   actor: User,
   action: string,

@@ -14,6 +14,8 @@ interface AuthState {
   canEditMaintenance: boolean;
   canEditFuel: boolean;
   isDriver: boolean;
+  /** Cliente externo: só o portal de comprovantes. */
+  isPortalClient: boolean;
   mustChangePassword: boolean;
 }
 
@@ -27,6 +29,7 @@ const AuthContext = createContext<AuthState>({
   canEditMaintenance: false,
   canEditFuel: false,
   isDriver: false,
+  isPortalClient: false,
   mustChangePassword: false,
 });
 
@@ -100,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     canEditMaintenance: false,
     canEditFuel: false,
     isDriver: false,
+    isPortalClient: false,
     mustChangePassword: false,
   });
 
@@ -117,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         canEditMaintenance: role === "admin" || role === "manutencao",
         canEditFuel: role === "admin" || role === "abastecimento",
         isDriver: role === "motorista",
+        isPortalClient: role === "cliente",
         mustChangePassword: user?.user_metadata?.must_change_password === true,
       });
     }

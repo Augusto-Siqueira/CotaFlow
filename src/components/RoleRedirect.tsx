@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
  * evita telas vazias). No primeiro acesso, ele precisa trocar a senha inicial.
  */
 export function RoleRedirect() {
-  const { isDriver, mustChangePassword, user } = useAuth();
+  const { isDriver, isPortalClient, mustChangePassword, user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -22,7 +22,11 @@ export function RoleRedirect() {
     ) {
       router.replace("/motorista");
     }
-  }, [isDriver, pathname, router]);
+    // Cliente externo só usa o portal de comprovantes.
+    if (isPortalClient && !pathname.startsWith("/portal") && pathname !== "/login") {
+      router.replace("/portal");
+    }
+  }, [isDriver, isPortalClient, pathname, router]);
 
   if (user && mustChangePassword) return <ForcePasswordChange />;
   return null;

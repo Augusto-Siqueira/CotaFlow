@@ -14,7 +14,9 @@ import { SidebarMenu, currentPageTitle } from "@/components/SidebarMenu";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const { user, role, isDriver } = useAuth();
+  const { user, role, isDriver, isPortalClient } = useAuth();
+  // Motorista e cliente externo não usam o menu do sistema.
+  const hasMenu = Boolean(user) && !isDriver && !isPortalClient;
   const { confirm: askConfirm } = useFeedback();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -48,7 +50,7 @@ export function SiteHeader() {
     <header className="bg-chrome-900 print:hidden">
       <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          {user && !isDriver && (
+          {hasMenu && (
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
@@ -72,7 +74,7 @@ export function SiteHeader() {
             </button>
           )}
           <Link
-            href={isDriver ? "/motorista" : "/"}
+            href={isDriver ? "/motorista" : isPortalClient ? "/portal" : "/"}
             className="flex items-center gap-2 text-lg font-bold tracking-tight text-white"
           >
             <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
@@ -94,6 +96,15 @@ export function SiteHeader() {
               {roleLabel(role)}
             </span>
             <ThemeToggle className="text-chrome-300 hover:text-brand-400" />
+            {isPortalClient && (
+              <button
+                type="button"
+                onClick={() => setPasswordOpen(true)}
+                className="font-medium transition-colors hover:text-brand-400"
+              >
+                Trocar senha
+              </button>
+            )}
             <button
               type="button"
               onClick={handleLogout}
@@ -105,7 +116,7 @@ export function SiteHeader() {
         )}
       </div>
 
-      {user && !isDriver && menuOpen && (
+      {hasMenu && menuOpen && (
         <SidebarMenu
           pathname={pathname}
           role={role}
