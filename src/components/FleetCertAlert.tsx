@@ -12,7 +12,8 @@ import { FLEET_CERT_COLUMNS, certAlerts, certText, type FleetCertFields } from "
  */
 export function FleetCertAlert() {
   const [rows, setRows] = useState<FleetCertFields[] | null>(null);
-  const [open, setOpen] = useState(true);
+  // Abre recolhida: só o título com a contagem; "Mostrar" abre a lista.
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancel = false;
