@@ -94,6 +94,8 @@ export function parseMoney(value: string): number | null {
 export const REPORT_CATEGORIES = [
   "Freios",
   "Motor",
+  "Caixa de Câmbio",
+  "Diferencial",
   "Elétrica",
   "Pneus",
   "Suspensão",
