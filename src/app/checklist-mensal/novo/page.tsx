@@ -111,8 +111,18 @@ export default function NewMonthlyChecklist() {
 
   const answered = shown.filter((i) => answers[i.id]).length;
   const missingNotes = shown.filter((i) => answers[i.id] === "N" && i.maintenance && !notes[i.id]?.trim());
+  // Vencimentos são obrigatórios (menos quando o item é N/A).
+  const missingDue = (i: MonthlyItem): boolean => {
+    if (answers[i.id] === "NA") return false;
+    const ex = extras[i.id] ?? {};
+    if (i.extra === "due") return !ex.due;
+    if (i.extra === "due2") return !ex.due || !ex.due2;
+    if (i.extra === "cnh") return !ex.validity;
+    return false;
+  };
+  const missingDates = shown.filter(missingDue);
   const driverOk = driverAbsent ? absentReason.trim().length > 0 : Boolean(driver.trim()) && Boolean(driverSig);
-  const ready = Boolean(unit) && answered === shown.length && shown.length > 0 && missingNotes.length === 0 && Boolean(inspectorSig) && driverOk;
+  const ready = Boolean(unit) && answered === shown.length && shown.length > 0 && missingNotes.length === 0 && missingDates.length === 0 && Boolean(inspectorSig) && driverOk;
 
   function certFromCadastro(it: MonthlyItem): string | null {
     if (!unit || !it.cert_key) return null;
@@ -258,14 +268,24 @@ export default function NewMonthlyChecklist() {
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-navy-700">
                       {(it.extra === "due" || it.extra === "due2") && (
                         <label className="flex items-center gap-1">
-                          Vencimento
-                          <input type="date" value={ex.due ?? ""} onChange={(e) => setExtra(it.id, { due: e.target.value })} className={dateCls} />
+                          Vencimento{a !== "NA" && <span className="text-red-600">*</span>}
+                          <input
+                            type="date"
+                            value={ex.due ?? ""}
+                            onChange={(e) => setExtra(it.id, { due: e.target.value })}
+                            className={`${dateCls} ${a !== "NA" && !ex.due ? "border-red-400" : ""}`}
+                          />
                         </label>
                       )}
                       {it.extra === "due2" && (
                         <label className="flex items-center gap-1">
-                          2º vencimento
-                          <input type="date" value={ex.due2 ?? ""} onChange={(e) => setExtra(it.id, { due2: e.target.value })} className={dateCls} />
+                          2º vencimento{a !== "NA" && <span className="text-red-600">*</span>}
+                          <input
+                            type="date"
+                            value={ex.due2 ?? ""}
+                            onChange={(e) => setExtra(it.id, { due2: e.target.value })}
+                            className={`${dateCls} ${a !== "NA" && !ex.due2 ? "border-red-400" : ""}`}
+                          />
                         </label>
                       )}
                       {it.extra === "cnh" && (
@@ -280,8 +300,13 @@ export default function NewMonthlyChecklist() {
                             />
                           </label>
                           <label className="flex items-center gap-1">
-                            Validade
-                            <input type="date" value={ex.validity ?? ""} onChange={(e) => setExtra(it.id, { validity: e.target.value })} className={dateCls} />
+                            Validade{a !== "NA" && <span className="text-red-600">*</span>}
+                            <input
+                              type="date"
+                              value={ex.validity ?? ""}
+                              onChange={(e) => setExtra(it.id, { validity: e.target.value })}
+                              className={`${dateCls} ${a !== "NA" && !ex.validity ? "border-red-400" : ""}`}
+                            />
                           </label>
                         </>
                       )}
@@ -411,7 +436,8 @@ export default function NewMonthlyChecklist() {
           {!ready && (
             <p className="mt-4 text-xs text-navy-500">
               Para enviar: responda os {shown.length} itens
-              {missingNotes.length > 0 ? `, descreva os defeitos (${missingNotes.map((i) => i.number).join(", ")})` : ""}, escolha o
+              {missingNotes.length > 0 ? `, descreva os defeitos (${missingNotes.map((i) => i.number).join(", ")})` : ""}
+              {missingDates.length > 0 ? `, preencha os vencimentos (${missingDates.map((i) => i.number).join(", ")})` : ""}, escolha o
               motorista (ou marque a ausência com o motivo) e colha as assinaturas.
             </p>
           )}
