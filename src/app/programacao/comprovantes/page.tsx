@@ -31,7 +31,15 @@ interface Load {
 type Situation = "completa" | "parcial" | "pendente";
 type Filter = "todas" | "alerta" | "pendente" | "parcial" | "completa";
 
+interface ProofDoc {
+  destination: string;
+  nf: string;
+  cte: string | null;
+}
+
 interface Row extends Load {
+  /** NF e CTE de cada comprovante já enviado. */
+  docs: ProofDoc[];
   dests: string[];
   sent: string[];
   situation: Situation;
@@ -51,6 +59,11 @@ function addDays(base: Date, n: number): Date {
   d.setDate(d.getDate() + n);
   return d;
 }
+// Só letras e números, minúsculo: "30625.30626" e "3062530626" são o mesmo número.
+function norm(v: string | null | undefined): string {
+  return (v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function fmtDate(iso: string) {
   return new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR");
 }
@@ -88,7 +101,7 @@ export default function ComprovantesPage() {
   const [filter, setFilter] = useState<Filter>("todas");
   const [search, setSearch] = useState("");
   const [loads, setLoads] = useState<Load[] | null>(null);
-  const [proofs, setProofs] = useState<Map<string, string[]>>(new Map());
+  const [proofs, setProofs] = useState<Map<string, ProofDoc[]>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -105,12 +118,18 @@ export default function ComprovantesPage() {
           .range(a, b)
       );
       const ids = rows.map((r) => r.id);
-      const map = new Map<string, string[]>();
+      const map = new Map<string, ProofDoc[]>();
       for (let i = 0; i < ids.length; i += 200) {
-        const part = await fetchAll<{ schedule_id: string; destination: string }>((a, b) =>
-          supabase.from("delivery_proofs").select("schedule_id, destination").in("schedule_id", ids.slice(i, i + 200)).range(a, b)
+        const part = await fetchAll<{ schedule_id: string; destination: string; invoice_number: string; cte_number: string | null }>((a, b) =>
+          supabase
+            .from("delivery_proofs")
+            .select("schedule_id, destination, invoice_number, cte_number")
+            .in("schedule_id", ids.slice(i, i + 200))
+            .range(a, b)
         );
-        for (const p of part) map.set(p.schedule_id, [...(map.get(p.schedule_id) ?? []), p.destination]);
+        for (const p of part) {
+          map.set(p.schedule_id, [...(map.get(p.schedule_id) ?? []), { destination: p.destination, nf: p.invoice_number, cte: p.cte_number }]);
+        }
       }
       setProofs(map);
       setLoads(rows);
@@ -132,10 +151,11 @@ export default function ComprovantesPage() {
     return (loads ?? []).map((l) => {
       const d = splitDestinations(l.destination);
       const dests = d.length > 0 ? d : [""];
-      const sent = dests.filter((x) => (proofs.get(l.id) ?? []).includes(x));
+      const docs = proofs.get(l.id) ?? [];
+      const sent = dests.filter((x) => docs.some((p) => p.destination === x));
       const situation: Situation = sent.length === dests.length ? "completa" : sent.length === 0 ? "pendente" : "parcial";
       const daysSince = l.status === "entregue" ? daysBetween(concludedOn(l), now) : null;
-      return { ...l, dests, sent, situation, daysSince, alert: situation !== "completa" && daysSince !== null && daysSince >= ALERT_DAYS };
+      return { ...l, docs, dests, sent, situation, daysSince, alert: situation !== "completa" && daysSince !== null && daysSince >= ALERT_DAYS };
     });
   }, [loads, proofs]);
 
@@ -151,12 +171,16 @@ export default function ComprovantesPage() {
   // Filtros comuns (cliente, status da carga e busca): os indicadores e a lista usam o mesmo recorte.
   const scoped = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const qDoc = norm(search);
     return rows.filter(
       (r) =>
         (!client || r.client_name === client) &&
         (!destFilter || r.dests.some((d) => baseCity(d).toLowerCase() === destFilter.toLowerCase())) &&
         (!status || r.status === status) &&
-        (!q || [r.plate, r.driver, r.cargo, r.destination].some((v) => (v ?? "").toLowerCase().includes(q)))
+        (!q ||
+          [r.plate, r.driver, r.cargo, r.destination].some((v) => (v ?? "").toLowerCase().includes(q)) ||
+          // NF e CTE: compara só os dígitos/letras, para achar mesmo com ponto ou espaço de diferença.
+          (qDoc.length >= 3 && r.docs.some((p) => [p.nf, p.cte].some((v) => norm(v).includes(qDoc)))))
     );
   }, [rows, client, destFilter, status, search]);
 
@@ -255,7 +279,7 @@ export default function ComprovantesPage() {
           <label htmlFor="cp-busca" className="mb-1 block text-xs font-medium text-navy-600">
             Buscar
           </label>
-          <input id="cp-busca" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Placa, motorista, carga ou destino" className={`${selectCls} w-64`} />
+          <input id="cp-busca" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Placa, motorista, destino, NF ou CTE" className={`${selectCls} w-64`} />
         </div>
       </div>
 
@@ -312,6 +336,7 @@ export default function ComprovantesPage() {
                       <th className="px-3 py-2 font-medium">Placa / motorista</th>
                       <th className="px-3 py-2 font-medium">Status</th>
                       <th className="px-3 py-2 font-medium">Comprovantes</th>
+                      <th className="px-3 py-2 font-medium">NF / CTE</th>
                       <th className="px-5 py-2 font-medium">Destinos</th>
                     </tr>
                   </thead>
@@ -350,6 +375,19 @@ export default function ComprovantesPage() {
                             {r.sent.length}/{r.dests.length}
                             {r.alert ? " · ⚠ em alerta" : r.situation === "completa" ? " · completa" : r.situation === "parcial" ? " · parcial" : " · sem comprovante"}
                           </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-navy-700">
+                          {r.docs.length === 0 ? (
+                            <span className="text-navy-400">—</span>
+                          ) : (
+                            r.docs.map((p) => (
+                              <span key={p.destination} className="block whitespace-nowrap">
+                                {r.docs.length > 1 && <span className="text-navy-500">{p.destination || "Entrega"}: </span>}
+                                NF {p.nf}
+                                {p.cte ? ` · CTE ${p.cte}` : ""}
+                              </span>
+                            ))
+                          )}
                         </td>
                         <td className="px-5 py-2">
                           <DeliveryProofDestinations
