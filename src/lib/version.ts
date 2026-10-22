@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.12";
+export const APP_VERSION = "1.13";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.13",
+    date: "2026-10-22",
+    notes: [
+      "Ordem de embarque da Btech (São José dos Pinhais): lançamento das linhas (OC, produto, compartimentos, peso e destino) na carga da Programação e PDF igual à planilha, que o motorista também baixa no app.",
+      "Nova tela Programação > Comprovantes: cargas com e sem comprovante por cliente e destino, busca por NF e CTE, e alerta das viagens concluídas há 3 dias ou mais sem todos os comprovantes.",
+      "Comprovante de entrega: botão Baixar para salvar as fotos do canhoto e do ticket.",
+      "Programação: o campo Destino virou Entregas e aceita a mesma cidade mais de uma vez (Cidade/UF e Cidade/UF (2)), com um comprovante para cada entrega; as faixas de manutenção, capacitações e bloco de notas foram reorganizadas e a de capacitações abre recolhida.",
+      "Portal do cliente: perfil Cliente (acesso externo) que vê só os comprovantes das empresas ligadas a ele, com fotos e download; o perfil é bloqueado em todo o resto do sistema.",
+      "Check-list mensal das placas: perfil Check-list mensal para o funcionário da base, formulários de semirreboque e de truck/cavalo com S/N/N/A, vencimentos obrigatórios, aviso de vencimento diferente do cadastro, assinatura escrita do responsável e do motorista, painel dos 30 dias e PDF.",
+      "Manutenção: novas categorias Caixa de Câmbio, Diferencial, Preventiva e Corretiva; oficinas cadastradas.",
+    ],
+  },
   {
     version: "1.12",
     date: "2026-10-19",
