@@ -8,6 +8,7 @@
 //
 // Variáveis opcionais: API_URL, ANON_KEY, SERVICE_ROLE_KEY (mesmas do smoke-test.mjs).
 import { createClient } from "@supabase/supabase-js";
+import { createHmac } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,14 @@ const API_URL = process.env.API_URL || fromFile.PUBLIC_API_URL;
 const ANON = process.env.ANON_KEY || fromFile.ANON_KEY;
 const SERVICE = process.env.SERVICE_ROLE_KEY || fromFile.SERVICE_ROLE_KEY;
 const SITE = process.env.SITE || "";
+// MINT=1: gera o token de acesso aqui (com o segredo do servidor), para ambientes
+// com anti-robô (captcha) no login, como a produção.
+const MINT = process.env.MINT === "1";
+const JWT_SECRET = process.env.JWT_SECRET || fromFile.JWT_SECRET;
+if (MINT && !JWT_SECRET) {
+  console.error("MINT=1 exige JWT_SECRET.");
+  process.exit(2);
+}
 if (!API_URL || !ANON || !SERVICE) {
   console.error("Faltam API_URL, ANON_KEY ou SERVICE_ROLE_KEY.");
   process.exit(2);
@@ -60,9 +69,20 @@ async function makeUser(role, label) {
     `criar usuário ${label}`
   ).user;
   created.users.push(u.id);
+  if (MINT) {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const now = Math.floor(Date.now() / 1000);
+    const payload = { aud: "authenticated", role: "authenticated", sub: u.id, email, app_metadata: { role }, user_metadata: {}, iat: now, exp: now + 3600 };
+    const body = `${b64({ alg: "HS256", typ: "JWT" })}.${b64(payload)}`;
+    const token = `${body}.${createHmac("sha256", JWT_SECRET).update(body).digest("base64url")}`;
+    const c = createClient(API_URL, ANON, { ...opts, global: { headers: { Authorization: `Bearer ${token}` } } });
+    const session = { access_token: token, token_type: "bearer", expires_in: 3600, expires_at: now + 3600, refresh_token: "x", user: { id: u.id, email, app_metadata: { role } } };
+    return { id: u.id, client: c, session };
+  }
   const c = createClient(API_URL, ANON, opts);
   must(await c.auth.signInWithPassword({ email, password: PASSWORD }), `login ${label}`);
-  return { id: u.id, client: c };
+  const { data: s } = await c.auth.getSession();
+  return { id: u.id, client: c, session: s.session };
 }
 
 try {
@@ -179,9 +199,8 @@ try {
 
   if (SITE) {
     console.log("\n== 7) Rota das fotos do portal (site em " + SITE + ")");
-    const { data: sess } = await cliente.client.auth.getSession();
-    const host = new URL(API_URL).hostname.split(".")[0];
-    const cookie = `sb-${host}-auth-token=base64-${Buffer.from(JSON.stringify(sess.session)).toString("base64url")}`;
+    const host = new URL(process.env.COOKIE_API_URL || API_URL).hostname.split(".")[0];
+    const cookie = `sb-${host}-auth-token=base64-${Buffer.from(JSON.stringify(cliente.session)).toString("base64url")}`;
     const get = (q) => fetch(`${SITE}/api/portal/foto?${q}`, { headers: { cookie }, redirect: "manual" });
     const own = await get(`proof=${proofA.id}&n=0`);
     const loc = own.headers.get("location") ?? "";
@@ -194,8 +213,7 @@ try {
     check("foto de outra empresa: negada", other.status === 404, String(other.status));
     const none = await fetch(`${SITE}/api/portal/foto?proof=${proofA.id}&n=0`, { redirect: "manual" });
     check("sem login: negada", none.status === 401, String(none.status));
-    const { data: ssess } = await staff.client.auth.getSession();
-    const staffCookie = `sb-${host}-auth-token=base64-${Buffer.from(JSON.stringify(ssess.session)).toString("base64url")}`;
+    const staffCookie = `sb-${host}-auth-token=base64-${Buffer.from(JSON.stringify(staff.session)).toString("base64url")}`;
     const st = await fetch(`${SITE}/api/portal/foto?proof=${proofA.id}&n=0`, { headers: { cookie: staffCookie }, redirect: "manual" });
     check("perfil da equipe não usa a rota do portal", st.status === 403, String(st.status));
   } else {
