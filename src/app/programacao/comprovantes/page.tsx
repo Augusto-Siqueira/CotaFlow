@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { loadingStatusBadge, loadingStatusLabel } from "@/lib/loadingStatus";
-import { splitDestinations } from "@/components/Destinations";
+import { baseCity, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 
 // Gestão dos comprovantes de entrega: quais cargas já têm comprovante, quais
@@ -83,6 +83,7 @@ export default function ComprovantesPage() {
   const [from, setFrom] = useState(() => localDate(addDays(new Date(), -30)));
   const [to, setTo] = useState(() => localDate(new Date()));
   const [client, setClient] = useState("");
+  const [destFilter, setDestFilter] = useState("");
   const [status, setStatus] = useState<"" | "em_viagem" | "entregue">("");
   const [filter, setFilter] = useState<Filter>("todas");
   const [search, setSearch] = useState("");
@@ -140,16 +141,24 @@ export default function ComprovantesPage() {
 
   const clients = useMemo(() => Array.from(new Set(rows.map((r) => r.client_name))).sort((a, b) => a.localeCompare(b, "pt-BR")), [rows]);
 
+  // Cidades de entrega do período (sem o "(2)" das entregas repetidas), para o filtro de destino.
+  const destinations = useMemo(
+    () =>
+      Array.from(new Set(rows.flatMap((r) => r.dests.map(baseCity)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [rows]
+  );
+
   // Filtros comuns (cliente, status da carga e busca): os indicadores e a lista usam o mesmo recorte.
   const scoped = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter(
       (r) =>
         (!client || r.client_name === client) &&
+        (!destFilter || r.dests.some((d) => baseCity(d).toLowerCase() === destFilter.toLowerCase())) &&
         (!status || r.status === status) &&
         (!q || [r.plate, r.driver, r.cargo, r.destination].some((v) => (v ?? "").toLowerCase().includes(q)))
     );
-  }, [rows, client, status, search]);
+  }, [rows, client, destFilter, status, search]);
 
   const counts = useMemo(
     () => ({
@@ -215,6 +224,19 @@ export default function ComprovantesPage() {
             {clients.map((c) => (
               <option key={c} value={c}>
                 {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="cp-destino" className="mb-1 block text-xs font-medium text-navy-600">
+            Destino
+          </label>
+          <select id="cp-destino" value={destFilter} onChange={(e) => setDestFilter(e.target.value)} className={selectCls}>
+            <option value="">Todos os destinos</option>
+            {destinations.map((d) => (
+              <option key={d} value={d}>
+                {d}
               </option>
             ))}
           </select>
