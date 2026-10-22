@@ -101,6 +101,8 @@ export const REPORT_CATEGORIES = [
   "Suspensão",
   "Cabine",
   "Carroceria",
+  "Preventiva",
+  "Corretiva",
   "Outros",
 ] as const;
 
