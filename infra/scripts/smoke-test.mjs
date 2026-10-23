@@ -173,7 +173,9 @@ try {
     check("motorista NÃO lê a frota", !q4.error && q4.data.length === 0, q4.error?.message);
     const q5 = await m.from("loading_schedules").select("cargo, driver");
     check("motorista lê SÓ as próprias cargas", !q5.error && q5.data.length === 1 && q5.data[0].cargo === "CARGA-DO-MOTORISTA", JSON.stringify(q5.data));
-    const q6 = await m.from("clients").insert({ name: "invasor" });
+    // Nome com a marca do teste: se a gravação passar por engano, a limpeza apaga.
+    const q6 = await m.from("clients").insert({ name: `${tag} invasor` }).select("id");
+    if (!q6.error) for (const row of q6.data ?? []) created.clientIds.push(row.id);
     check("motorista NÃO grava cliente", !!q6.error, "gravou!");
     const q7 = await m.from("loading_schedules").update({ status: "entregue" }).eq("id", created.loadIds[0]).select("id");
     check("motorista NÃO altera programação", !!q7.error || q7.data.length === 0);
@@ -275,6 +277,7 @@ try {
     for (const id of created.loadIds) await admin.from("loading_schedules").delete().eq("id", id);
     for (const id of created.driverIds) await admin.from("drivers").delete().eq("id", id);
     for (const id of created.clientIds) await admin.from("clients").delete().eq("id", id);
+    await admin.from("clients").delete().like("name", `${tag}%`);
     for (const p of created.plates) await admin.from("fleet_units").delete().eq("plate", p);
     for (const id of created.users) await admin.auth.admin.deleteUser(id);
   } catch (e) {
