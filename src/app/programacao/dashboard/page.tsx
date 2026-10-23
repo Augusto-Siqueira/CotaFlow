@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizePlate } from "@/lib/fleet";
+import { SearchSelect } from "@/components/SearchSelect";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import {
@@ -94,6 +96,8 @@ export default function DashboardPage() {
   const [from, setFrom] = useState(() => `${today.slice(0, 8)}01`);
   const [to, setTo] = useState(today);
   const [client, setClient] = useState("");
+  // Placa: vale para o cavalo/truck e para a carreta da carga.
+  const [plate, setPlate] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   // Gráfico do painel: cargas por dia ou ranking de clientes.
   const [chartView, setChartView] = useState<"dia" | "ranking">("dia");
@@ -133,14 +137,24 @@ export default function DashboardPage() {
   // Se o cliente escolhido não tem cargas no período novo, volta para "todos".
   const activeClient = clientOptions.includes(client) ? client : "";
 
+  // Placas das cargas do período (cavalo/truck e carreta), para sugerir no filtro.
+  const plateOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(periodRows.flatMap((r) => [r.plate, r.trailer_plate]).filter((p): p is string => Boolean(p)))
+      ).sort(),
+    [periodRows]
+  );
+  const plateQuery = normalizePlate(plate);
+
   const rows = useMemo(
     () =>
-      activeClient
-        ? periodRows.filter(
-            (r) => (r.client_name.trim() || "Sem cliente") === activeClient
-          )
-        : periodRows,
-    [periodRows, activeClient]
+      periodRows.filter(
+        (r) =>
+          (!activeClient || (r.client_name.trim() || "Sem cliente") === activeClient) &&
+          (!plateQuery || [r.plate, r.trailer_plate].some((p) => (p ?? "").includes(plateQuery)))
+      ),
+    [periodRows, activeClient, plateQuery]
   );
 
   // Atrasada = dia já passou e a carga ainda não saiu (Programado ou
@@ -201,10 +215,11 @@ export default function DashboardPage() {
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
 
   // Ranking usa o período todo (sem o filtro de cliente), para continuar
-  // útil mesmo depois de escolher um cliente.
+  // útil mesmo depois de escolher um cliente; a placa filtra (clientes que ela atendeu).
   const ranking = useMemo(() => {
     const map = new Map<string, { count: number; tons: number }>();
     for (const r of periodRows) {
+      if (plateQuery && ![r.plate, r.trailer_plate].some((p) => (p ?? "").includes(plateQuery))) continue;
       const name = r.client_name.trim() || "Sem cliente";
       const c = map.get(name) ?? { count: 0, tons: 0 };
       c.count++;
@@ -217,7 +232,7 @@ export default function DashboardPage() {
         b.count - a.count ||
         a.name.localeCompare(b.name, "pt-BR")
     );
-  }, [periodRows, rankBy]);
+  }, [periodRows, rankBy, plateQuery]);
   const rankMax = Math.max(1, ...ranking.map((c) => c[rankBy]));
 
   const listRows = useMemo(
@@ -369,6 +384,19 @@ export default function DashboardPage() {
             ))}
           </select>
         </div>
+        <div>
+          <label htmlFor="dash-placa" className="mb-1 block text-xs font-medium text-navy-600">
+            Placa
+          </label>
+          <SearchSelect
+            id="dash-placa"
+            value={plate}
+            onChange={(v) => setPlate(normalizePlate(v))}
+            options={plateOptions.map((p) => ({ value: p }))}
+            placeholder="Cavalo ou carreta"
+            className={`${dateInputCls} w-40 uppercase tracking-wide`}
+          />
+        </div>
         <div className="flex flex-wrap gap-2">
           {shortcuts.map((s) => (
             <button
@@ -399,6 +427,7 @@ export default function DashboardPage() {
           <p className="mt-4 text-sm text-navy-500">
             {from === to ? br(from) : `${br(from)} a ${br(to)}`}
             {activeClient ? ` · ${activeClient}` : " · todos os clientes"}
+            {plateQuery ? ` · placa ${plateQuery}` : ""}
             {loading && " · carregando..."}
           </p>
 
