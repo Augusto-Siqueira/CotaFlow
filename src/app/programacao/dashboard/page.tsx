@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizePlate } from "@/lib/fleet";
+import { useAuth } from "@/lib/auth";
+import { useFeedback } from "@/components/Feedback";
+import { statusChangeBlockers } from "@/lib/scheduleStatusCheck";
 import { SearchSelect } from "@/components/SearchSelect";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -93,6 +96,9 @@ const dateInputCls =
 
 export default function DashboardPage() {
   const today = toIso(new Date());
+  // Logística e admin mudam o status da viagem direto por aqui.
+  const { canEditSchedule } = useAuth();
+  const { toastError, toastSuccess } = useFeedback();
   const [from, setFrom] = useState(() => `${today.slice(0, 8)}01`);
   const [to, setTo] = useState(today);
   const [client, setClient] = useState("");
@@ -122,6 +128,28 @@ export default function DashboardPage() {
   }, [from, to, key, invalidRange]);
 
   const loading = !invalidRange && (data === null || data.key !== key);
+
+  // Muda o status com as mesmas travas da Programação (viagem anterior aberta,
+  // placa na oficina ou parada por defeito).
+  async function changeStatus(load: Load, status: string) {
+    if (status === load.status) return;
+    const blockers = await statusChangeBlockers(load, status);
+    if (blockers.length > 0) {
+      toastError(blockers.join(" "));
+      return;
+    }
+    const setStatus = (value: string) =>
+      setData((prev) => (prev ? { ...prev, rows: prev.rows.map((r) => (r.id === load.id ? { ...r, status: value } : r)) } : prev));
+    const previous = load.status;
+    setStatus(status);
+    const { error } = await supabase.from("loading_schedules").update({ status }).eq("id", load.id);
+    if (error) {
+      setStatus(previous);
+      toastError(`Não foi possível atualizar o status (${error.message}).`);
+      return;
+    }
+    toastSuccess(`${load.cargo} · ${load.client_name}: ${loadingStatusLabel(status)}.`);
+  }
   const periodRows = useMemo(
     () => (loading || invalidRange ? [] : data?.rows ?? []),
     [loading, invalidRange, data]
@@ -304,13 +332,27 @@ export default function DashboardPage() {
       key: "status",
       header: "Status",
       mobile: "badge",
-      cell: (r) => (
-        <span
-          className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${loadingStatusBadge(r.status)}`}
-        >
-          {loadingStatusLabel(r.status)}
-        </span>
-      ),
+      cell: (r) =>
+        canEditSchedule ? (
+          <select
+            value={r.status}
+            onChange={(e) => changeStatus(r, e.target.value)}
+            aria-label={`Status da carga ${r.cargo} de ${r.client_name}`}
+            className={`min-w-0 max-w-[11rem] cursor-pointer truncate rounded-full border-0 py-1 pl-2.5 pr-1 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(r.status)}`}
+          >
+            {LOADING_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span
+            className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${loadingStatusBadge(r.status)}`}
+          >
+            {loadingStatusLabel(r.status)}
+          </span>
+        ),
     },
   ];
 
