@@ -1083,15 +1083,24 @@ export default function ManutencaoPage() {
                   {/* Coluna com altura limitada: com muitos lançamentos, rola por dentro. */}
                   <div className={`max-h-[34rem] space-y-2 overflow-y-auto pr-1 ${collapsedStages.has(stage.value) ? "hidden" : ""}`}>
                     {orderCards.map((o) => {
+                      // Na oficina = veículo parado (vermelho), igual aos defeitos em "Em oficina".
+                      const parked = !o.exit_at;
                       const body = (
                         <>
                           <span className="flex items-center justify-between gap-2">
                             <span className="text-sm font-semibold tracking-wide text-navy-900">{o.plate}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${serviceTypeBadge(o.service_type)}`}>
-                              {serviceTypeLabel(o.service_type)}
-                            </span>
+                            {parked ? (
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(3)}`}>{severityLabel(3)}</span>
+                            ) : (
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${serviceTypeBadge(o.service_type)}`}>
+                                {serviceTypeLabel(o.service_type)}
+                              </span>
+                            )}
                           </span>
-                          <span className="mt-0.5 block font-medium text-navy-700">{o.maintenance_workshops?.name ?? "Oficina"}</span>
+                          <span className="mt-0.5 block font-medium text-navy-700">
+                            {parked ? `${serviceTypeLabel(o.service_type)} · ` : ""}
+                            {o.maintenance_workshops?.name ?? "Oficina"}
+                          </span>
                           <span className="mt-0.5 line-clamp-2 block text-navy-600">{o.service}</span>
                           <span className="mt-1.5 block text-[11px] text-navy-500">
                             {o.exit_at
@@ -1106,12 +1115,17 @@ export default function ManutencaoPage() {
                           type="button"
                           onClick={() => openEdit(o)}
                           title="Entrada lançada direto (sem defeito relatado) — clique para editar"
-                          className="block w-full rounded-lg border border-dashed border-navy-300 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-brand-500"
+                          className={`block w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors hover:border-brand-500 ${
+                            parked ? "border-red-300 bg-red-50" : "border-navy-200 bg-white"
+                          }`}
                         >
                           {body}
                         </button>
                       ) : (
-                        <div key={o.id} className="rounded-lg border border-dashed border-navy-300 bg-white px-3 py-2 text-xs">
+                        <div
+                          key={o.id}
+                          className={`rounded-lg border px-3 py-2 text-xs ${parked ? "border-red-300 bg-red-50" : "border-navy-200 bg-white"}`}
+                        >
                           {body}
                         </div>
                       );
