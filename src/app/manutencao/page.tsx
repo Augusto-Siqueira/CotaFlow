@@ -1087,20 +1087,18 @@ export default function ManutencaoPage() {
                       const parked = !o.exit_at;
                       const body = (
                         <>
-                          <span className="flex items-center justify-between gap-2">
+                          <span className="flex items-start justify-between gap-2">
                             <span className="text-sm font-semibold tracking-wide text-navy-900">{o.plate}</span>
-                            {parked ? (
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(3)}`}>{severityLabel(3)}</span>
-                            ) : (
+                            <span className="flex flex-col items-end gap-1">
+                              {parked && (
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(3)}`}>{severityLabel(3)}</span>
+                              )}
                               <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${serviceTypeBadge(o.service_type)}`}>
                                 {serviceTypeLabel(o.service_type)}
                               </span>
-                            )}
+                            </span>
                           </span>
-                          <span className="mt-0.5 block font-medium text-navy-700">
-                            {parked ? `${serviceTypeLabel(o.service_type)} · ` : ""}
-                            {o.maintenance_workshops?.name ?? "Oficina"}
-                          </span>
+                          <span className="mt-0.5 block font-medium text-navy-700">{o.maintenance_workshops?.name ?? "Oficina"}</span>
                           <span className="mt-0.5 line-clamp-2 block text-navy-600">{o.service}</span>
                           <span className="mt-1.5 block text-[11px] text-navy-500">
                             {o.exit_at
@@ -1152,14 +1150,27 @@ export default function ManutencaoPage() {
                               : "border-navy-200 bg-white"
                           }`}
                         >
-                          <span className="flex items-center justify-between gap-2">
+                          <span className="flex items-start justify-between gap-2">
                             <span className="text-sm font-semibold tracking-wide text-navy-900">
                               {r.plate}
                             </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(r.severity)}`}
-                            >
-                              {severityLabel(r.severity)}
+                            <span className="flex flex-col items-end gap-1">
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(r.severity)}`}
+                              >
+                                {severityLabel(r.severity)}
+                              </span>
+                              {(() => {
+                                // Tipo de serviço da entrada ligada (Corretiva/Preventiva).
+                                const ord = r.order_id
+                                  ? ((orders ?? []).find((x) => x.id === r.order_id) ?? released.find((x) => x.id === r.order_id))
+                                  : undefined;
+                                return ord ? (
+                                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${serviceTypeBadge(ord.service_type)}`}>
+                                    {serviceTypeLabel(ord.service_type)}
+                                  </span>
+                                ) : null;
+                              })()}
                             </span>
                           </span>
                           <span className="mt-0.5 block font-medium text-navy-700">
