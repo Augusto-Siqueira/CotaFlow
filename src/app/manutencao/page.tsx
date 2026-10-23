@@ -119,6 +119,8 @@ export default function ManutencaoPage() {
 
   const [now] = useState(() => Date.now());
   const [orders, setOrders] = useState<MaintenanceOrder[] | null>(null);
+  // Entradas liberadas nos últimos 7 dias (coluna "Concluída" do quadro).
+  const [released, setReleased] = useState<MaintenanceOrder[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [fleet, setFleet] = useState<FleetUnit[]>([]);
@@ -173,6 +175,12 @@ export default function ManutencaoPage() {
     const open = (data as unknown as MaintenanceOrder[]) ?? [];
     setLoadError(null);
     setOrders(open);
+    const { data: done } = await supabase
+      .from("maintenance_orders")
+      .select(ORDER_COLUMNS)
+      .gte("exit_at", new Date(Date.now() - 7 * 86400000).toISOString())
+      .order("exit_at", { ascending: false });
+    setReleased((done as unknown as MaintenanceOrder[] | null) ?? []);
     const affected = await fetchAffected(
       open.map((o) => o.plate),
       localDate(new Date())
@@ -1013,6 +1021,15 @@ export default function ManutencaoPage() {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             {REPORT_STAGES.map((stage) => {
+              // Entradas sem defeito ligado também passam pelo quadro: abertas em
+              // "Em oficina" e liberadas (últimos 7 dias) em "Concluída".
+              const linkedOrders = new Set(reports.map((r) => r.order_id).filter(Boolean));
+              const orderCards =
+                stage.value === "em_oficina"
+                  ? (orders ?? []).filter((o) => !linkedOrders.has(o.id))
+                  : stage.value === "concluida"
+                    ? released.filter((o) => !linkedOrders.has(o.id))
+                    : [];
               const cards = reports
                 .filter((r) => r.status === stage.value)
                 .sort(
@@ -1032,11 +1049,45 @@ export default function ManutencaoPage() {
                       <span className="text-[11px] font-normal text-navy-500">(7 dias)</span>
                     )}
                     <span className="ml-auto rounded-full bg-navy-100 px-2 py-0.5 text-xs text-navy-600">
-                      {cards.length}
+                      {cards.length + orderCards.length}
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {cards.length === 0 && (
+                    {orderCards.map((o) => {
+                      const body = (
+                        <>
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold tracking-wide text-navy-900">{o.plate}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${serviceTypeBadge(o.service_type)}`}>
+                              {serviceTypeLabel(o.service_type)}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block font-medium text-navy-700">{o.maintenance_workshops?.name ?? "Oficina"}</span>
+                          <span className="mt-0.5 line-clamp-2 block text-navy-600">{o.service}</span>
+                          <span className="mt-1.5 block text-[11px] text-navy-500">
+                            {o.exit_at
+                              ? `Liberada em ${formatDateTime(o.exit_at)}`
+                              : `Há ${formatDuration(now - new Date(o.entry_at).getTime())} na oficina`}
+                          </span>
+                        </>
+                      );
+                      return canEditMaintenance ? (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => openEdit(o)}
+                          title="Entrada lançada direto (sem defeito relatado) — clique para editar"
+                          className="block w-full rounded-lg border border-dashed border-navy-300 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-brand-500"
+                        >
+                          {body}
+                        </button>
+                      ) : (
+                        <div key={o.id} className="rounded-lg border border-dashed border-navy-300 bg-white px-3 py-2 text-xs">
+                          {body}
+                        </div>
+                      );
+                    })}
+                    {cards.length === 0 && orderCards.length === 0 && (
                       <p className="py-4 text-center text-xs text-navy-500">vazio</p>
                     )}
                     {cards.map((r) => {
