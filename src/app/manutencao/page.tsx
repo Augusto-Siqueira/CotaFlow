@@ -146,6 +146,9 @@ export default function ManutencaoPage() {
   // Defeitos da placa marcados para ligar à entrada (vão para "Em oficina").
   const [linkIds, setLinkIds] = useState<Set<string>>(new Set());
   const [linkTouched, setLinkTouched] = useState(false);
+  // Quadro de defeitos: colunas recolhidas e o quadro inteiro recolhido.
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
+  const [boardCollapsed, setBoardCollapsed] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportForm, setReportForm] = useState({
     plate: "",
@@ -1004,17 +1007,27 @@ export default function ManutencaoPage() {
               ({(reports ?? []).filter((r) => r.status !== "concluida").length} em aberto)
             </span>
           </h2>
-          {canReport && (
+          <span className="flex flex-wrap items-center gap-2">
+            {canReport && (
+              <button
+                type="button"
+                onClick={openNewReport}
+                className={buttonClasses("secondary", "sm")}
+              >
+                Relatar defeito
+              </button>
+            )}
             <button
               type="button"
-              onClick={openNewReport}
+              onClick={() => setBoardCollapsed((v) => !v)}
+              aria-expanded={!boardCollapsed}
               className={buttonClasses("secondary", "sm")}
             >
-              Relatar defeito
+              {boardCollapsed ? "Mostrar quadro" : "Recolher quadro"}
             </button>
-          )}
+          </span>
         </div>
-        {reports === null ? (
+        {boardCollapsed ? null : reports === null ? (
           <div className="rounded-xl border border-navy-200 bg-white px-6 py-8 text-center text-sm text-navy-500">
             Carregando...
           </div>
@@ -1051,8 +1064,25 @@ export default function ManutencaoPage() {
                     <span className="ml-auto rounded-full bg-navy-100 px-2 py-0.5 text-xs text-navy-600">
                       {cards.length + orderCards.length}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCollapsedStages((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(stage.value)) next.delete(stage.value);
+                          else next.add(stage.value);
+                          return next;
+                        })
+                      }
+                      aria-expanded={!collapsedStages.has(stage.value)}
+                      aria-label={`${collapsedStages.has(stage.value) ? "Mostrar" : "Recolher"} ${stage.label}`}
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-navy-500 hover:bg-navy-100 hover:text-navy-800"
+                    >
+                      {collapsedStages.has(stage.value) ? "Mostrar" : "Recolher"}
+                    </button>
                   </div>
-                  <div className="space-y-2">
+                  {/* Coluna com altura limitada: com muitos lançamentos, rola por dentro. */}
+                  <div className={`max-h-[34rem] space-y-2 overflow-y-auto pr-1 ${collapsedStages.has(stage.value) ? "hidden" : ""}`}>
                     {orderCards.map((o) => {
                       const body = (
                         <>
