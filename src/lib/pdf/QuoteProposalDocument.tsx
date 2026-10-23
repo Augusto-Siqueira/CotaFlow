@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { revisionLabel } from "@/lib/format";
+import { minLoadNote, perTon, tonsLabel } from "@/lib/perTon";
 import {
   Document,
   Page,
@@ -34,6 +35,8 @@ export interface QuoteProposalData {
   icms_pct: number | null;
   net_freight: number | null;
   full_freight: number | null;
+  /** Lotação mínima (t): com ela, os custos saem por tonelada. */
+  min_load_tons?: number | null;
   transit_time_hours: number | null;
   delivery_deadline: string | null;
   validity_date: string | null;
@@ -238,6 +241,24 @@ function formatCurrency(value: number | null): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/** Valores de custo: por carga, ou por tonelada ("/t") quando há lotação mínima. */
+function moneyFor(tons: number | null) {
+  return (value: number | null): string => {
+    const v = perTon(value, tons);
+    if (v === null) return "—";
+    return tons ? `${formatCurrency(v)}/t` : formatCurrency(v);
+  };
+}
+
+function MinLoadBox({ tons }: { tons: number }) {
+  return (
+    <View style={{ marginTop: 10, padding: 8, borderWidth: 1, borderColor: "#d97706", backgroundColor: "#fffbeb", borderRadius: 4 }}>
+      <Text style={{ fontSize: 11, fontWeight: 700, color: "#92400e" }}>Lotação mínima: {tonsLabel(tons)}</Text>
+      <Text style={{ fontSize: 9, color: "#92400e", marginTop: 2 }}>{minLoadNote(tons)}</Text>
+    </View>
+  );
+}
+
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString("pt-BR");
 }
@@ -304,6 +325,8 @@ function KeminSectionHeader({ label }: { label: string }) {
 }
 
 function KeminCostSection({ quote }: { quote: QuoteProposalData }) {
+  const tons = quote.min_load_tons ? Number(quote.min_load_tons) : null;
+  const money = moneyFor(tons);
   const gross = quote.gross_freight;
   const icmsValue = computeIcmsValue(
     quote.full_freight,
@@ -325,8 +348,9 @@ function KeminCostSection({ quote }: { quote: QuoteProposalData }) {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Detalhamento de custos</Text>
-      <View style={styles.keminTable}>
+      <Text style={styles.sectionTitle}>Detalhamento de custos{tons ? " por tonelada" : ""}</Text>
+      {tons && <MinLoadBox tons={tons} />}
+      <View style={[styles.keminTable, tons ? { marginTop: 8 } : {}]}>
         <View style={styles.keminHeaderRow}>
           <Text style={[styles.keminHeaderCell, { flex: 2 }]}>Descrição</Text>
           <Text style={[styles.keminHeaderCell, { flex: 1, textAlign: "center" }]}>
@@ -343,35 +367,35 @@ function KeminCostSection({ quote }: { quote: QuoteProposalData }) {
         </View>
         <KeminRow
           label="Valor Líquido do Frete (sem impostos)"
-          value={formatCurrency(gross)}
+          value={money(gross)}
         />
-        <KeminRow label="Pedágios" value={formatCurrency(quote.toll_cost)} />
+        <KeminRow label="Pedágios" value={money(quote.toll_cost)} />
         <KeminRow
           label="Seguro"
           pct={quote.insurance_pct !== null ? `${quote.insurance_pct}%` : undefined}
-          value={formatCurrency(quote.insurance_value)}
+          value={money(quote.insurance_value)}
         />
         <KeminSectionHeader label="Impostos incidentes na Operação:" />
         <KeminRow
           label="ICMS"
           pct={quote.icms_pct !== null ? `${quote.icms_pct}%` : undefined}
-          value={formatCurrency(icmsValue)}
+          value={money(icmsValue)}
         />
-        <KeminRow label="PIS" pct={`${PIS_PCT}%`} value={formatCurrency(pisValue)} />
+        <KeminRow label="PIS" pct={`${PIS_PCT}%`} value={money(pisValue)} />
         <KeminRow
           label="COFINS"
           pct={`${COFINS_PCT}%`}
-          value={formatCurrency(cofinsValue)}
+          value={money(cofinsValue)}
         />
         <KeminRow
           label="ISS (quando aplicável)"
           pct={`${ISS_PCT}%`}
-          value={formatCurrency(issValue)}
+          value={money(issValue)}
         />
-        <KeminRow label="Valor total de impostos" value={formatCurrency(totalTaxes)} />
+        <KeminRow label="Valor total de impostos" value={money(totalTaxes)} />
         <KeminRow
-          label="Valor Bruto do Frete (Total)"
-          value={formatCurrency(quote.full_freight)}
+          label={tons ? "Valor Bruto do Frete por tonelada" : "Valor Bruto do Frete (Total)"}
+          value={money(quote.full_freight)}
           bold
         />
         <KeminRow
@@ -412,6 +436,8 @@ export function QuoteProposalDocument({
     quote.toll_cost,
     quote.insurance_value
   );
+  const tons = quote.min_load_tons ? Number(quote.min_load_tons) : null;
+  const money = moneyFor(tons);
 
   return (
     <Document>
@@ -506,18 +532,19 @@ export function QuoteProposalDocument({
         ) : (
           <>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Detalhamento de custos</Text>
-              <View style={styles.table}>
+              <Text style={styles.sectionTitle}>Detalhamento de custos{tons ? " por tonelada" : ""}</Text>
+              {tons && <MinLoadBox tons={tons} />}
+              <View style={[styles.table, tons ? { marginTop: 8 } : {}]}>
                 <View style={styles.tableRow}>
                   <Text style={styles.tableLabel}>Frete Gross</Text>
                   <Text style={styles.tableValue}>
-                    {formatCurrency(quote.gross_freight)}
+                    {money(quote.gross_freight)}
                   </Text>
                 </View>
                 <View style={styles.tableRow}>
                   <Text style={styles.tableLabel}>Pedágio</Text>
                   <Text style={styles.tableValue}>
-                    {formatCurrency(quote.toll_cost)}
+                    {money(quote.toll_cost)}
                   </Text>
                 </View>
                 <View style={styles.tableRow}>
@@ -526,7 +553,7 @@ export function QuoteProposalDocument({
                     {quote.insurance_pct !== null ? ` (${quote.insurance_pct}%)` : ""}
                   </Text>
                   <Text style={styles.tableValue}>
-                    {formatCurrency(quote.insurance_value)}
+                    {money(quote.insurance_value)}
                   </Text>
                 </View>
                 <View style={styles.tableRow}>
@@ -534,20 +561,20 @@ export function QuoteProposalDocument({
                     ICMS{quote.icms_pct !== null ? ` (${quote.icms_pct}%)` : ""}
                   </Text>
                   <Text style={styles.tableValue}>
-                    {formatCurrency(icmsValue)}
+                    {money(icmsValue)}
                   </Text>
                 </View>
                 <View style={styles.tableRow}>
                   <Text style={styles.tableLabel}>Frete Net (PIS/COFINS)</Text>
                   <Text style={styles.tableValue}>
-                    {formatCurrency(quote.net_freight)}
+                    {money(quote.net_freight)}
                   </Text>
                 </View>
               </View>
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Frete Full</Text>
+                <Text style={styles.totalLabel}>Frete Full{tons ? " por tonelada" : ""}</Text>
                 <Text style={styles.totalValue}>
-                  {formatCurrency(quote.full_freight)}
+                  {money(quote.full_freight)}
                 </Text>
               </View>
             </View>

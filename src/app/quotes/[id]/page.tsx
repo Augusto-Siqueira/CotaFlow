@@ -13,6 +13,8 @@ import { computeIcmsValue } from "@/lib/quoteCalculations";
 import { getCityCoordinates } from "@/lib/geocoding";
 import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { QuoteStatusSelect } from "@/components/QuoteStatusSelect";
+import { QuotePerTonControl } from "@/components/QuotePerTonControl";
+import { minLoadNote, perTon, tonsLabel } from "@/lib/perTon";
 import { buttonClasses, ButtonLink } from "@/components/Button";
 
 interface QuoteDetail {
@@ -31,6 +33,8 @@ interface QuoteDetail {
   icms_pct: number | null;
   net_freight: number | null;
   full_freight: number | null;
+  /** Lotação mínima (t): com ela, os valores são mostrados por tonelada. */
+  min_load_tons: number | null;
   transit_time_hours: number | null;
   delivery_deadline: string | null;
   validity_date: string | null;
@@ -97,7 +101,7 @@ export default async function QuoteDetailPage({
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, transit_time_hours, delivery_deadline, validity_date, free_time_hours, over_time_cost, client_quote_number, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
+      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, min_load_tons, transit_time_hours, delivery_deadline, validity_date, free_time_hours, over_time_cost, client_quote_number, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
     )
     .eq("id", id)
     .single();
@@ -107,6 +111,12 @@ export default async function QuoteDetailPage({
   }
 
   const quote = data as unknown as QuoteDetail;
+  // Cotação por tonelada: valores divididos pela lotação mínima, com "/t".
+  const tons = quote.min_load_tons !== null ? Number(quote.min_load_tons) : null;
+  const money = (v: number | null) => {
+    const shown = formatCurrency(perTon(v, tons));
+    return tons && v !== null ? `${shown}/t` : shown;
+  };
 
   const icmsValue = computeIcmsValue(
     quote.full_freight,
@@ -398,19 +408,26 @@ export default async function QuoteDetailPage({
 
         <div className="rounded-xl border border-navy-200 bg-white p-6 shadow-sm sm:col-span-2">
           <h2 className="text-sm font-medium uppercase tracking-wide text-navy-500">
-            Custos
+            Custos{tons ? " por tonelada" : ""}
           </h2>
+          <QuotePerTonControl quoteId={quote.id} initialTons={tons} />
+          {tons && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="text-base font-semibold">Lotação mínima: {tonsLabel(tons)}</div>
+              <p className="mt-0.5">{minLoadNote(tons)}</p>
+            </div>
+          )}
           <div className="mt-3 divide-y divide-navy-100 text-sm">
             <div className="flex justify-between py-2">
               <span className="text-navy-600">Frete Gross</span>
               <span className="font-medium text-navy-900">
-                {formatCurrency(quote.gross_freight)}
+                {money(quote.gross_freight)}
               </span>
             </div>
             <div className="flex justify-between py-2">
               <span className="text-navy-600">Pedágio</span>
               <span className="font-medium text-navy-900">
-                {formatCurrency(quote.toll_cost)}
+                {money(quote.toll_cost)}
               </span>
             </div>
             <div className="flex justify-between py-2">
@@ -421,7 +438,7 @@ export default async function QuoteDetailPage({
                   : ""}
               </span>
               <span className="font-medium text-navy-900">
-                {formatCurrency(quote.insurance_value)}
+                {money(quote.insurance_value)}
               </span>
             </div>
             <div className="flex justify-between py-2">
@@ -429,22 +446,22 @@ export default async function QuoteDetailPage({
                 ICMS{quote.icms_pct !== null ? ` (${quote.icms_pct}%)` : ""}
               </span>
               <span className="font-medium text-navy-900">
-                {formatCurrency(icmsValue)}
+                {money(icmsValue)}
               </span>
             </div>
             <div className="flex justify-between py-2">
               <span className="text-navy-600">Frete Net (PIS/COFINS)</span>
               <span className="font-medium text-navy-900">
-                {formatCurrency(quote.net_freight)}
+                {money(quote.net_freight)}
               </span>
             </div>
           </div>
           <div className="mt-3 flex justify-between rounded-lg bg-navy-50 px-4 py-3">
             <span className="text-base font-semibold text-navy-900">
-              Frete Full
+              Frete Full{tons ? " por tonelada" : ""}
             </span>
             <span className="text-base font-semibold text-navy-900">
-              {formatCurrency(quote.full_freight)}
+              {money(quote.full_freight)}
             </span>
           </div>
         </div>
