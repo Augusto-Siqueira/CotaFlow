@@ -141,6 +141,9 @@ export default function ManutencaoPage() {
   // Defeitos relatados (triagem -> agendada -> em oficina -> concluída)
   const [reports, setReports] = useState<MaintenanceReport[] | null>(null);
   const [linkReportId, setLinkReportId] = useState<string | null>(null);
+  // Defeitos da placa marcados para ligar à entrada (vão para "Em oficina").
+  const [linkIds, setLinkIds] = useState<Set<string>>(new Set());
+  const [linkTouched, setLinkTouched] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportForm, setReportForm] = useState({
     plate: "",
@@ -248,12 +251,34 @@ export default function ManutencaoPage() {
     };
   }, [showForm, resolvedPlate, form.entry_at]);
 
+  // Defeitos da placa ainda sem entrada (triagem/agendada) e os já ligados à entrada em edição.
+  const plateOpenReports = useMemo(
+    () =>
+      showForm && resolvedPlate
+        ? (reports ?? []).filter((r) => r.plate === resolvedPlate && (r.status === "triagem" || r.status === "agendada"))
+        : [],
+    [showForm, resolvedPlate, reports]
+  );
+  const plateLinkedReports = useMemo(
+    () => (showForm && editingId ? (reports ?? []).filter((r) => r.order_id === editingId) : []),
+    [showForm, editingId, reports]
+  );
+
+  // Por padrão, todos os defeitos abertos da placa vêm marcados (a pessoa desmarca o que não for desta entrada).
+  useEffect(() => {
+    if (linkTouched) return;
+    const ids = new Set(plateOpenReports.map((r) => r.id));
+    if (linkReportId) ids.add(linkReportId);
+    queueMicrotask(() => setLinkIds(ids));
+  }, [plateOpenReports, linkReportId, linkTouched]);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function openNew() {
     setLinkReportId(null);
+    setLinkTouched(false);
     setEditingId(null);
     setForm(emptyForm());
     setFormError(null);
@@ -262,6 +287,8 @@ export default function ManutencaoPage() {
 
   function openEdit(o: MaintenanceOrder) {
     setEditingId(o.id);
+    setLinkReportId(null);
+    setLinkTouched(false);
     setForm({
       plate: o.plate,
       workshop_id: o.workshop_id,
@@ -342,6 +369,8 @@ export default function ManutencaoPage() {
     setSaving(true);
     setFormError(null);
     let error: { message: string } | null = null;
+    let savedId: string | null = editingId;
+    const selectedLinks = plateOpenReports.filter((r) => linkIds.has(r.id)).map((r) => r.id);
     if (editingId) {
       ({ error } = await supabase
         .from("maintenance_orders")
@@ -354,13 +383,18 @@ export default function ManutencaoPage() {
         .select("id")
         .single();
       error = res.error;
-      if (!error && linkReportId && res.data) {
-        // O defeito de origem passa a "Em oficina", ligado a esta ordem.
-        await supabase
-          .from("maintenance_reports")
-          .update({ status: "em_oficina", order_id: res.data.id })
-          .eq("id", linkReportId);
-      }
+      savedId = res.data?.id ?? null;
+    }
+    // Defeitos marcados passam a "Em oficina", ligados a esta entrada (ou
+    // "Concluída", se a entrada já está liberada).
+    let linkError: string | null = null;
+    if (!error && savedId && selectedLinks.length > 0) {
+      const { error: le } = await supabase
+        .from("maintenance_reports")
+        .update({ status: exit ? "concluida" : "em_oficina", order_id: savedId })
+        .in("id", selectedLinks)
+        .in("status", ["triagem", "agendada"]);
+      if (le) linkError = le.message;
     }
     setSaving(false);
 
@@ -372,7 +406,16 @@ export default function ManutencaoPage() {
       );
       return;
     }
-    toastSuccess(editingId ? "Manutenção atualizada." : "Entrada lançada.");
+    if (linkError) {
+      toastError(`A entrada foi salva, mas os defeitos não foram ligados a ela (${linkError}). Abra a entrada em Editar e tente de novo.`);
+    } else {
+      toastSuccess(
+        (editingId ? "Manutenção atualizada." : "Entrada lançada.") +
+          (selectedLinks.length > 0
+            ? ` ${selectedLinks.length} ${selectedLinks.length === 1 ? "defeito ligado" : "defeitos ligados"} à entrada.`
+            : "")
+      );
+    }
     closeForm();
     await Promise.all([loadOrders(), loadReports()]);
   }
@@ -538,6 +581,7 @@ export default function ManutencaoPage() {
   function startEntryFromReport(r: MaintenanceReport) {
     setEditingId(null);
     setLinkReportId(r.id);
+    setLinkTouched(false);
     setForm({
       ...emptyForm(),
       plate: r.plate,
@@ -846,6 +890,52 @@ export default function ManutencaoPage() {
               />
             </div>
           </div>
+
+          {(plateOpenReports.length > 0 || plateLinkedReports.length > 0) && (
+            <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Defeitos relatados desta placa</p>
+              <p className="text-xs">
+                Os marcados ficam ligados a esta entrada: vão para &quot;Em oficina&quot; e são concluídos quando a placa for liberada.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {plateLinkedReports.map((r) => (
+                  <li key={r.id} className="flex items-start gap-2 text-navy-700">
+                    <input type="checkbox" checked disabled aria-label="Já ligado a esta entrada" className="mt-0.5 cursor-not-allowed" />
+                    <span>
+                      <span className="font-medium">{r.category}</span> · {r.description}
+                      <span className="ml-1 text-xs text-navy-500">(já ligado · {reportStageLabel(r.status)})</span>
+                    </span>
+                  </li>
+                ))}
+                {plateOpenReports.map((r) => (
+                  <li key={r.id}>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={linkIds.has(r.id)}
+                        onChange={(e) => {
+                          setLinkTouched(true);
+                          setLinkIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(r.id);
+                            else next.delete(r.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium">{r.category}</span> · {r.description}
+                        <span className="ml-1 text-xs text-amber-800">
+                          ({reportStageLabel(r.status)} · {severityLabel(r.severity)})
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {formAffected.length > 0 && (
             <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
