@@ -16,10 +16,17 @@ function localDate(d: Date): string {
  * Placas para os formulários do motorista (defeito e check-list): as de hoje
  * primeiro, depois a frota. Fica guardado no celular para funcionar sem sinal.
  */
-export async function loadPlateOptions(userId: string): Promise<{ options: SearchOption[]; stale: boolean; at: number }> {
+export async function loadPlateOptions(
+  userId: string
+): Promise<{ options: SearchOption[]; stale: boolean; at: number; loadPlate: string | null }> {
   const res = await cached<PlatesRef>(`${userId}:plates`, async () => {
     const [today, fleet] = await Promise.all([
-      supabase.from("loading_schedules").select("plate, trailer_plate").eq("schedule_date", localDate(new Date())),
+      // Cargas de hoje e as de dias anteriores com a viagem em andamento (carregando ou em viagem).
+      supabase
+        .from("loading_schedules")
+        .select("plate, trailer_plate")
+        .or(`schedule_date.eq.${localDate(new Date())},and(schedule_date.lt.${localDate(new Date())},status.in.(carregando,em_viagem)))`)
+        .order("schedule_date", { ascending: false }),
       supabase.rpc("fleet_plates"),
     ]);
     if (today.error) throw new Error(today.error.message);
@@ -34,9 +41,11 @@ export async function loadPlateOptions(userId: string): Promise<{ options: Searc
     if (p && !options.some((o) => o.value === p)) options.push({ value: p, hint });
   };
   for (const l of res.data.today) {
-    add(l.plate, "Cavalo da carga de hoje");
-    add(l.trailer_plate, "Carreta da carga de hoje");
+    add(l.plate, "Cavalo da sua carga");
+    add(l.trailer_plate, "Carreta da sua carga");
   }
   for (const f of res.data.fleet) add(f.plate, f.kind === "semirreboque" ? "Semi-reboque" : "Cavalo/truck");
-  return { options, stale: res.stale, at: res.at };
+  // Placa para preencher sozinho: só o cavalo de uma carga dele (sem carga, fica em branco).
+  const loadPlate = res.data.today.find((l) => l.plate)?.plate ?? null;
+  return { options, stale: res.stale, at: res.at, loadPlate };
 }

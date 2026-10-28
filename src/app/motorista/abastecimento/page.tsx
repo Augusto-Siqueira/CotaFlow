@@ -149,7 +149,13 @@ export default function AbastecimentoMotoristaPage() {
         const res = await cached<FuelRef>(key, async () => {
           const [d, today, fleet] = await Promise.all([
             supabase.from("drivers").select("name").maybeSingle(),
-            supabase.from("loading_schedules").select("plate").eq("schedule_date", localDate(new Date())),
+            // Cargas dele: as de hoje e as de dias anteriores com a viagem em andamento (carregando ou em viagem).
+            supabase
+              .from("loading_schedules")
+              .select("plate")
+              .or(`schedule_date.eq.${localDate(new Date())},and(schedule_date.lt.${localDate(new Date())},status.in.(carregando,em_viagem)))`)
+              .order("schedule_date", { ascending: false })
+              .order("loading_time", { ascending: true, nullsFirst: false }),
             supabase.rpc("fleet_plates"),
           ]);
           if (d.error) throw new Error(d.error.message);
@@ -187,7 +193,7 @@ export default function AbastecimentoMotoristaPage() {
     if (!ref) return [];
     const opts: SearchOption[] = [];
     for (const p of ref.data.todayPlates) {
-      if (!opts.some((o) => o.value === p)) opts.push({ value: p, hint: "Cavalo da carga de hoje" });
+      if (!opts.some((o) => o.value === p)) opts.push({ value: p, hint: "Cavalo da sua carga" });
     }
     for (const f of ref.data.fleet) {
       if (f.kind !== "semirreboque" && !opts.some((o) => o.value === f.plate)) opts.push({ value: f.plate, hint: "Cavalo/truck" });
@@ -196,9 +202,12 @@ export default function AbastecimentoMotoristaPage() {
   }, [ref]);
 
   useEffect(() => {
-    if (!plateOptions[0] || redo) return;
-    queueMicrotask(() => setPlate((cur) => cur || plateOptions[0].value));
-  }, [plateOptions, redo]);
+    // Só preenche sozinho com o cavalo da carga dele; sem carga lançada, o campo fica em branco
+    // (evita abastecimento lançado em placa errada).
+    const loadPlate = ref?.data.todayPlates[0];
+    if (!loadPlate || redo) return;
+    queueMicrotask(() => setPlate((cur) => cur || loadPlate));
+  }, [ref, redo]);
 
   const chosenPlate = useMemo(() => plate.trim().replace(/[\s-]/g, "").toUpperCase(), [plate]);
   const knownPlate = plateOptions.length === 0 || plateOptions.some((o) => o.value === chosenPlate);

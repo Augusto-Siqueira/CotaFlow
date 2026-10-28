@@ -37,7 +37,8 @@ export default function RelatarDefeitoPage() {
       .then((r) => {
         setPlateOptions(r.options);
         setStaleAt(r.stale ? r.at : null);
-        if (r.options[0]) setPlate((cur) => cur || r.options[0].value);
+        // Só o cavalo da carga dele; sem carga lançada, o campo fica em branco.
+        if (r.loadPlate) setPlate((cur) => cur || r.loadPlate!);
       })
       .catch(() => {});
   }, [user, isDriver]);
