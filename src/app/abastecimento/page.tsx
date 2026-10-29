@@ -17,7 +17,10 @@ import {
   formatLiters,
   formatMoney,
   fuelKmDeltas,
+  maskDecimalInput,
+  maskIntegerInput,
   parseDecimal,
+  toMaskedInput,
   type FuelEntry,
   type FuelType,
 } from "@/lib/fuel";
@@ -203,9 +206,9 @@ export default function AbastecimentoPage() {
       fueled_at: toDateInput(e.fueled_at),
       location_type: e.location_type,
       location: e.location ?? "",
-      price: e.price_per_liter ? String(e.price_per_liter).replace(".", ",") : "",
-      liters: String(e.liters).replace(".", ","),
-      km: String(e.odometer_km),
+      price: e.price_per_liter ? toMaskedInput(e.price_per_liter) : "",
+      liters: toMaskedInput(e.liters),
+      km: maskIntegerInput(String(e.odometer_km)),
       full_tank: e.full_tank,
       notes: e.notes ?? "",
     });
@@ -626,17 +629,17 @@ export default function AbastecimentoPage() {
                   </div>
                   <div>
                     <label htmlFor="ed-preco" className="mb-1 block text-sm font-medium text-navy-700">R$/litro</label>
-                    <input id="ed-preco" inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className={inputCls} />
+                    <input id="ed-preco" inputMode="numeric" value={form.price} onChange={(e) => setForm({ ...form, price: maskDecimalInput(e.target.value) })} className={inputCls} />
                   </div>
                 </>
               )}
               <div>
                 <label htmlFor="ed-km" className="mb-1 block text-sm font-medium text-navy-700">Km</label>
-                <input id="ed-km" inputMode="numeric" value={form.km} onChange={(e) => setForm({ ...form, km: e.target.value })} className={inputCls} />
+                <input id="ed-km" inputMode="numeric" value={form.km} onChange={(e) => setForm({ ...form, km: maskIntegerInput(e.target.value) })} className={inputCls} />
               </div>
               <div>
                 <label htmlFor="ed-litros" className="mb-1 block text-sm font-medium text-navy-700">Litros</label>
-                <input id="ed-litros" inputMode="decimal" value={form.liters} onChange={(e) => setForm({ ...form, liters: e.target.value })} className={inputCls} />
+                <input id="ed-litros" inputMode="numeric" value={form.liters} onChange={(e) => setForm({ ...form, liters: maskDecimalInput(e.target.value) })} className={inputCls} />
               </div>
               <div className="col-span-2">
                 <label htmlFor="ed-obs" className="mb-1 block text-sm font-medium text-navy-700">Observação</label>

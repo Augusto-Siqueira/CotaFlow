@@ -24,7 +24,10 @@ import {
   formatKm,
   formatLiters,
   formatMoney,
+  maskDecimalInput,
+  maskIntegerInput,
   parseDecimal,
+  toMaskedInput,
   type FuelEntry,
   type FuelType,
 } from "@/lib/fuel";
@@ -256,9 +259,9 @@ export default function AbastecimentoMotoristaPage() {
       setWhen(localDate(new Date(String(p.fueled_at))));
       setWhere(p.location_type as "patio" | "externo");
       setStation(String(p.location ?? ""));
-      setPrice(p.price_per_liter ? String(p.price_per_liter).replace(".", ",") : "");
-      setLiters(String(p.liters ?? "").replace(".", ","));
-      setKm(String(p.odometer_km ?? ""));
+      setPrice(p.price_per_liter ? toMaskedInput(p.price_per_liter as number) : "");
+      setLiters(toMaskedInput(p.liters as number));
+      setKm(maskIntegerInput(String(p.odometer_km ?? "")));
       setFullTank(p.full_tank ? "sim" : "nao");
       setNotes(String(p.notes ?? ""));
       setPhotos(item.photos);
@@ -468,11 +471,11 @@ export default function AbastecimentoMotoristaPage() {
               <input
                 id="ab-preco"
                 type="text"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => setPrice(maskDecimalInput(e.target.value))}
                 className={fieldCls}
-                placeholder="Ex.: 6,19"
+                placeholder="Ex.: 6,190"
               />
             </div>
           </>
@@ -487,9 +490,9 @@ export default function AbastecimentoMotoristaPage() {
             type="text"
             inputMode="numeric"
             value={km}
-            onChange={(e) => setKm(e.target.value)}
+            onChange={(e) => setKm(maskIntegerInput(e.target.value))}
             className={fieldCls}
-            placeholder="Ex.: 452318"
+            placeholder="Ex.: 452.318"
           />
           {kmLower && (
             <p className="mt-1 text-xs font-medium text-amber-700">
@@ -505,12 +508,15 @@ export default function AbastecimentoMotoristaPage() {
           <input
             id="ab-litros"
             type="text"
-            inputMode="decimal"
+            inputMode="numeric"
             value={liters}
-            onChange={(e) => setLiters(e.target.value)}
+            onChange={(e) => setLiters(maskDecimalInput(e.target.value))}
             className={fieldCls}
-            placeholder="Ex.: 380,5"
+            placeholder="Ex.: 380,500"
           />
+          <p className="mt-1 text-xs text-navy-500">
+            Digite só os números, como na bomba: a vírgula entra sozinha. Se a bomba mostrar só 2 casas, termine com 0.
+          </p>
         </div>
 
         <div>

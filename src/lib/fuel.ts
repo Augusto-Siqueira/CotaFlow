@@ -82,6 +82,34 @@ export function formatAverage(n: number): string {
 }
 
 /** "1.234,5" / "1234.5" / "1234,5" -> 1234.5; inválido -> null. */
+/**
+ * Campo com máscara: aceita só números; a vírgula e os pontos de milhar entram
+ * sozinhos, da direita para a esquerda, com casas decimais fixas.
+ * 3 casas: "279071" -> "279,071"; "4" -> "0,004"; "1200000" -> "1.200,000".
+ */
+export function maskDecimalInput(text: string, decimals = 3): string {
+  const digits = text.replace(/\D/g, "").replace(/^0+/, "");
+  if (!digits) return "";
+  const padded = digits.padStart(decimals + 1, "0");
+  const intPart = Number(padded.slice(0, -decimals)).toLocaleString("pt-BR");
+  return `${intPart},${padded.slice(-decimals)}`;
+}
+
+/** Só números com ponto de milhar automático: "256197" -> "256.197". */
+export function maskIntegerInput(text: string): string {
+  const digits = text.replace(/\D/g, "").replace(/^0+/, "");
+  return digits ? Number(digits).toLocaleString("pt-BR") : "";
+}
+
+/** Número já gravado para o campo com máscara (ex.: 279.07 -> "279,070"). */
+export function toMaskedInput(value: number | string | null | undefined, decimals = 3): string {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  return Number.isFinite(n)
+    ? n.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : "";
+}
+
 export function parseDecimal(value: string): number | null {
   const v = value.trim();
   if (!v) return null;
