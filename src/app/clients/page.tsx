@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { parseEmailList } from "@/lib/deliveryProof";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -18,6 +19,7 @@ interface Client {
   segment: string | null;
   default_insurance_pct: number | null;
   pdf_layout: string;
+  proof_email: string | null;
   created_at: string;
 }
 
@@ -28,6 +30,7 @@ interface FormState {
   segment: string;
   default_insurance_pct: string;
   pdf_layout: PdfLayout;
+  proof_email: string;
 }
 
 const emptyForm: FormState = {
@@ -37,6 +40,7 @@ const emptyForm: FormState = {
   segment: "",
   default_insurance_pct: "",
   pdf_layout: "padrao",
+  proof_email: "",
 };
 
 export default function ClientsPage() {
@@ -127,6 +131,7 @@ export default function ClientsPage() {
           ? String(client.default_insurance_pct)
           : "",
       pdf_layout: (client.pdf_layout as PdfLayout) ?? "padrao",
+      proof_email: client.proof_email ?? "",
     });
     setFormErrors({});
     setSubmitError(null);
@@ -187,6 +192,12 @@ export default function ClientsPage() {
     ) {
       errors.default_insurance_pct = "Informe um número válido.";
     }
+    if (form.proof_email.trim()) {
+      const parts = form.proof_email.split(/[;,\s]+/).filter(Boolean);
+      if (parseEmailList(form.proof_email).length !== parts.length) {
+        errors.proof_email = "Confira os e-mails (separe mais de um com ponto e vírgula).";
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -211,6 +222,7 @@ export default function ClientsPage() {
       segment: form.segment.trim() || null,
       default_insurance_pct: insurancePct,
       pdf_layout: form.pdf_layout,
+      proof_email: parseEmailList(form.proof_email).join("; ") || null,
     };
     const { error } = editingId
       ? await supabase.from("clients").update(payload).eq("id", editingId)
@@ -460,6 +472,25 @@ export default function ClientsPage() {
                     {formErrors.default_insurance_pct}
                   </p>
                 )}
+              </div>
+
+              <div className="sm:col-span-2">
+                <label htmlFor="proof_email" className="mb-1 block text-sm font-medium text-navy-700">
+                  E-mail para comprovantes <span className="font-normal text-navy-500">(opcional)</span>
+                </label>
+                <input
+                  id="proof_email"
+                  type="text"
+                  inputMode="email"
+                  value={form.proof_email}
+                  onChange={(e) => updateField("proof_email", e.target.value)}
+                  className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Ex: canhotos@cliente.com.br; logistica@cliente.com.br"
+                />
+                <p className="mt-1 text-xs text-navy-500">
+                  O botão &quot;Enviar por e-mail&quot; do comprovante já abre com estes endereços. Mais de um: separe com ponto e vírgula.
+                </p>
+                {formErrors.proof_email && <p className="mt-1 text-xs text-red-600">{formErrors.proof_email}</p>}
               </div>
 
               <div>

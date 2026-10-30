@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { photoDownloadUrl, photoUrl } from "@/lib/photos";
-import { buildProofEmail, formatKg } from "@/lib/deliveryProof";
+import { buildProofEmail, formatKg, parseEmailList } from "@/lib/deliveryProof";
 import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
@@ -129,6 +129,8 @@ function ProofModal({
   // Links de 7 dias para o e-mail (os de 1 h acima são só para a tela).
   const [mailLinks, setMailLinks] = useState<string[]>([]);
   const [mailNote, setMailNote] = useState<string | null>(null);
+  // E-mail para comprovantes do cliente da carga (cadastro de clientes).
+  const [mailTo, setMailTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -158,6 +160,27 @@ function ProofModal({
       cancelled = true;
     };
   }, [scheduleId, destination]);
+
+  // Cliente da carga -> e-mail para comprovantes do cadastro (nome fantasia ou razão social).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: load } = await supabase.from("loading_schedules").select("client_name").eq("id", scheduleId).maybeSingle();
+      const name = (load?.client_name ?? "").trim();
+      if (!name) return;
+      const { data: rows } = await supabase
+        .from("clients")
+        .select("name, trade_name, proof_email")
+        .or(`trade_name.eq."${name.replace(/"/g, "")}",name.eq."${name.replace(/"/g, "")}"`);
+      const found = ((rows ?? []) as { name: string; trade_name: string | null; proof_email: string | null }[]).find(
+        (c) => (c.trade_name ?? "").trim() === name || c.name.trim() === name
+      );
+      if (!cancelled) setMailTo(parseEmailList(found?.proof_email));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scheduleId]);
 
   async function remove() {
     if (!(await askConfirm("Apagar este comprovante? O motorista poderá lançar de novo."))) return;
@@ -202,7 +225,7 @@ function ProofModal({
 
   async function sendByEmail() {
     if (!proof) return;
-    const mail = buildProofEmail({ ...proof, destination }, mailLinks);
+    const mail = buildProofEmail({ ...proof, destination }, mailLinks, mailTo);
     // Copia o corpo formatado (link clicável) e abre o e-mail novo só com o
     // assunto: o usuário cola o corpo com Ctrl+V.
     try {
@@ -321,7 +344,11 @@ function ProofModal({
               type="button"
               onClick={sendByEmail}
               disabled={mailLinks.length === 0}
-              title="Copia o texto e abre um e-mail novo no Outlook na web"
+              title={
+                mailTo.length > 0
+                  ? `Copia o texto e abre um e-mail para ${mailTo.join(", ")} no Outlook na web`
+                  : "Copia o texto e abre um e-mail novo no Outlook na web (cliente sem e-mail para comprovantes no cadastro)"
+              }
               className={buttonClasses("soft")}
             >
               Enviar por e-mail

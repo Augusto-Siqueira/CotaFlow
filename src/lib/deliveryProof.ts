@@ -35,7 +35,15 @@ const esc = (t: string) =>
  * no corpo; só o assunto vai pelo endereço (`composeUrl`). `text` é o mesmo
  * corpo sem formatação, para quando a cópia rica não for possível.
  */
-export function buildProofEmail(proof: ProofMailData, photoLinks: string[]) {
+/** "a@x.com; b@y.com" -> ["a@x.com", "b@y.com"] (só os que parecem e-mail). */
+export function parseEmailList(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .split(/[;,\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+}
+
+export function buildProofEmail(proof: ProofMailData, photoLinks: string[], to: string[] = []) {
   const diff = Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg);
   const rows: [string, string][] = [
     ["Cliente", proof.client_name],
@@ -74,8 +82,10 @@ export function buildProofEmail(proof: ProofMailData, photoLinks: string[]) {
     "Atenciosamente,",
   ].join("\n");
 
+  // Destinatário já preenchido: o e-mail para comprovantes do cadastro do cliente.
   const composeUrl =
     "https://outlook.office.com/mail/deeplink/compose" +
-    `?subject=${encodeURIComponent(subject)}`;
+    `?subject=${encodeURIComponent(subject)}` +
+    (to.length > 0 ? `&to=${encodeURIComponent(to.join(","))}` : "");
   return { subject, html, text, composeUrl };
 }
