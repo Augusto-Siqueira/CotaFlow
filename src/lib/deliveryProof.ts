@@ -43,6 +43,27 @@ export function parseEmailList(value: string | null | undefined): string[] {
     .filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
 }
 
+/** Cópia de todo comprovante enviado pelo CotaFlow. */
+export const PROOF_EMAIL_CC = ["atendimento@transbochnia.com.br"];
+
+/** Assunto e texto do e-mail enviado pelo CotaFlow (as fotos vão anexadas). */
+export function proofEmailDraft(proof: ProofMailData): { subject: string; text: string } {
+  const diff = Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg);
+  const lines = [
+    `Cliente: ${proof.client_name}`,
+    `Destino: ${proof.destination || "—"}`,
+    `Nota fiscal: ${proof.invoice_number}`,
+    ...(proof.cte_number ? [`CTE: ${proof.cte_number}`] : []),
+    `Peso da NF: ${formatKg(proof.invoice_weight_kg)} kg`,
+    `Peso descarregado: ${formatKg(proof.unloaded_weight_kg)} kg`,
+    `Diferença: ${diff > 0 ? "+" : ""}${formatKg(diff)} kg`,
+  ];
+  return {
+    subject: proof.cte_number ? `CANHOTO CTE ${proof.cte_number}` : `CANHOTO NF ${proof.invoice_number}`,
+    text: ["Prezados,", "", "Segue o comprovante de entrega:", "", ...lines, "", "Fotos do canhoto e do ticket de pesagem em anexo.", "", "Atenciosamente,", "Transbochnia Transportes"].join("\n"),
+  };
+}
+
 export function buildProofEmail(proof: ProofMailData, photoLinks: string[], to: string[] = []) {
   const diff = Number(proof.unloaded_weight_kg) - Number(proof.invoice_weight_kg);
   const rows: [string, string][] = [

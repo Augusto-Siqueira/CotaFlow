@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { photoDownloadUrl, photoUrl } from "@/lib/photos";
-import { buildProofEmail, formatKg, parseEmailList } from "@/lib/deliveryProof";
+import { PROOF_EMAIL_CC, buildProofEmail, formatKg, parseEmailList, proofEmailDraft } from "@/lib/deliveryProof";
 import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
 import { useFeedback } from "@/components/Feedback";
 
 interface ProofDetail {
+  id: string;
   client_name: string;
   invoice_number: string;
   cte_number: string | null;
@@ -131,6 +132,11 @@ function ProofModal({
   const [mailNote, setMailNote] = useState<string | null>(null);
   // E-mail para comprovantes do cliente da carga (cadastro de clientes).
   const [mailTo, setMailTo] = useState<string[]>([]);
+  // Envio direto pelo CotaFlow (Gmail), com as fotos anexadas.
+  const [compose, setCompose] = useState<{ to: string; subject: string; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [composeError, setComposeError] = useState<{ text: string; notConfigured?: boolean } | null>(null);
+  const [lastSent, setLastSent] = useState<{ sent_at: string; to_addresses: string[]; sent_by_name: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -141,7 +147,7 @@ function ProofModal({
     (async () => {
       const { data, error: err } = await supabase
         .from("delivery_proofs")
-        .select("client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes")
+        .select("id, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes")
         .eq("schedule_id", scheduleId)
         .eq("destination", destination)
         .maybeSingle();
@@ -221,6 +227,57 @@ function ProofModal({
       }
     }
     setDownloading(false);
+  }
+
+  // Último envio deste comprovante pelo CotaFlow.
+  useEffect(() => {
+    if (!proof) return;
+    let cancelled = false;
+    supabase
+      .from("delivery_proof_emails")
+      .select("sent_at, to_addresses, sent_by_name")
+      .eq("proof_id", proof.id)
+      .order("sent_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setLastSent(data as typeof lastSent);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [proof]);
+
+  function openCompose() {
+    if (!proof) return;
+    const draft = proofEmailDraft({ ...proof, destination });
+    setComposeError(null);
+    setCompose({ to: mailTo.join("; "), subject: draft.subject, text: draft.text });
+  }
+
+  async function sendDirect() {
+    if (!proof || !compose) return;
+    const to = parseEmailList(compose.to);
+    if (to.length === 0) {
+      setComposeError({ text: "Informe pelo menos um destinatário válido." });
+      return;
+    }
+    setSending(true);
+    setComposeError(null);
+    const r = await fetch(`/api/comprovantes/${proof.id}/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to, subject: compose.subject, text: compose.text }),
+    });
+    const res = await r.json().catch(() => ({}));
+    setSending(false);
+    if (!r.ok) {
+      setComposeError({ text: res.error ?? `Erro ${r.status}`, notConfigured: Boolean(res.notConfigured) });
+      return;
+    }
+    setCompose(null);
+    setLastSent({ sent_at: res.sent_at, to_addresses: res.to, sent_by_name: null });
+    setMailNote(`E-mail enviado para ${res.to.join(", ")} (cópia: ${res.cc.join(", ") || "—"}), com ${res.attachments} ${res.attachments === 1 ? "foto anexada" : "fotos anexadas"}.`);
   }
 
   async function sendByEmail() {
@@ -309,6 +366,76 @@ function ProofModal({
           </div>
         </>
       )}
+      {lastSent && !compose && (
+        <p className="mt-3 text-xs text-navy-500">
+          ✉ Último envio pelo CotaFlow: {new Date(lastSent.sent_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+          {lastSent.sent_by_name ? ` por ${lastSent.sent_by_name}` : ""} para {lastSent.to_addresses.join(", ")}.
+        </p>
+      )}
+      {compose && (
+        <div className="mt-4 space-y-2 rounded-lg border border-navy-200 p-3 text-sm">
+          <div>
+            <label htmlFor="pe-to" className="mb-1 block text-xs font-medium text-navy-600">
+              Para
+            </label>
+            <input
+              id="pe-to"
+              value={compose.to}
+              onChange={(e) => setCompose({ ...compose, to: e.target.value })}
+              placeholder="email@cliente.com.br; outro@cliente.com.br"
+              className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
+            {mailTo.length === 0 && (
+              <p className="mt-1 text-xs text-amber-700">Este cliente não tem e-mail para comprovantes no cadastro: digite o destinatário.</p>
+            )}
+          </div>
+          <p className="text-xs text-navy-500">Cópia: {PROOF_EMAIL_CC.join(", ")}</p>
+          <div>
+            <label htmlFor="pe-subject" className="mb-1 block text-xs font-medium text-navy-600">
+              Assunto
+            </label>
+            <input
+              id="pe-subject"
+              value={compose.subject}
+              onChange={(e) => setCompose({ ...compose, subject: e.target.value })}
+              className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="pe-text" className="mb-1 block text-xs font-medium text-navy-600">
+              Mensagem
+            </label>
+            <textarea
+              id="pe-text"
+              rows={9}
+              value={compose.text}
+              onChange={(e) => setCompose({ ...compose, text: e.target.value })}
+              className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+          <p className="text-xs text-navy-500">
+            📎 {proof?.photos.length ?? 0} {(proof?.photos.length ?? 0) === 1 ? "foto anexada" : "fotos anexadas"} (canhoto e ticket).
+          </p>
+          {composeError && (
+            <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {composeError.text}
+              {composeError.notConfigured && (
+                <button type="button" onClick={sendByEmail} className="ml-1 font-medium underline">
+                  Abrir no Outlook sem anexo
+                </button>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setCompose(null)} className={buttonClasses("secondary", "sm")}>
+              Cancelar
+            </button>
+            <button type="button" onClick={sendDirect} disabled={sending} className={`${buttonClasses("primary", "sm")} disabled:cursor-not-allowed`}>
+              {sending ? "Enviando..." : "Enviar"}
+            </button>
+          </div>
+        </div>
+      )}
       {mailNote && (
         <div role="status" className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800">
           {mailNote}
@@ -342,12 +469,12 @@ function ProofModal({
           {proof && (
             <button
               type="button"
-              onClick={sendByEmail}
-              disabled={mailLinks.length === 0}
+              onClick={openCompose}
+              disabled={Boolean(compose)}
               title={
                 mailTo.length > 0
-                  ? `Copia o texto e abre um e-mail para ${mailTo.join(", ")} no Outlook na web`
-                  : "Copia o texto e abre um e-mail novo no Outlook na web (cliente sem e-mail para comprovantes no cadastro)"
+                  ? `Envia com as fotos anexadas para ${mailTo.join(", ")} (cópia: ${PROOF_EMAIL_CC.join(", ")})`
+                  : "Envia com as fotos anexadas (cliente sem e-mail para comprovantes no cadastro: digite o destinatário)"
               }
               className={buttonClasses("soft")}
             >

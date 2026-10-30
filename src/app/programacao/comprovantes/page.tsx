@@ -32,9 +32,12 @@ type Situation = "completa" | "parcial" | "pendente";
 type Filter = "todas" | "alerta" | "pendente" | "parcial" | "completa";
 
 interface ProofDoc {
+  id: string;
   destination: string;
   nf: string;
   cte: string | null;
+  /** Último envio por e-mail pelo CotaFlow (ou null). */
+  emailedAt: string | null;
 }
 
 interface Row extends Load {
@@ -120,15 +123,31 @@ export default function ComprovantesPage() {
       const ids = rows.map((r) => r.id);
       const map = new Map<string, ProofDoc[]>();
       for (let i = 0; i < ids.length; i += 200) {
-        const part = await fetchAll<{ schedule_id: string; destination: string; invoice_number: string; cte_number: string | null }>((a, b) =>
+        const part = await fetchAll<{ id: string; schedule_id: string; destination: string; invoice_number: string; cte_number: string | null }>((a, b) =>
           supabase
             .from("delivery_proofs")
-            .select("schedule_id, destination, invoice_number, cte_number")
+            .select("id, schedule_id, destination, invoice_number, cte_number")
             .in("schedule_id", ids.slice(i, i + 200))
             .range(a, b)
         );
+        // Envios por e-mail feitos pelo CotaFlow (o mais recente de cada comprovante).
+        const sent = new Map<string, string>();
+        const proofIds = part.map((p) => p.id);
+        for (let j = 0; j < proofIds.length; j += 200) {
+          const mails = await fetchAll<{ proof_id: string; sent_at: string }>((a, b) =>
+            supabase
+              .from("delivery_proof_emails")
+              .select("proof_id, sent_at")
+              .in("proof_id", proofIds.slice(j, j + 200))
+              .range(a, b)
+          );
+          for (const m of mails) if (!sent.has(m.proof_id) || sent.get(m.proof_id)! < m.sent_at) sent.set(m.proof_id, m.sent_at);
+        }
         for (const p of part) {
-          map.set(p.schedule_id, [...(map.get(p.schedule_id) ?? []), { destination: p.destination, nf: p.invoice_number, cte: p.cte_number }]);
+          map.set(p.schedule_id, [
+            ...(map.get(p.schedule_id) ?? []),
+            { id: p.id, destination: p.destination, nf: p.invoice_number, cte: p.cte_number, emailedAt: sent.get(p.id) ?? null },
+          ]);
         }
       }
       setProofs(map);
@@ -385,6 +404,13 @@ export default function ComprovantesPage() {
                                 {r.docs.length > 1 && <span className="text-navy-500">{p.destination || "Entrega"}: </span>}
                                 NF {p.nf}
                                 {p.cte ? ` · CTE ${p.cte}` : ""}
+                                {p.emailedAt ? (
+                                  <span className="ml-1 text-teal-700" title="Enviado por e-mail pelo CotaFlow">
+                                    · ✉ {new Date(p.emailedAt).toLocaleDateString("pt-BR")}
+                                  </span>
+                                ) : (
+                                  <span className="ml-1 text-navy-400">· não enviado</span>
+                                )}
                               </span>
                             ))
                           )}
