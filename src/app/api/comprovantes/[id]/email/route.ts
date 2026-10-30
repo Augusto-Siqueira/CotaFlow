@@ -46,14 +46,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // Fotos do armazenamento interno, anexadas ao e-mail.
   const photos = (proof.photos as string[] | null) ?? [];
-  const doc = (proof.cte_number || proof.invoice_number || "comprovante").replace(/[^A-Za-z0-9.-]+/g, "_");
-  const dest = (proof.destination || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  // Nome do anexo = número da nota fiscal digitado pelo motorista (só o número).
+  const nf = String(proof.invoice_number ?? "").trim().replace(/[\/:*?"<>|\s]+/g, "") || "comprovante";
   const attachments: { filename: string; content: Buffer; contentType: string }[] = [];
   for (let i = 0; i < photos.length; i++) {
     const { data: blob, error } = await admin.storage.from("driver-photos").download(photos[i]);
     if (error || !blob) return Response.json({ error: "Não foi possível ler as fotos do comprovante." }, { status: 502 });
     attachments.push({
-      filename: `comprovante-${doc}${dest ? `-${dest}` : ""}${photos.length > 1 ? `-${i + 1}` : ""}.jpg`,
+      // Mais de uma foto: a primeira leva só o número; as outras, "-2", "-3"...
+      filename: `${nf}${i > 0 ? `-${i + 1}` : ""}.jpg`,
       content: Buffer.from(await blob.arrayBuffer()),
       contentType: "image/jpeg",
     });
