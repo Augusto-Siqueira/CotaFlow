@@ -28,6 +28,35 @@ const dateCls =
 
 type FleetRow = FleetCertFields & { kind: string };
 
+// Rascunho do check-list guardado no aparelho (por placa): se der erro ao
+// enviar ou a pessoa precisar trocar de login, nada do que foi preenchido se
+// perde. As assinaturas não ficam no rascunho (precisam ser feitas de novo).
+interface Draft {
+  savedAt: number;
+  answers: Record<string, MonthlyAnswer>;
+  notes: Record<string, string>;
+  extras: Record<string, MonthlyExtra>;
+  photos: Record<string, string[]>;
+  observations: string;
+  driver: string;
+  driverAbsent: boolean;
+  absentReason: string;
+}
+const draftKey = (plate: string) => `cotaflow:checklist-mensal:${plate}`;
+function readDraft(plate: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(plate));
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null;
+  }
+}
+function removeDraft(plate: string) {
+  try {
+    localStorage.removeItem(draftKey(plate));
+  } catch {}
+}
+
 export default function NewMonthlyChecklist() {
   const router = useRouter();
   const { user, role, canDoMonthlyChecklist, loading: authLoading } = useAuth();
@@ -58,6 +87,9 @@ export default function NewMonthlyChecklist() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startedAt] = useState(() => new Date().toISOString());
+  const [restoredAt, setRestoredAt] = useState<number | null>(null);
+  // Placa a que as respostas na tela pertencem (evita gravar o rascunho de uma placa na outra ao trocar).
+  const [statePlate, setStatePlate] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canDoMonthlyChecklist) return;
@@ -93,13 +125,51 @@ export default function NewMonthlyChecklist() {
       const due = it.cert_key === "civ" ? unit.civ_due : it.cert_key === "cipp" ? unit.cipp_due : unit.crono_due;
       if (due) pre[it.id] = { due };
     }
+    const draft = readDraft(unit.plate);
     queueMicrotask(() => {
-      setAnswers({});
-      setNotes({});
-      setPhotos({});
-      setExtras(pre);
+      if (draft) {
+        // Rascunho desta placa neste aparelho: volta tudo como estava.
+        setAnswers(draft.answers ?? {});
+        setNotes(draft.notes ?? {});
+        setPhotos(draft.photos ?? {});
+        setExtras({ ...pre, ...(draft.extras ?? {}) });
+        setObservations(draft.observations ?? "");
+        setDriver(draft.driver ?? "");
+        setDriverAbsent(Boolean(draft.driverAbsent));
+        setAbsentReason(draft.absentReason ?? "");
+        setRestoredAt(draft.savedAt);
+        setStatePlate(unit.plate);
+      } else {
+        setAnswers({});
+        setNotes({});
+        setPhotos({});
+        setExtras(pre);
+        setRestoredAt(null);
+        setStatePlate(unit.plate);
+      }
     });
   }, [unit, items]);
+
+  // Guarda o rascunho a cada mudança (só depois de responder algo).
+  useEffect(() => {
+    if (!unit || statePlate !== unit.plate) return;
+    const hasContent = Object.keys(answers).length > 0 || observations.trim() || Object.keys(notes).length > 0;
+    if (!hasContent) return;
+    const draft: Draft = { savedAt: Date.now(), answers, notes, extras, photos, observations, driver, driverAbsent, absentReason };
+    try {
+      localStorage.setItem(draftKey(unit.plate), JSON.stringify(draft));
+    } catch {}
+  }, [unit, statePlate, answers, notes, extras, photos, observations, driver, driverAbsent, absentReason]);
+
+  function discardDraft() {
+    if (!unit) return;
+    removeDraft(unit.plate);
+    setAnswers({});
+    setNotes({});
+    setPhotos({});
+    setObservations("");
+    setRestoredAt(null);
+  }
 
   function setExtra(id: string, patch: MonthlyExtra) {
     setExtras((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
@@ -173,6 +243,7 @@ export default function NewMonthlyChecklist() {
       );
       return;
     }
+    removeDraft(unit.plate);
     router.push(`/checklist-mensal/${id}?novo=1`);
   }
 
@@ -252,6 +323,17 @@ export default function NewMonthlyChecklist() {
 
       {unit && (
         <>
+          {restoredAt && (
+            <div role="status" className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <span>
+                Rascunho recuperado (salvo às {new Date(restoredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}). Confira e
+                colha as assinaturas de novo.
+              </span>
+              <button type="button" onClick={discardDraft} className={buttonClasses("secondary", "sm")}>
+                Começar do zero
+              </button>
+            </div>
+          )}
           <div className="sticky top-0 z-10 -mx-4 mt-4 border-b border-navy-200 bg-navy-50 px-4 py-2">
             <div className="flex items-center justify-between text-xs text-navy-600">
               <span className="font-medium tracking-wide">{unit.plate}</span>
