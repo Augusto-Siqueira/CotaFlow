@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/lib/auth";
+import { MANUAL_LOGOUT_KEY, useAuth } from "@/lib/auth";
+import { roleLabel } from "@/lib/roles";
 import { uploadPhoto } from "@/lib/photos";
 import { ButtonLink, buttonClasses } from "@/components/Button";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -29,7 +30,16 @@ type FleetRow = FleetCertFields & { kind: string };
 
 export default function NewMonthlyChecklist() {
   const router = useRouter();
-  const { user, canDoMonthlyChecklist, loading: authLoading } = useAuth();
+  const { user, role, canDoMonthlyChecklist, loading: authLoading } = useAuth();
+
+  // Aparelho conectado com outro login: sai e volta para a tela de login.
+  async function switchUser() {
+    try {
+      sessionStorage.setItem(MANUAL_LOGOUT_KEY, "1");
+    } catch {}
+    await supabase.auth.signOut();
+    window.location.assign("/login");
+  }
   const [fleet, setFleet] = useState<FleetRow[]>([]);
   const [items, setItems] = useState<MonthlyItem[]>([]);
   const [drivers, setDrivers] = useState<{ value: string; hint?: string }[]>([]);
@@ -156,7 +166,11 @@ export default function NewMonthlyChecklist() {
     });
     setSaving(false);
     if (err) {
-      setError(`Não foi possível salvar (${err.message}). Confira a conexão e tente de novo.`);
+      setError(
+        /perfil não faz/i.test(err.message)
+          ? `Este aparelho está conectado como ${user.email ?? "outro login"}, que não faz check-list mensal. Saia e entre com o login do perfil Check-list mensal.`
+          : `Não foi possível salvar (${err.message}). Confira a conexão e tente de novo.`
+      );
       return;
     }
     router.push(`/checklist-mensal/${id}?novo=1`);
@@ -166,8 +180,14 @@ export default function NewMonthlyChecklist() {
   if (!canDoMonthlyChecklist) {
     return (
       <div className="mx-auto w-full max-w-md px-6 py-16 text-center">
-        <h1 className="text-lg font-semibold text-navy-900">Acesso restrito</h1>
-        <p className="mt-2 text-sm text-navy-500">Seu perfil só consulta os check-lists mensais.</p>
+        <h1 className="text-lg font-semibold text-navy-900">Este login não faz check-list mensal</h1>
+        <p className="mt-2 text-sm text-navy-500">
+          Este aparelho está conectado como <strong>{user?.email ?? "—"}</strong> (perfil {roleLabel(role)}), que só consulta os
+          check-lists mensais. Para fazer o check-list, entre com o login do perfil Check-list mensal.
+        </p>
+        <button type="button" onClick={switchUser} className={`${buttonClasses("primary")} mt-4`}>
+          Sair e entrar com outro login
+        </button>
       </div>
     );
   }
