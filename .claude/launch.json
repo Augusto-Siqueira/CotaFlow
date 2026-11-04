@@ -12,8 +12,9 @@
     },
     {
       "name": "cotaflow-local",
-      "runtimeExecutable": "bash",
+      "runtimeExecutable": "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
       "runtimeArgs": [
+        "-l",
         "infra/scripts/local.sh"
       ],
       "port": 3101

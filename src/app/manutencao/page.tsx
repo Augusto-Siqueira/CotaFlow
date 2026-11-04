@@ -19,6 +19,8 @@ import {
   SERVICE_TYPES,
   SEVERITIES,
   TRIAGE_SLA_HOURS,
+  isDriverReport,
+  reportSourceLabel,
   reportStageLabel,
   severityBadge,
   severityLabel,
@@ -148,6 +150,8 @@ export default function ManutencaoPage() {
   // Quadro de defeitos: colunas recolhidas e o quadro inteiro recolhido.
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
   const [boardCollapsed, setBoardCollapsed] = useState(false);
+  // Filtro de origem do quadro: tudo, só o que o motorista relatou ou só a gestão.
+  const [originFilter, setOriginFilter] = useState<"todos" | "motorista" | "gestao">("todos");
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportForm, setReportForm] = useState({
     plate: "",
@@ -1007,6 +1011,31 @@ export default function ManutencaoPage() {
             </span>
           </h2>
           <span className="flex flex-wrap items-center gap-2">
+            <span role="group" aria-label="Origem do relato" className="inline-flex overflow-hidden rounded-lg border border-navy-200 text-xs">
+              {(
+                [
+                  ["todos", "Todos"],
+                  ["motorista", `Do motorista (${(reports ?? []).filter((r) => r.status !== "concluida" && isDriverReport(r)).length})`],
+                  ["gestao", "Da gestão"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setOriginFilter(value)}
+                  aria-pressed={originFilter === value}
+                  className={`px-2.5 py-1 font-medium transition-colors ${
+                    originFilter === value
+                      ? value === "motorista"
+                        ? "bg-violet-600 text-white"
+                        : "bg-navy-800 text-white"
+                      : "bg-white text-navy-600 hover:bg-navy-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
             {canReport && (
               <button
                 type="button"
@@ -1037,15 +1066,22 @@ export default function ManutencaoPage() {
               // "Em oficina" e liberadas (últimos 7 dias) em "Concluída".
               const linkedOrders = new Set(reports.map((r) => r.order_id).filter(Boolean));
               const orderCards =
-                stage.value === "em_oficina"
+                originFilter === "motorista"
+                  ? []
+                  : stage.value === "em_oficina"
                   ? (orders ?? []).filter((o) => !linkedOrders.has(o.id))
                   : stage.value === "concluida"
                     ? released.filter((o) => !linkedOrders.has(o.id))
                     : [];
               const cards = reports
                 .filter((r) => r.status === stage.value)
+                .filter((r) =>
+                  originFilter === "todos" ? true : originFilter === "motorista" ? isDriverReport(r) : !isDriverReport(r)
+                )
                 .sort(
                   (a, b) =>
+                    // Relatos do motorista sempre no topo; depois gravidade e o mais antigo.
+                    Number(isDriverReport(b)) - Number(isDriverReport(a)) ||
                     b.severity - a.severity ||
                     new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime()
                 );
@@ -1139,17 +1175,27 @@ export default function ManutencaoPage() {
                         r.status === "agendada" &&
                         r.scheduled_for !== null &&
                         new Date(r.scheduled_for).getTime() < now;
+                      const fromDriver = isDriverReport(r);
                       return (
                         <button
                           key={r.id}
                           type="button"
                           onClick={() => openDetail(r)}
+                          title={fromDriver ? `Relatado pelo motorista (${reportSourceLabel(r.source)})` : undefined}
                           className={`block w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors hover:border-brand-500 ${
                             r.severity === 3 && r.status !== "concluida"
                               ? "border-red-300 bg-red-50"
-                              : "border-navy-200 bg-white"
-                          }`}
+                              : fromDriver
+                                ? "border-violet-200 bg-violet-50"
+                                : "border-navy-200 bg-white"
+                          } ${fromDriver ? "border-l-4 border-l-violet-500" : ""}`}
                         >
+                          {fromDriver && (
+                            <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                              <span aria-hidden="true">🚚</span>
+                              {r.source === "checklist" ? "Motorista · check-list diário" : "Relato do motorista"}
+                            </span>
+                          )}
                           <span className="flex items-start justify-between gap-2">
                             <span className="text-sm font-semibold tracking-wide text-navy-900">
                               {r.plate}
@@ -1353,6 +1399,11 @@ export default function ManutencaoPage() {
                   ? ` · via ${({ motorista: "app do motorista", checklist: "check-list diário", checklist_mensal: "check-list mensal" } as Record<string, string>)[detail.source] ?? detail.source}`
                   : ""}
               </p>
+              {isDriverReport(detail) && (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                  <span aria-hidden="true">🚚</span> Relato do motorista
+                </span>
+              )}
             </div>
             <span className="flex shrink-0 flex-col items-end gap-1">
               <span className="rounded-full bg-navy-200 px-2.5 py-0.5 text-xs font-medium text-navy-800">

@@ -132,6 +132,21 @@ export function reportStageLabel(value: string): string {
   return REPORT_STAGES.find((s) => s.value === value)?.label ?? value;
 }
 
+// Origem do relato: o que vem do motorista (app ou check-list diário) ganha
+// destaque no quadro, separado do que a própria gestão lança.
+export const DRIVER_SOURCES = ["motorista", "checklist"];
+export function isDriverReport(r: { source: string }): boolean {
+  return DRIVER_SOURCES.includes(r.source);
+}
+export function reportSourceLabel(source: string): string {
+  return (
+    ({ manual: "Gestão", motorista: "Motorista", checklist: "Check-list diário", checklist_mensal: "Check-list mensal" } as Record<
+      string,
+      string
+    >)[source] ?? source
+  );
+}
+
 // Meta de tempo na triagem (horas): depois disso o cartão fica em alerta.
 export const TRIAGE_SLA_HOURS = 4;
 

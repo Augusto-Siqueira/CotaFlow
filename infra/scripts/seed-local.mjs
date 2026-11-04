@@ -47,7 +47,8 @@ for (let page = 1; ; page++) {
 }
 const ids = {};
 for (const [key, u] of Object.entries(users)) {
-  const email = u.login.includes("@") ? u.login : `${u.login}@motorista.transbochnia.com.br`;
+  const login = u.login ?? u.email; // cliente e inspetor foram gravados com "email"
+  const email = login.includes("@") ? login : `${login}@motorista.transbochnia.com.br`;
   ids[key] =
     existing.get(email) ??
     must(

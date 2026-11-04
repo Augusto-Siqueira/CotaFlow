@@ -179,6 +179,13 @@ html.dark {
   --color-sky-200: #0c2e45;
   --color-sky-800: #7dd3fc;
   --color-sky-900: #7dd3fc;
+  /* Relatos do motorista no quadro da Manutenção */
+  --color-violet-50: #1f1733;
+  --color-violet-100: #2e2150;
+  --color-violet-200: #43307a;
+  --color-violet-500: #a78bfa;
+  --color-violet-600: #7c5cd6;
+  --color-violet-800: #c4b5fd;
 }
 
 html.dark .bg-white {
