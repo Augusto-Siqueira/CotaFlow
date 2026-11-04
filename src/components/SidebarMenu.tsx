@@ -56,6 +56,7 @@ export const NAV: NavEntry[] = [
       { href: "/manutencao", label: "Lançamentos" },
       { href: "/manutencao/dashboard", label: "Dashboard" },
       { href: "/manutencao/checklists", label: "Check-lists" },
+      { href: "/manutencao/ordens-servico", label: "Ordem de Serviço" },
       { href: "/checklist-mensal", label: "Check-list mensal", monthlyOnly: true },
     ],
   },

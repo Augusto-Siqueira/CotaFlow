@@ -725,6 +725,9 @@ export default function ManutencaoPage() {
           <Link href="/manutencao/dashboard" className={buttonClasses("secondary", "md")}>
             Dashboard
           </Link>
+          <Link href="/manutencao/ordens-servico" className={buttonClasses("secondary", "md")}>
+            Ordens de serviço
+          </Link>
           {canEditMaintenance && (
             <>
               <button
