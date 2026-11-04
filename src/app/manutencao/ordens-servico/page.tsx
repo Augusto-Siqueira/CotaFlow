@@ -85,6 +85,12 @@ export default function ServiceOrdersPage() {
     return fleet.find((f) => f.plate === v)?.plate ?? null;
   }, [form.plate, fleet, editing]);
 
+  // Semirreboque não tem hodômetro: KM opcional.
+  const kmOptional = useMemo(
+    () => Boolean(resolvedPlate) && fleet.find((f) => f.plate === resolvedPlate)?.kind === "semirreboque",
+    [resolvedPlate, fleet]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/[\s-]/g, "");
     if (!rows || !q) return rows ?? [];
@@ -123,13 +129,13 @@ export default function ServiceOrdersPage() {
     if (!form.service_date) return setFormError("Informe a data.");
     if (!resolvedPlate) return setFormError("Escolha uma placa da frota.");
     const kmDigits = form.km.replace(/\D/g, "");
-    if (!kmDigits) return setFormError("Informe o KM.");
+    if (!kmDigits && !kmOptional) return setFormError("Informe o KM.");
     if (!form.services.trim()) return setFormError("Descreva os serviços.");
 
     const payload = {
       service_date: form.service_date,
       plate: resolvedPlate,
-      km: Number(kmDigits),
+      km: kmDigits ? Number(kmDigits) : null,
       services: form.services.trim(),
       parts: form.parts.trim(),
     };
@@ -295,7 +301,12 @@ export default function ServiceOrdersPage() {
               </div>
               <div>
                 <label className={labelCls} htmlFor="os-km">
-                  KM <span className="text-red-600">*</span>
+                  KM{" "}
+                  {kmOptional ? (
+                    <span className="font-normal text-navy-500">(opcional no semirreboque)</span>
+                  ) : (
+                    <span className="text-red-600">*</span>
+                  )}
                 </label>
                 <input
                   id="os-km"
