@@ -301,12 +301,7 @@ export default function ServiceOrdersPage() {
               </div>
               <div>
                 <label className={labelCls} htmlFor="os-km">
-                  KM{" "}
-                  {kmOptional ? (
-                    <span className="font-normal text-navy-500">(opcional no semirreboque)</span>
-                  ) : (
-                    <span className="text-red-600">*</span>
-                  )}
+                  KM {!kmOptional && <span className="text-red-600">*</span>}
                 </label>
                 <input
                   id="os-km"
