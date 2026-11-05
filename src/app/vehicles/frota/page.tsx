@@ -19,9 +19,63 @@ import {
 } from "@/lib/fleet";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
+import { Modal } from "@/components/Modal";
+import { SearchSelect } from "@/components/SearchSelect";
+import { fetchAllCityNames } from "@/lib/cities";
+import { BODY_TYPES, WHEEL_TYPES } from "@/lib/agregados";
+import { onlyDigits } from "@/lib/cpf";
 
-interface Unit extends FleetCertFields {
+// Dados do veículo pedidos pelo CIOT (e, no futuro, pelo MDF-e) — migration 0080.
+interface VehicleData {
+  renavam: string | null;
+  chassis: string | null;
+  brand: string | null;
+  model: string | null;
+  year_made: number | null;
+  year_model: number | null;
+  axles: number | null;
+  color: string | null;
+  tare_kg: number | null;
+  capacity_kg: number | null;
+  capacity_m3: number | null;
+  wheel_type: string | null;
+  body_type: string | null;
+  registry_city: string | null;
+}
+
+const VEHICLE_DATA_COLUMNS =
+  "agregado_id, renavam, chassis, brand, model, year_made, year_model, axles, color, tare_kg, capacity_kg, capacity_m3, wheel_type, body_type, registry_city";
+
+interface Unit extends FleetCertFields, VehicleData {
   id: string;
+  agregado_id: string | null;
+}
+
+type VehicleForm = Record<keyof VehicleData, string>;
+
+const VEHICLE_FIELDS: { key: keyof VehicleData; label: string; numeric?: boolean; span?: string }[] = [
+  { key: "renavam", label: "Renavam", numeric: true },
+  { key: "chassis", label: "Chassi" },
+  { key: "brand", label: "Marca" },
+  { key: "model", label: "Modelo" },
+  { key: "year_made", label: "Ano de fabricação", numeric: true },
+  { key: "year_model", label: "Ano do modelo", numeric: true },
+  { key: "axles", label: "Número de eixos", numeric: true },
+  { key: "color", label: "Cor" },
+  { key: "tare_kg", label: "Tara (kg)", numeric: true },
+  { key: "capacity_kg", label: "Capacidade (kg)", numeric: true },
+  { key: "capacity_m3", label: "Capacidade (m³)", numeric: true },
+];
+
+const NUMBER_KEYS: (keyof VehicleData)[] = ["year_made", "year_model", "axles", "tare_kg", "capacity_kg", "capacity_m3"];
+
+function toVehicleForm(u: Unit): VehicleForm {
+  const out = {} as VehicleForm;
+  for (const k of [...VEHICLE_FIELDS.map((f) => f.key), "wheel_type", "body_type", "registry_city"] as (keyof VehicleData)[]) {
+    const v = u[k];
+    out[k] = v === null || v === undefined ? "" : String(v);
+  }
+  return out;
 }
 
 const LEVEL_CLS: Record<CertLevel, string> = {
@@ -37,7 +91,15 @@ const inputCls =
 
 export default function FleetPage() {
   const { canEditSchedule } = useAuth();
-  const { toastError, confirm: askConfirm } = useFeedback();
+  const { toastError, toastSuccess, confirm: askConfirm } = useFeedback();
+  // Nome do agregado dono de cada placa (a tabela agregados só é lida por
+  // Logística/admin; para os demais o mapa fica vazio e o selo não aparece).
+  const [agregadoNames, setAgregadoNames] = useState<Record<string, string>>({});
+  const [cities, setCities] = useState<string[]>([]);
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [vehicleForm, setVehicleForm] = useState<VehicleForm | null>(null);
+  const [vehicleError, setVehicleError] = useState<string | null>(null);
+  const [savingVehicle, setSavingVehicle] = useState(false);
   const [units, setUnits] = useState<Unit[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -50,7 +112,7 @@ export default function FleetPage() {
   async function loadUnits() {
     const { data, error } = await supabase
       .from("fleet_units")
-      .select(`id, ${FLEET_CERT_COLUMNS}`)
+      .select(`id, ${FLEET_CERT_COLUMNS}, ${VEHICLE_DATA_COLUMNS}`)
       .order("plate");
     if (error) {
       setListError(error.message);
@@ -58,7 +120,47 @@ export default function FleetPage() {
       return;
     }
     setListError(null);
-    setUnits((data as Unit[]) ?? []);
+    setUnits((data as unknown as Unit[]) ?? []);
+    const ag = await supabase.from("agregados").select("id, name");
+    setAgregadoNames(Object.fromEntries((ag.data ?? []).map((a) => [a.id, a.name])));
+  }
+
+  function openVehicle(u: Unit) {
+    setEditingUnit(u);
+    setVehicleForm(toVehicleForm(u));
+    setVehicleError(null);
+    if (cities.length === 0) fetchAllCityNames().then(setCities);
+  }
+
+  function closeVehicle() {
+    setEditingUnit(null);
+    setVehicleForm(null);
+  }
+
+  async function saveVehicle(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingUnit || !vehicleForm) return;
+    if (vehicleForm.registry_city.trim() && !cities.includes(vehicleForm.registry_city)) {
+      setVehicleError("Escolha o município na lista.");
+      return;
+    }
+    const patch: Record<string, string | number | null> = {};
+    for (const [k, v] of Object.entries(vehicleForm) as [keyof VehicleData, string][]) {
+      const t = v.trim();
+      if (!t) patch[k] = null;
+      else if (NUMBER_KEYS.includes(k)) patch[k] = Number(t.replace(",", "."));
+      else patch[k] = k === "chassis" ? t.toUpperCase() : t;
+    }
+    setSavingVehicle(true);
+    const { error } = await supabase.from("fleet_units").update(patch).eq("id", editingUnit.id);
+    setSavingVehicle(false);
+    if (error) {
+      setVehicleError(`Não foi possível salvar (${error.message}).`);
+      return;
+    }
+    setUnits((prev) => (prev ?? []).map((u) => (u.id === editingUnit.id ? { ...u, ...patch } : u)));
+    toastSuccess(`Dados do veículo ${editingUnit.plate} salvos.`);
+    closeVehicle();
   }
 
   useEffect(() => {
@@ -131,7 +233,7 @@ export default function FleetPage() {
           Veículos
         </h1>
         <p className="mt-1 text-sm text-navy-500">
-          Placas da frota própria: cavalos mecânicos, semi-reboques e trucks.
+          Placas da frota (própria e de agregados): cavalos mecânicos, semi-reboques e trucks.
         </p>
       </div>
 
@@ -245,15 +347,29 @@ export default function FleetPage() {
                                 {u.plate}
                               </span>
                               {canEditSchedule && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(u)}
-                                  className={buttonClasses("danger", "sm")}
-                                >
-                                  Excluir
-                                </button>
+                                <span className="flex shrink-0 items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openVehicle(u)}
+                                    className={buttonClasses("soft", "sm")}
+                                  >
+                                    Dados do veículo
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(u)}
+                                    className={buttonClasses("danger", "sm")}
+                                  >
+                                    Excluir
+                                  </button>
+                                </span>
                               )}
                             </div>
+                            {u.agregado_id && agregadoNames[u.agregado_id] && (
+                              <p className="mt-1 truncate text-xs font-medium text-violet-800">
+                                Agregado · {agregadoNames[u.agregado_id]}
+                              </p>
+                            )}
                             <ul className="mt-2 space-y-1.5">
                               {certStatuses(u).map((c) => (
                                 <li key={c.cert} className="flex flex-wrap items-center gap-2 text-xs">
@@ -314,6 +430,98 @@ export default function FleetPage() {
           )}
         </div>
       </div>
+
+      {editingUnit && vehicleForm && (
+        <Modal onClose={closeVehicle} labelledBy="vehicle-data-title" className="max-w-2xl">
+          <form onSubmit={saveVehicle} className="flex flex-col gap-4">
+            <div>
+              <h2 id="vehicle-data-title" className="text-base font-medium text-navy-900">
+                Dados do veículo {editingUnit.plate}
+              </h2>
+              <p className="mt-1 text-sm text-navy-500">
+                Os mesmos dados que o e-Frete pede no CIOT. Preencha uma vez e o CotaFlow reaproveita.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {VEHICLE_FIELDS.map((f) => (
+                <div key={f.key}>
+                  <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor={`veic-${f.key}`}>
+                    {f.label}
+                  </label>
+                  <input
+                    id={`veic-${f.key}`}
+                    inputMode={f.numeric ? "numeric" : undefined}
+                    value={vehicleForm[f.key]}
+                    onChange={(e) =>
+                      setVehicleForm((v) => v && {
+                        ...v,
+                        [f.key]: f.numeric && f.key !== "capacity_m3" ? onlyDigits(e.target.value) : e.target.value,
+                      })
+                    }
+                    className={`${inputCls} ${f.key === "chassis" ? "uppercase" : ""}`}
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="veic-rodado">
+                  Tipo de rodado
+                </label>
+                <select
+                  id="veic-rodado"
+                  value={vehicleForm.wheel_type}
+                  onChange={(e) => setVehicleForm((v) => v && { ...v, wheel_type: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">—</option>
+                  {WHEEL_TYPES.map((w) => (
+                    <option key={w.value} value={w.value}>{w.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="veic-carroceria">
+                  Tipo de carroceria
+                </label>
+                <select
+                  id="veic-carroceria"
+                  value={vehicleForm.body_type}
+                  onChange={(e) => setVehicleForm((v) => v && { ...v, body_type: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">—</option>
+                  {BODY_TYPES.map((b) => (
+                    <option key={b.value} value={b.value}>{b.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2 sm:col-span-3">
+                <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="veic-municipio">
+                  Município do emplacamento
+                </label>
+                <SearchSelect
+                  id="veic-municipio"
+                  value={vehicleForm.registry_city}
+                  onChange={(val) => setVehicleForm((v) => v && { ...v, registry_city: val })}
+                  options={cities.map((c) => ({ value: c }))}
+                  placeholder="Digite para procurar (ex: Curitiba/PR)"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            {vehicleError && (
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{vehicleError}</div>
+            )}
+            <div className="flex gap-3">
+              <button type="submit" disabled={savingVehicle} className={`flex-1 ${buttonClasses("primary", "md")}`}>
+                {savingVehicle ? "Salvando..." : "Salvar dados"}
+              </button>
+              <button type="button" onClick={closeVehicle} className={buttonClasses("secondary", "md")}>
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

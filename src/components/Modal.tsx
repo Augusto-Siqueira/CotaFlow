@@ -33,9 +33,10 @@ export function Modal({
 
   return (
     <div
-      className={`fixed inset-0 ${zIndex} flex justify-center overflow-y-auto bg-black/60 p-4 print:hidden ${
-        align === "center" ? "items-center" : "items-start sm:items-center"
-      }`}
+      // Centraliza com margem automática no painel (e não items-center no
+      // contêiner): se a janela for mais alta que a tela, o topo continua
+      // alcançável pela rolagem em vez de ficar cortado para cima.
+      className={`fixed inset-0 ${zIndex} flex items-start justify-center overflow-y-auto bg-black/60 p-4 print:hidden`}
       onClick={onClose}
     >
       <div
@@ -45,7 +46,9 @@ export function Modal({
         aria-labelledby={labelledBy}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full rounded-xl bg-white p-6 text-navy-900 shadow-xl outline-none ${className}`}
+        className={`w-full rounded-xl bg-white p-6 text-navy-900 shadow-xl outline-none ${
+          align === "center" ? "my-auto" : "sm:my-auto"
+        } ${className}`}
       >
         {children}
       </div>

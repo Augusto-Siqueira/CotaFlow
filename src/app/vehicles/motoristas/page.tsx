@@ -8,6 +8,23 @@ import { defaultNickname, formatCpf, isValidCpf, onlyDigits } from "@/lib/cpf";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import {
+  PostalAddressFields,
+  emptyPostalAddress,
+  type PostalAddress,
+} from "@/components/PostalAddressFields";
+import { fetchAllCityNames } from "@/lib/cities";
+import { formatCep, formatPhone } from "@/lib/agregados";
+
+// Dados pessoais usados no CIOT (tabela driver_details, migration 0080) —
+// lidos e gravados só por Logística/admin.
+interface DriverDetails {
+  cnh: string;
+  birth_date: string;
+  mobile_phone: string;
+  address: PostalAddress;
+}
+const emptyDetails: DriverDetails = { cnh: "", birth_date: "", mobile_phone: "", address: emptyPostalAddress };
 
 interface Driver {
   id: string;
@@ -63,6 +80,8 @@ export default function DriversPage() {
   const [cpf, setCpf] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [details, setDetails] = useState<DriverDetails>(emptyDetails);
+  const [cities, setCities] = useState<string[]>([]);
 
   async function loadDrivers() {
     const { data, error } = await supabase
@@ -90,24 +109,52 @@ export default function DriversPage() {
     setFormError(null);
   }
 
+  function loadCities() {
+    if (cities.length === 0) fetchAllCityNames().then(setCities);
+  }
+
   function openNew() {
     setEditingId(null);
     setName("");
     setNickname("");
     setCpf("");
+    setDetails(emptyDetails);
     setFormError(null);
     setSuccessMessage(null);
     setShowForm(true);
+    loadCities();
   }
 
-  function openEdit(d: Driver) {
+  async function openEdit(d: Driver) {
     setEditingId(d.id);
     setName(d.name);
     setNickname(d.nickname ?? "");
     setCpf(formatCpf(d.cpf));
+    setDetails(emptyDetails);
     setFormError(null);
     setSuccessMessage(null);
     setShowForm(true);
+    loadCities();
+    const { data } = await supabase
+      .from("driver_details")
+      .select("cnh, birth_date, mobile_phone, street, number, complement, district, cep, city")
+      .eq("driver_id", d.id)
+      .maybeSingle();
+    if (data) {
+      setDetails({
+        cnh: data.cnh ?? "",
+        birth_date: data.birth_date ?? "",
+        mobile_phone: formatPhone(data.mobile_phone ?? ""),
+        address: {
+          street: data.street ?? "",
+          number: data.number ?? "",
+          complement: data.complement ?? "",
+          district: data.district ?? "",
+          cep: formatCep(data.cep ?? ""),
+          city: data.city ?? "",
+        },
+      });
+    }
   }
 
   const filtered = useMemo(() => {
@@ -130,6 +177,10 @@ export default function DriversPage() {
     }
     if (!isValidCpf(cpf)) {
       setFormError("CPF inválido. Confira os 11 dígitos.");
+      return;
+    }
+    if (details.address.city.trim() && !cities.includes(details.address.city)) {
+      setFormError("Escolha o município do endereço na lista.");
       return;
     }
 
@@ -155,6 +206,27 @@ export default function DriversPage() {
       return;
     }
 
+    // Dados para o CIOT: só grava se algo foi preenchido (ou se já existiam).
+    const t = (v: string) => v.trim() || null;
+    const detailsRow = {
+      driver_id: saved.id,
+      cnh: t(onlyDigits(details.cnh)),
+      birth_date: details.birth_date || null,
+      mobile_phone: t(onlyDigits(details.mobile_phone)),
+      street: t(details.address.street),
+      number: t(details.address.number),
+      complement: t(details.address.complement),
+      district: t(details.address.district),
+      cep: t(onlyDigits(details.address.cep)),
+      city: t(details.address.city),
+    };
+    const hasDetails = Object.entries(detailsRow).some(([k, v]) => k !== "driver_id" && v !== null);
+    let detailsErr: string | null = null;
+    if (hasDetails || editingId) {
+      const { error: dErr } = await supabase.from("driver_details").upsert(detailsRow);
+      detailsErr = dErr?.message ?? null;
+    }
+
     // O acesso ao app acompanha o cadastro: nasce junto e segue a troca de CPF.
     let accessMsg = "";
     let accessErr: string | null = null;
@@ -174,7 +246,9 @@ export default function DriversPage() {
     setActionError(
       accessErr
         ? `O cadastro foi salvo, mas o acesso ao app não (${accessErr}). Use o botão Criar acesso na lista.`
-        : null
+        : detailsErr
+          ? `O cadastro foi salvo, mas os dados para o CIOT não (${detailsErr}).`
+          : null
     );
     closeForm();
     await loadDrivers();
@@ -342,7 +416,7 @@ export default function DriversPage() {
       </div>
 
       {canEditSchedule && showForm && (
-        <Modal onClose={closeForm} labelledBy="driver-modal-title" className="max-w-md">
+        <Modal onClose={closeForm} labelledBy="driver-modal-title" className="max-w-2xl">
           <form onSubmit={handleSubmit}>
             <h2 id="driver-modal-title" className="text-base font-medium text-navy-900">
               {editingId ? "Editar motorista" : "Novo motorista"}
@@ -391,6 +465,50 @@ export default function DriversPage() {
                   placeholder="000.000.000-00"
                 />
               </div>
+
+              <details className="rounded-lg border border-navy-200 px-4 py-3" open={Boolean(details.cnh || details.mobile_phone || details.address.street)}>
+                <summary className="cursor-pointer text-sm font-semibold text-navy-900">
+                  Dados para o CIOT (CNH, nascimento, celular e endereço)
+                </summary>
+                <div className="mt-3 flex flex-col gap-3">
+                  <div className="grid grid-cols-6 gap-3">
+                    <div className="col-span-6 sm:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="mot-cnh">CNH</label>
+                      <input id="mot-cnh"
+                        inputMode="numeric"
+                        value={details.cnh}
+                        onChange={(e) => setDetails((d) => ({ ...d, cnh: onlyDigits(e.target.value).slice(0, 11) }))}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="col-span-3 sm:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="mot-nasc">Data de nascimento</label>
+                      <input id="mot-nasc"
+                        type="date"
+                        value={details.birth_date}
+                        onChange={(e) => setDetails((d) => ({ ...d, birth_date: e.target.value }))}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="col-span-3 sm:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="mot-cel">Celular</label>
+                      <input id="mot-cel"
+                        inputMode="tel"
+                        value={details.mobile_phone}
+                        onChange={(e) => setDetails((d) => ({ ...d, mobile_phone: formatPhone(e.target.value) }))}
+                        className={inputCls}
+                        placeholder="(41) 99999-9999"
+                      />
+                    </div>
+                  </div>
+                  <PostalAddressFields
+                    idPrefix="mot-end"
+                    value={details.address}
+                    onChange={(address) => setDetails((d) => ({ ...d, address }))}
+                    cityOptions={cities.map((c) => ({ value: c }))}
+                  />
+                </div>
+              </details>
 
               {formError && (
                 <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
