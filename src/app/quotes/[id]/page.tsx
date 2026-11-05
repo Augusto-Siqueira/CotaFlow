@@ -28,6 +28,7 @@ interface QuoteDetail {
   nf_value: number | null;
   gross_freight: number | null;
   toll_cost: number | null;
+  load_unload_cost: number | null;
   insurance_pct: number | null;
   insurance_value: number | null;
   icms_pct: number | null;
@@ -101,7 +102,7 @@ export default async function QuoteDetailPage({
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, min_load_tons, transit_time_hours, delivery_deadline, validity_date, free_time_hours, over_time_cost, client_quote_number, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
+      "id, base_origin, origin, destination, final_destination, distance_km, product, nf_value, gross_freight, toll_cost, load_unload_cost, insurance_pct, insurance_value, icms_pct, net_freight, full_freight, min_load_tons, transit_time_hours, delivery_deadline, validity_date, free_time_hours, over_time_cost, client_quote_number, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino, status, created_at, version, duplicated_from_id, clients(name, document, segment), vehicles(type, axles, capacity_kg, antt_category)"
     )
     .eq("id", id)
     .single();
@@ -122,7 +123,8 @@ export default async function QuoteDetailPage({
     quote.full_freight,
     quote.gross_freight,
     quote.toll_cost,
-    quote.insurance_value
+    quote.insurance_value,
+    quote.load_unload_cost
   );
 
   function splitWaypoints(value: string | null): string[] {
@@ -424,6 +426,14 @@ export default async function QuoteDetailPage({
                 {money(quote.gross_freight)}
               </span>
             </div>
+            {quote.load_unload_cost ? (
+              <div className="flex justify-between py-2">
+                <span className="text-navy-600">Carga e descarga</span>
+                <span className="font-medium text-navy-900">
+                  {money(quote.load_unload_cost)}
+                </span>
+              </div>
+            ) : null}
             <div className="flex justify-between py-2">
               <span className="text-navy-600">Pedágio</span>
               <span className="font-medium text-navy-900">

@@ -30,6 +30,8 @@ export interface QuoteProposalData {
   nf_value: number | null;
   gross_freight: number | null;
   toll_cost: number | null;
+  /** Carga e descarga (R$); null/0 = linha não aparece no PDF. */
+  load_unload_cost?: number | null;
   insurance_pct: number | null;
   insurance_value: number | null;
   icms_pct: number | null;
@@ -332,7 +334,8 @@ function KeminCostSection({ quote }: { quote: QuoteProposalData }) {
     quote.full_freight,
     quote.gross_freight,
     quote.toll_cost,
-    quote.insurance_value
+    quote.insurance_value,
+    quote.load_unload_cost ?? null
   );
   // PIS/COFINS são calculados sobre o Frete Gross (a mesma base usada pelo
   // fator único de computeNetFreight — ver o comentário em
@@ -369,6 +372,9 @@ function KeminCostSection({ quote }: { quote: QuoteProposalData }) {
           label="Valor Líquido do Frete (sem impostos)"
           value={money(gross)}
         />
+        {quote.load_unload_cost ? (
+          <KeminRow label="Carga e descarga" value={money(quote.load_unload_cost)} />
+        ) : null}
         <KeminRow label="Pedágios" value={money(quote.toll_cost)} />
         <KeminRow
           label="Seguro"
@@ -434,7 +440,8 @@ export function QuoteProposalDocument({
     quote.full_freight,
     quote.gross_freight,
     quote.toll_cost,
-    quote.insurance_value
+    quote.insurance_value,
+    quote.load_unload_cost ?? null
   );
   const tons = quote.min_load_tons ? Number(quote.min_load_tons) : null;
   const money = moneyFor(tons);
@@ -541,6 +548,14 @@ export function QuoteProposalDocument({
                     {money(quote.gross_freight)}
                   </Text>
                 </View>
+                {quote.load_unload_cost ? (
+                  <View style={styles.tableRow}>
+                    <Text style={styles.tableLabel}>Carga e descarga</Text>
+                    <Text style={styles.tableValue}>
+                      {money(quote.load_unload_cost)}
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={styles.tableRow}>
                   <Text style={styles.tableLabel}>Pedágio</Text>
                   <Text style={styles.tableValue}>

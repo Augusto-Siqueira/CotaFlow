@@ -34,32 +34,44 @@ export function computeFullFreight(
   tollCost: number | null,
   insuranceValue: number | null,
   icmsPct: number | null,
-  paranaRule: boolean
+  paranaRule: boolean,
+  // Carga e descarga (opcional): faz parte do serviço de frete, então entra
+  // na base do ICMS nas duas regras — só o pedágio fica fora no Paraná.
+  loadUnloadCost: number | null = null
 ): number | null {
   if (grossFreight === null || icmsPct === null) return null;
 
   const toll = tollCost ?? 0;
   const insurance = insuranceValue ?? 0;
+  const loadUnload = loadUnloadCost ?? 0;
   const icmsFactor = 1 - icmsPct / 100;
   if (icmsFactor <= 0) return null;
 
   if (paranaRule) {
-    return (grossFreight + insurance) / icmsFactor + toll;
+    return (grossFreight + insurance + loadUnload) / icmsFactor + toll;
   }
-  return (grossFreight + toll + insurance) / icmsFactor;
+  return (grossFreight + toll + insurance + loadUnload) / icmsFactor;
 }
 
 // Valor do ICMS embutido no Full ("por dentro"). Full = Gross + Pedágio +
-// Seguro + ICMS em ambas as regras (geral e Paraná), então o valor do
-// imposto é sempre o resíduo — não depende de saber qual regra foi aplicada.
+// Seguro + Carga/Descarga + ICMS em ambas as regras (geral e Paraná), então o
+// valor do imposto é sempre o resíduo — não depende de saber qual regra foi
+// aplicada.
 export function computeIcmsValue(
   fullFreight: number | null,
   grossFreight: number | null,
   tollCost: number | null,
-  insuranceValue: number | null
+  insuranceValue: number | null,
+  loadUnloadCost: number | null = null
 ): number | null {
   if (fullFreight === null || grossFreight === null) return null;
-  return fullFreight - grossFreight - (tollCost ?? 0) - (insuranceValue ?? 0);
+  return (
+    fullFreight -
+    grossFreight -
+    (tollCost ?? 0) -
+    (insuranceValue ?? 0) -
+    (loadUnloadCost ?? 0)
+  );
 }
 
 // Piso mínimo ANTT — seção 5.5. CCD/CC vêm da tabela `antt_coefficients`,

@@ -50,6 +50,7 @@ interface DuplicateSourceQuote {
   nf_value: number | null;
   gross_freight: number | null;
   toll_cost: number | null;
+  load_unload_cost: number | null;
   insurance_pct: number | null;
   icms_pct: number | null;
   transit_time_hours: number | null;
@@ -72,6 +73,9 @@ interface FormState {
   nf_value: string;
   vehicle_id: string;
   gross_freight: string;
+  // Carga e descarga (R$, opcional) — entra na base do ICMS e soma ao Gross
+  // na comparação com o piso ANTT (que já embute carga/descarga no CC).
+  load_unload_cost: string;
   toll_cost: string;
   insurance_pct: string;
   icms_pct: string;
@@ -112,6 +116,7 @@ const emptyForm: FormState = {
   nf_value: "",
   vehicle_id: "",
   gross_freight: "",
+  load_unload_cost: "",
   toll_cost: "",
   insurance_pct: "",
   icms_pct: "",
@@ -334,7 +339,7 @@ function NewQuotePage({
           ? supabase
               .from("quotes")
               .select(
-                "id, client_id, base_origin, origin, destination, final_destination, distance_km, vehicle_id, product, nf_value, gross_freight, toll_cost, insurance_pct, icms_pct, transit_time_hours, delivery_deadline, free_time_hours, version, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino"
+                "id, client_id, base_origin, origin, destination, final_destination, distance_km, vehicle_id, product, nf_value, gross_freight, toll_cost, load_unload_cost, insurance_pct, icms_pct, transit_time_hours, delivery_deadline, free_time_hours, version, waypoints_origin_coleta, waypoints_coleta_entrega, waypoints_entrega_destino"
               )
               .eq("id", duplicateId)
               .single()
@@ -378,6 +383,8 @@ function NewQuotePage({
           gross_freight:
             source.gross_freight !== null ? String(source.gross_freight) : "",
           toll_cost: source.toll_cost !== null ? String(source.toll_cost) : "",
+          load_unload_cost:
+            source.load_unload_cost !== null ? String(source.load_unload_cost) : "",
           insurance_pct:
             source.insurance_pct !== null ? String(source.insurance_pct) : "",
           icms_pct: source.icms_pct !== null ? String(source.icms_pct) : "",
@@ -527,6 +534,9 @@ function NewQuotePage({
       if (!form.gross_freight.trim() || !isValidNumber(form.gross_freight)) {
         errors.gross_freight = "Informe o frete gross.";
       }
+      if (!isValidNumber(form.load_unload_cost)) {
+        errors.load_unload_cost = "Informe um número válido.";
+      }
       if (!isValidNumber(form.toll_cost)) {
         errors.toll_cost = "Informe um número válido.";
       }
@@ -566,6 +576,7 @@ function NewQuotePage({
   const nfValue = toNumber(form.nf_value);
   const grossFreight = toNumber(form.gross_freight);
   const tollCost = toNumber(form.toll_cost) ?? 0;
+  const loadUnloadCost = toNumber(form.load_unload_cost);
   const insurancePct = toNumber(form.insurance_pct);
   const icmsPct = toNumber(form.icms_pct);
 
@@ -576,7 +587,8 @@ function NewQuotePage({
     tollCost,
     insuranceValue,
     icmsPct,
-    form.parana_rule
+    form.parana_rule,
+    loadUnloadCost
   );
 
   const distanceKm = toNumber(form.distance_km);
@@ -591,8 +603,12 @@ function NewQuotePage({
     matchedAnttCoefficient?.cc ?? null,
     distanceKm
   );
+  // O piso ANTT (CCD × km + CC) já inclui carga e descarga no CC, então o
+  // valor comparado é o Gross + a carga/descarga informada.
+  const freightForFloor =
+    grossFreight !== null ? grossFreight + (loadUnloadCost ?? 0) : null;
   const belowAnttFloor =
-    anttFloor !== null && grossFreight !== null && grossFreight < anttFloor;
+    anttFloor !== null && freightForFloor !== null && freightForFloor < anttFloor;
 
   // Paradas com peso preenchido rateiam a NF entre si — o mesmo que a antiga
   // "Entrega fracionada" fazia, só que agora é uma propriedade opcional de
@@ -636,6 +652,7 @@ function NewQuotePage({
         nf_value: nfValue,
         gross_freight: grossFreight,
         toll_cost: tollCost,
+        load_unload_cost: loadUnloadCost,
         insurance_pct: insurancePct,
         insurance_value: insuranceValue,
         icms_pct: icmsPct,
@@ -1157,6 +1174,23 @@ function NewQuotePage({
             </div>
 
             <div>
+              <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-carga-descarga-r">
+                Carga e descarga (R$)
+              </label>
+              <CurrencyInput id="cot-carga-descarga-r"
+                value={form.load_unload_cost}
+                onChange={(v) => updateField("load_unload_cost", v)}
+                className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                placeholder="0,00"
+              />
+              {stepErrors.load_unload_cost && (
+                <p className="mt-1 text-xs text-red-600">
+                  {stepErrors.load_unload_cost}
+                </p>
+              )}
+            </div>
+
+            <div>
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-tipo-de-carga-piso-antt">
                 Tipo de carga (piso ANTT)
               </label>
@@ -1200,17 +1234,22 @@ function NewQuotePage({
                   {belowAnttFloor && (
                     <>
                       <p className="mt-1">
-                        O frete Gross informado está abaixo do piso mínimo
-                        obrigatório.
+                        {loadUnloadCost
+                          ? `O frete Gross + carga e descarga (${formatCurrency(freightForFloor)}) está abaixo do piso mínimo obrigatório.`
+                          : "O frete Gross informado está abaixo do piso mínimo obrigatório."}
                       </p>
                       <button
                         type="button"
                         onClick={() =>
-                          updateField("gross_freight", anttFloor.toFixed(2))
+                          updateField(
+                            "gross_freight",
+                            (anttFloor - (loadUnloadCost ?? 0)).toFixed(2)
+                          )
                         }
                         className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
                       >
-                        Ajustar Gross para o piso ({formatCurrency(anttFloor)})
+                        Ajustar Gross para o piso (
+                        {formatCurrency(anttFloor - (loadUnloadCost ?? 0))})
                       </button>
                       <label className="mt-2 flex items-center gap-2 text-xs">
                         <input
@@ -1441,7 +1480,13 @@ function NewQuotePage({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+              <div>
+                <div className="text-navy-500">Carga e descarga</div>
+                <div className="text-navy-900">
+                  {formatCurrency(loadUnloadCost ?? 0)}
+                </div>
+              </div>
               <div>
                 <div className="text-navy-500">Seguro</div>
                 <div className="text-navy-900">
@@ -1472,7 +1517,10 @@ function NewQuotePage({
               >
                 Piso mínimo ANTT ({form.antt_cargo_type}):{" "}
                 <span className="font-medium">{formatCurrency(anttFloor)}</span>
-                {belowAnttFloor && " — frete Gross abaixo do piso, confirmado pelo usuário."}
+                {belowAnttFloor &&
+                  (loadUnloadCost
+                    ? " — Gross + carga e descarga abaixo do piso, confirmado pelo usuário."
+                    : " — frete Gross abaixo do piso, confirmado pelo usuário.")}
               </div>
             )}
 
