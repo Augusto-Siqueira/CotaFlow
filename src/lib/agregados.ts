@@ -119,3 +119,32 @@ export function formatPhone(value: string): string {
     ? `(${ddd}) ${rest.slice(0, split)}-${rest.slice(split)}`
     : `(${ddd}) ${rest}`;
 }
+
+// Rótulo único de cliente para as listas de escolha (destinatário): várias
+// unidades têm a mesma razão social (ex: ARAUCO INDÚSTRIA DE PAINÉIS S.A.),
+// então o nome fantasia vem na frente e, se ainda repetir, o CNPJ no fim.
+export interface ClientForLabel {
+  id: string;
+  name: string;
+  trade_name: string | null;
+  document: string | null;
+}
+
+export function clientLabels(clients: ClientForLabel[]): Map<string, string> {
+  const base = (c: ClientForLabel) => (c.trade_name?.trim() ? `${c.trade_name.trim()} · ${c.name}` : c.name);
+  const count = new Map<string, number>();
+  for (const c of clients) count.set(base(c), (count.get(base(c)) ?? 0) + 1);
+  const labels = new Map<string, string>();
+  for (const c of clients) {
+    const b = base(c);
+    const doc = onlyDigits(c.document ?? "");
+    labels.set(c.id, (count.get(b) ?? 0) > 1 && doc ? `${b} · ${doc.length === 14 ? formatCnpj(doc) : doc}` : b);
+  }
+  return labels;
+}
+
+/** CNPJ formatado como dica embaixo do nome nas listas. */
+export function clientHint(c: ClientForLabel): string | undefined {
+  const doc = onlyDigits(c.document ?? "");
+  return doc.length === 14 ? formatCnpj(doc) : doc || undefined;
+}

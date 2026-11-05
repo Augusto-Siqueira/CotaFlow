@@ -10,6 +10,13 @@ import { PDF_LAYOUTS, type PdfLayout } from "@/lib/pdfLayout";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import {
+  PostalAddressFields,
+  emptyPostalAddress,
+  type PostalAddress,
+} from "@/components/PostalAddressFields";
+import { fetchAllCityNames } from "@/lib/cities";
+import { formatCep, formatPhone } from "@/lib/agregados";
 
 interface Client {
   id: string;
@@ -20,6 +27,14 @@ interface Client {
   default_insurance_pct: number | null;
   pdf_layout: string;
   proof_email: string | null;
+  // Endereço e telefone: usados como destinatário no CIOT (migration 0081).
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  district: string | null;
+  cep: string | null;
+  city: string | null;
+  phone: string | null;
   created_at: string;
 }
 
@@ -71,6 +86,12 @@ export default function ClientsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [address, setAddress] = useState<PostalAddress>(emptyPostalAddress);
+  const [phone, setPhone] = useState("");
+  const [cities, setCities] = useState<string[]>([]);
+  useEffect(() => {
+    if (showForm && cities.length === 0) fetchAllCityNames().then(setCities);
+  }, [showForm, cities.length]);
 
   async function loadClients() {
     setLoadingList(true);
@@ -133,6 +154,15 @@ export default function ClientsPage() {
       pdf_layout: (client.pdf_layout as PdfLayout) ?? "padrao",
       proof_email: client.proof_email ?? "",
     });
+    setAddress({
+      street: client.street ?? "",
+      number: client.number ?? "",
+      complement: client.complement ?? "",
+      district: client.district ?? "",
+      cep: formatCep(client.cep ?? ""),
+      city: client.city ?? "",
+    });
+    setPhone(formatPhone(client.phone ?? ""));
     setFormErrors({});
     setSubmitError(null);
     setSuccessMessage(null);
@@ -142,6 +172,8 @@ export default function ClientsPage() {
   function openNew() {
     setEditingId(null);
     setForm(emptyForm);
+    setAddress(emptyPostalAddress);
+    setPhone("");
     setFormErrors({});
     setSubmitError(null);
     setSuccessMessage(null);
@@ -223,6 +255,13 @@ export default function ClientsPage() {
       default_insurance_pct: insurancePct,
       pdf_layout: form.pdf_layout,
       proof_email: parseEmailList(form.proof_email).join("; ") || null,
+      street: address.street.trim() || null,
+      number: address.number.trim() || null,
+      complement: address.complement.trim() || null,
+      district: address.district.trim() || null,
+      cep: address.cep.replace(/\D/g, "") || null,
+      city: address.city.trim() || null,
+      phone: phone.replace(/\D/g, "") || null,
     };
     const { error } = editingId
       ? await supabase.from("clients").update(payload).eq("id", editingId)
@@ -367,7 +406,7 @@ export default function ClientsPage() {
 
       <div>
         {canEditCommercial && showForm && (
-        <Modal onClose={cancelEditing} labelledBy="client-modal-title" className="max-w-lg">
+        <Modal onClose={cancelEditing} labelledBy="client-modal-title" className="max-w-2xl">
             <h2 id="client-modal-title" className="text-base font-medium text-navy-900">
               {editingId ? "Editar cliente" : "Novo cliente"}
             </h2>
@@ -491,6 +530,31 @@ export default function ClientsPage() {
                   O botão &quot;Enviar por e-mail&quot; do comprovante já abre com estes endereços. Mais de um: separe com ponto e vírgula.
                 </p>
                 {formErrors.proof_email && <p className="mt-1 text-xs text-red-600">{formErrors.proof_email}</p>}
+              </div>
+
+              <div className="sm:col-span-2 border-t border-navy-200 pt-4">
+                <p className="mb-3 text-sm font-semibold text-navy-900">
+                  Endereço <span className="font-normal text-navy-500">(opcional — usado quando o cliente é destinatário no CIOT)</span>
+                </p>
+                <PostalAddressFields
+                  idPrefix="cli-end"
+                  value={address}
+                  onChange={setAddress}
+                  cityOptions={cities.map((c) => ({ value: c }))}
+                />
+                <div className="mt-3 sm:w-1/2">
+                  <label htmlFor="cli-telefone" className="mb-1 block text-sm font-medium text-navy-700">
+                    Telefone comercial
+                  </label>
+                  <input
+                    id="cli-telefone"
+                    inputMode="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
+                    className="w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                    placeholder="(41) 3333-3333"
+                  />
+                </div>
               </div>
 
               <div>

@@ -20,6 +20,8 @@ import {
   AGREGADO_COLUMNS,
   CIOT_MODE_LABEL,
   PIX_KEY_LABEL,
+  clientHint,
+  clientLabels,
   formatCep,
   formatDocument,
   formatPhone,
@@ -49,6 +51,8 @@ interface DriverOption {
 interface ClientOption {
   id: string;
   name: string;
+  trade_name: string | null;
+  document: string | null;
 }
 
 interface FormState {
@@ -137,7 +141,7 @@ export default function AgregadosPage() {
       supabase.from("agregados").select(AGREGADO_COLUMNS).order("name"),
       supabase.from("fleet_units").select("id, plate, kind, agregado_id").order("plate"),
       supabase.from("drivers").select("id, name, cpf").order("name"),
-      supabase.from("clients").select("id, name").order("name"),
+      supabase.from("clients").select("id, name, trade_name, document").order("name"),
     ]);
     if (agRes.error) {
       setListError(agRes.error.message);
@@ -164,9 +168,14 @@ export default function AgregadosPage() {
     () => drivers.map((d) => ({ value: driverLabel(d) })),
     [drivers]
   );
+  // Nome fantasia na frente: várias unidades têm a mesma razão social.
+  const clientLabel = useMemo(() => clientLabels(clients), [clients]);
   const clientOptions: SearchOption[] = useMemo(
-    () => clients.map((c) => ({ value: c.name })),
-    [clients]
+    () =>
+      clients
+        .map((c) => ({ value: clientLabel.get(c.id) ?? c.name, hint: clientHint(c) }))
+        .sort((a, b) => a.value.localeCompare(b.value, "pt-BR")),
+    [clients, clientLabel]
   );
 
   const platesByAgregado = useMemo(() => {
@@ -230,7 +239,7 @@ export default function AgregadosPage() {
       pix_key_type: a.pix_key_type ?? "",
       pix_key: a.pix_key ?? "",
       ciot_mode: a.ciot_mode,
-      recipient_client: client?.name ?? "",
+      recipient_client: client ? clientLabel.get(client.id) ?? client.name : "",
       driver: driver ? driverLabel(driver) : "",
       notes: a.notes ?? "",
       active: a.active,
@@ -266,7 +275,7 @@ export default function AgregadosPage() {
     const driver = form.driver.trim() ? drivers.find((d) => driverLabel(d) === form.driver) : null;
     if (form.driver.trim() && !driver) return fail("Escolha o motorista na lista.");
     const client = form.recipient_client.trim()
-      ? clients.find((c) => c.name === form.recipient_client)
+      ? clients.find((c) => clientLabel.get(c.id) === form.recipient_client)
       : null;
     if (form.recipient_client.trim() && !client) return fail("Escolha o destinatário na lista de clientes.");
     if (form.address.city.trim() && !cities.includes(form.address.city))

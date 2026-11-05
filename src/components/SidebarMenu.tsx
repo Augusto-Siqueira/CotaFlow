@@ -13,6 +13,8 @@ interface NavLeaf {
   fuelOnly?: boolean;
   /** Check-list mensal: admin, manutenção e logística. */
   monthlyOnly?: boolean;
+  /** Admin e logística (quem edita a programação), ex: CIOT dos agregados. */
+  scheduleOnly?: boolean;
 }
 
 interface NavEntry {
@@ -46,6 +48,7 @@ export const NAV: NavEntry[] = [
       { href: "/programacao/dashboard", label: "Dashboard" },
       { href: "/programacao/capacitacoes", label: "Capacitações" },
       { href: "/programacao/comprovantes", label: "Comprovantes" },
+      { href: "/ciot", label: "CIOT", scheduleOnly: true },
     ],
   },
   {
@@ -245,6 +248,7 @@ export function SidebarMenu({
                   (!i.commercialOnly || role === "admin" || role === "comercial") &&
                   (!i.fuelOnly || role === "admin" || role === "abastecimento") &&
                   (!i.monthlyOnly || role === "admin" || role === "manutencao" || role === "logistica") &&
+                  (!i.scheduleOnly || role === "admin" || role === "logistica") &&
                   // Perfil Abastecimento: da Programação, só a tela do dia (somente leitura).
                   (role !== "abastecimento" || entry.key !== "programacao" || i.href === "/programacao")
               );
