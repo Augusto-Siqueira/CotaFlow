@@ -1,6 +1,6 @@
 // Versão do sistema. A cada publicação nova: soma 0,01 em APP_VERSION
 // (1.00 -> 1.01 -> 1.02...) e acrescenta uma entrada NO TOPO de CHANGELOG.
-export const APP_VERSION = "1.13";
+export const APP_VERSION = "1.14";
 
 export interface ChangelogEntry {
   version: string;
@@ -9,6 +9,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.14",
+    date: "2026-11-06",
+    notes: [
+      "KM Exato dentro do CotaFlow: o controle de quilometragem do contrato dedicado Btech (antes um app separado) com painel de saldo por placa e produtividade mínima, viagens (abrir no carregamento lendo os XML de CT-e/NF-e, compensação de saldo com o texto para o CT-e, fechar na volta pelo odômetro), entregas e comprovantes, relatórios com Excel e PDF e ajustes de tarifas, regras, rotas e acertos. Todo o histórico foi importado e o saldo confere com o app anterior.",
+      "Portal do cliente: a Btech passa a consultar o controle de km na aba Controle de km, sem os dados internos da Transbochnia.",
+      "CIOT dos agregados: cadastro de agregados, dados do veículo e do motorista para o CIOT, e tela Programação > CIOT com as cargas de agregado, ficha pronta para o e-Frete (com botão de copiar em cada campo), checagem do piso ANTT e registro do número do CIOT.",
+      "Cotação: campo de carga e descarga logo após o frete (entra na base do ICMS e no piso ANTT) e cotação por tonelada com a lotação mínima na tela e no PDF.",
+      "Manutenção: aba Ordem de Serviço (salvar e imprimir), relatos do motorista em destaque no quadro de defeitos e quadro com recolher por coluna e entradas passando por Em oficina.",
+      "Comprovantes: envio por e-mail pelo Gmail do CotaFlow com as fotos anexadas e o e-mail do cliente já preenchido.",
+      "Dashboard da programação com filtro de placa e mudança de status; abastecimento com casas decimais automáticas; rascunho automático no check-list mensal.",
+    ],
+  },
   {
     version: "1.13",
     date: "2026-10-22",

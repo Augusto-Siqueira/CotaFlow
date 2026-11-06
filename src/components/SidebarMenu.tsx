@@ -52,6 +52,19 @@ export const NAV: NavEntry[] = [
     ],
   },
   {
+    // Controle de km do contrato dedicado Btech (antigo app avulso "KM Exato").
+    key: "kmexato",
+    label: "KM Exato",
+    icon: "M3 17a9 9 0 0118 0M12 17l4-6M5 17h2M17 17h2M12 8V6",
+    items: [
+      { href: "/km-exato", label: "Painel", scheduleOnly: true },
+      { href: "/km-exato/viagens", label: "Viagens", scheduleOnly: true },
+      { href: "/km-exato/entregas", label: "Entregas", scheduleOnly: true },
+      { href: "/km-exato/relatorios", label: "Relatórios", scheduleOnly: true },
+      { href: "/km-exato/ajustes", label: "Ajustes", adminOnly: true },
+    ],
+  },
+  {
     key: "manutencao",
     label: "Manutenção",
     icon: "M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z",

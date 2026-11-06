@@ -27,6 +27,14 @@
   --color-chrome-900: #192134;
   --color-chrome-950: #111622;
 
+  /* KM Exato: par divergente do saldo (validado para daltonismo, claro e
+     escuro): azul = a favor da Transbochnia, âmbar = a favor da Btech. */
+  --color-kmtb: #1f63b0;
+  --color-kmbt: #c27c0e;
+  /* Séries do gráfico mensal (divergência × compensação), validadas. */
+  --color-kmdiv: #6250d6;
+  --color-kmcomp: #1baf7a;
+
   --color-navy-50: #f1f3f8;
   --color-navy-100: #dde2ee;
   --color-navy-200: #bac5de;
@@ -186,6 +194,10 @@ html.dark {
   --color-violet-500: #a78bfa;
   --color-violet-600: #7c5cd6;
   --color-violet-800: #c4b5fd;
+  --color-kmtb: #4c8dd0;
+  --color-kmbt: #b9862a;
+  --color-kmdiv: #9085e9;
+  --color-kmcomp: #199e70;
 }
 
 html.dark .bg-white {

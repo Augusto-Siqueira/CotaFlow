@@ -8,6 +8,7 @@ import { formatKg } from "@/lib/deliveryProof";
 import { baseCity, splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
+import { PortalTabs } from "@/components/PortalTabs";
 
 // Portal do cliente: comprovantes de entrega das empresas ligadas ao usuário.
 // Os dados vêm só da função client_portal_loads (o banco nega qualquer outra
@@ -149,6 +150,7 @@ export default function PortalPage() {
 
   return (
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
+      <PortalTabs active="/portal" />
       <h1 className="text-2xl font-semibold tracking-tight text-navy-900">Comprovantes de entrega</h1>
       <p className="mt-1 text-sm text-navy-500">
         Cargas em viagem e entregues{companies.length > 0 ? ` de ${companies.join(", ")}` : ""}. Clique na entrega para ver o
