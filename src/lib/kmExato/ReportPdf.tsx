@@ -50,7 +50,7 @@ export function KmReportPdf({ D, logoUrl }: { D: ReportData; logoUrl: string }) 
   const c = D.cps;
   const wv = [9, 7, 7, 6, 8, 8, 8, 12, 12, 12, 11];
   return (
-    <Document title="KM Exato · Btech × Transbochnia" author="Transbochnia Transportes">
+    <Document title="KM Btech · Btech × Transbochnia" author="Transbochnia Transportes">
       <Page size="A4" style={s.page}>
         <View style={s.head}>
           <View>
@@ -124,7 +124,7 @@ export function KmReportPdf({ D, logoUrl }: { D: ReportData; logoUrl: string }) 
           </>
         )}
 
-        <Text style={s.foot} fixed render={({ pageNumber, totalPages }) => `KM Exato · Btech × Transbochnia · valores negativos a favor da Transbochnia, positivos a favor da Btech · página ${pageNumber} de ${totalPages}`} />
+        <Text style={s.foot} fixed render={({ pageNumber, totalPages }) => `KM Btech · Btech × Transbochnia · valores negativos a favor da Transbochnia, positivos a favor da Btech · página ${pageNumber} de ${totalPages}`} />
       </Page>
     </Document>
   );

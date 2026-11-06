@@ -1,6 +1,6 @@
 import { createTransport } from "nodemailer";
 import { requireRole, supabaseAdmin } from "@/lib/supabaseAdmin";
-import { PROOF_EMAIL_CC, parseEmailList } from "@/lib/deliveryProof";
+import { PROOF_EMAIL_CC, parseEmailList, proofEmailDraft } from "@/lib/deliveryProof";
 
 export const runtime = "nodejs";
 
@@ -10,14 +10,60 @@ export const runtime = "nodejs";
 // GMAIL_APP_PASSWORD (senha de app do Google, nunca a senha normal da conta).
 const STAFF = ["admin", "comercial", "logistica", "manutencao", "abastecimento"];
 
+// O cliente do portal também envia, mas com travas no servidor: só comprovante
+// das empresas ligadas a ele, SEMPRE para o e-mail de comprovantes do cadastro
+// do cliente (não escolhe destinatário) e com o assunto/texto padrão.
+type Admin = ReturnType<typeof supabaseAdmin>;
+
+async function clientProofEmails(admin: Admin, clientName: string): Promise<string[]> {
+  const name = clientName.trim();
+  if (!name) return [];
+  const { data } = await admin.from("clients").select("name, trade_name, proof_email");
+  const found = ((data ?? []) as { name: string; trade_name: string | null; proof_email: string | null }[]).find(
+    (c) => (c.trade_name ?? "").trim() === name || c.name.trim() === name
+  );
+  return parseEmailList(found?.proof_email);
+}
+
+async function portalCanSee(admin: Admin, userId: string, clientName: string) {
+  const { data } = await admin.from("client_portal_links").select("client_name").eq("user_id", userId).eq("client_name", clientName).maybeSingle();
+  return Boolean(data);
+}
+
+/** Para o portal: para quem o comprovante vai e quando foi o último envio. */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireRole([...STAFF, "cliente"], "Seu perfil não envia comprovantes.");
+  if (!auth.ok) return auth.response;
+  const { id } = await params;
+  const admin = supabaseAdmin();
+  const { data: proof } = await admin.from("delivery_proofs").select("id, loading_schedules(client_name)").eq("id", id).maybeSingle();
+  const clientName = (proof?.loading_schedules as unknown as { client_name: string } | null)?.client_name ?? "";
+  if (!proof || (auth.user.app_metadata?.role === "cliente" && !(await portalCanSee(admin, auth.user.id, clientName)))) {
+    return Response.json({ error: "Comprovante não encontrado." }, { status: 404 });
+  }
+  const to = await clientProofEmails(admin, clientName);
+  const { data: last } = await admin
+    .from("delivery_proof_emails")
+    .select("sent_at, to_addresses")
+    .eq("proof_id", id)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return Response.json(
+    { to, cc: PROOF_EMAIL_CC.filter((c) => !to.includes(c)), lastSent: last ?? null, configured: Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) },
+    { headers: { "Cache-Control": "no-store" } }
+  );
+}
+
 function htmlFromText(text: string): string {
   const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return `<div style="font-family:Arial,sans-serif;font-size:14px">${esc.replace(/\n/g, "<br>")}</div>`;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole(STAFF, "Seu perfil não envia comprovantes.");
+  const auth = await requireRole([...STAFF, "cliente"], "Seu perfil não envia comprovantes.");
   if (!auth.ok) return auth.response;
+  const isPortal = auth.user.app_metadata?.role === "cliente";
 
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
@@ -30,19 +76,40 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const body = (await request.json().catch(() => null)) as { to?: unknown; subject?: unknown; text?: unknown } | null;
-  const to = parseEmailList(Array.isArray(body?.to) ? body!.to.join(";") : String(body?.to ?? ""));
-  const subject = String(body?.subject ?? "").trim();
-  const text = String(body?.text ?? "").trim();
-  if (to.length === 0) return Response.json({ error: "Informe pelo menos um destinatário válido." }, { status: 400 });
-  if (!subject) return Response.json({ error: "Informe o assunto." }, { status: 400 });
 
   const admin = supabaseAdmin();
   const { data: proof } = await admin
     .from("delivery_proofs")
-    .select("id, schedule_id, destination, invoice_number, cte_number, photos")
+    .select("id, schedule_id, destination, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, loading_schedules(client_name)")
     .eq("id", id)
     .maybeSingle();
   if (!proof) return Response.json({ error: "Comprovante não encontrado." }, { status: 404 });
+
+  let to: string[];
+  let subject: string;
+  let text: string;
+  if (isPortal) {
+    const company = (proof.loading_schedules as unknown as { client_name: string } | null)?.client_name ?? "";
+    if (!(await portalCanSee(admin, auth.user.id, company))) return Response.json({ error: "Comprovante não encontrado." }, { status: 404 });
+    to = await clientProofEmails(admin, company);
+    if (to.length === 0) {
+      return Response.json({ error: "Esta empresa não tem e-mail de comprovantes cadastrado. Fale com a Transbochnia." }, { status: 400 });
+    }
+    ({ subject, text } = proofEmailDraft({
+      destination: proof.destination,
+      client_name: proof.client_name,
+      invoice_number: proof.invoice_number,
+      cte_number: proof.cte_number,
+      invoice_weight_kg: proof.invoice_weight_kg,
+      unloaded_weight_kg: proof.unloaded_weight_kg,
+    }));
+  } else {
+    to = parseEmailList(Array.isArray(body?.to) ? body!.to.join(";") : String(body?.to ?? ""));
+    subject = String(body?.subject ?? "").trim();
+    text = String(body?.text ?? "").trim();
+    if (to.length === 0) return Response.json({ error: "Informe pelo menos um destinatário válido." }, { status: 400 });
+    if (!subject) return Response.json({ error: "Informe o assunto." }, { status: 400 });
+  }
 
   // Fotos do armazenamento interno, anexadas ao e-mail.
   const photos = (proof.photos as string[] | null) ?? [];
@@ -86,7 +153,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const name = (auth.user.user_metadata?.name as string | undefined) ?? auth.user.email ?? null;
+  const who = (auth.user.user_metadata?.name as string | undefined) ?? auth.user.email ?? null;
+  const name = isPortal && who ? `${who} (portal do cliente)` : who;
   const { data: row } = await admin
     .from("delivery_proof_emails")
     .insert({

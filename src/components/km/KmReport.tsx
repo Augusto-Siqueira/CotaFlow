@@ -196,7 +196,7 @@ export function KmReport({ E, isAdmin, userName, reload, open }: { E: KmEngine; 
     setBusy(kind);
     try {
       const Dx = reportData(E, f, false); // sempre o recorte sem dados internos
-      const name = `km-exato_${f.de}_a_${f.ate}`;
+      const name = `km-btech_${f.de}_a_${f.ate}`;
       const { downloadBlob, buildReportXlsx } = await import("@/lib/kmExato/exportXlsx");
       if (kind === "xlsx") {
         downloadBlob(await buildReportXlsx(E, Dx), name + ".xlsx");

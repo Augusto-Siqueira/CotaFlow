@@ -8,7 +8,8 @@ import { portalEngine, type PortalPayload } from "@/lib/kmExato/portal";
 import { buttonClasses } from "@/components/Button";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
-import { PortalTabs } from "@/components/PortalTabs";
+import { PortalProofs } from "@/components/portal/PortalProofs";
+import { PortalProofEmail } from "@/components/portal/PortalProofEmail";
 import { MonthPicker, Panel, Pill, Plate, Signed } from "@/components/km/KmUi";
 import { ProdCard, SaldoCard } from "@/components/km/KmCards";
 import { KmReport } from "@/components/km/KmReport";
@@ -17,18 +18,19 @@ import { KmReport } from "@/components/km/KmReport";
 // dados chegam já calculados e sem os dados internos da Transbochnia pela rota
 // /api/portal/km-exato (o perfil cliente não lê nenhuma tabela).
 
-type View = "painel" | "viagens" | "entregas" | "relatorios";
+type View = "painel" | "viagens" | "entregas" | "comprovantes" | "relatorios";
 
 /** Links das fotos do comprovante do motorista (rota do portal confere a empresa). */
 function ProofLinks({ e }: { e: KmTrip["entregas"][number] }) {
   if (!e.proof || !e.proof.photos) return <span className="text-xs text-navy-400">—</span>;
   return (
-    <span className="inline-flex flex-wrap gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2">
       {Array.from({ length: e.proof.photos }, (_, i) => (
         <a key={i} href={`/api/portal/foto?proof=${e.proof!.id}&n=${i}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand-700 hover:underline">
           {e.proof!.photos > 1 ? `Foto ${i + 1}` : "Ver foto"}
         </a>
       ))}
+      <PortalProofEmail proofId={e.proof.id} size="sm" />
     </span>
   );
 }
@@ -210,7 +212,6 @@ export default function PortalKmPage() {
 
   return (
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
-      <PortalTabs active="/portal/km-exato" />
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-navy-900">Controle de km · Btech × Transbochnia</h1>
@@ -220,12 +221,17 @@ export default function PortalKmPage() {
       </div>
 
       <div className="mb-6 flex flex-wrap overflow-hidden rounded-lg border border-navy-300 sm:w-fit">
-        {([["painel", "Painel"], ["viagens", "Viagens"], ["entregas", "Entregas"], ["relatorios", "Relatórios"]] as const).map(([v, l]) => (
+        {([["painel", "Painel"], ["viagens", "Viagens"], ["entregas", "Entregas"], ["comprovantes", "Comprovantes"], ["relatorios", "Relatórios"]] as const).map(([v, l]) => (
           <button key={v} type="button" className={seg(view === v)} onClick={() => setView(v)}>{l}</button>
         ))}
       </div>
 
-      {error ? (
+      {view === "comprovantes" ? (
+        <div>
+          <p className="mb-4 text-sm text-navy-600">Comprovantes de entrega de todas as unidades ligadas ao seu acesso, com as fotos e o envio por e-mail.</p>
+          <PortalProofs embedded />
+        </div>
+      ) : error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-6 py-6 text-sm text-red-700">{error}</p>
       ) : !E ? (
         <p className="rounded-xl border border-navy-200 bg-white px-6 py-10 text-center text-sm text-navy-500">Carregando...</p>

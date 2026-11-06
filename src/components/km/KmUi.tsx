@@ -73,7 +73,7 @@ export function KmPage({
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">KM Exato · Btech</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">KM Btech</p>
           <h1 className="text-2xl font-semibold tracking-tight text-navy-900">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-navy-500">{subtitle}</p>}
         </div>

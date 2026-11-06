@@ -13,7 +13,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.14",
     date: "2026-11-06",
     notes: [
-      "KM Exato dentro do CotaFlow: o controle de quilometragem do contrato dedicado Btech (antes um app separado) com painel de saldo por placa e produtividade mínima, viagens (abrir no carregamento lendo os XML de CT-e/NF-e, compensação de saldo com o texto para o CT-e, fechar na volta pelo odômetro), entregas e comprovantes, relatórios com Excel e PDF e ajustes de tarifas, regras, rotas e acertos. Todo o histórico foi importado e o saldo confere com o app anterior.",
+      "KM Btech dentro do CotaFlow: o controle de quilometragem do contrato dedicado Btech (antes um app separado) com painel de saldo por placa e produtividade mínima, viagens (abrir no carregamento lendo os XML de CT-e/NF-e, compensação de saldo com o texto para o CT-e, fechar na volta pelo odômetro), entregas e comprovantes, relatórios com Excel e PDF e ajustes de tarifas, regras, rotas e acertos. Todo o histórico foi importado e o saldo confere com o app anterior.",
       "Portal do cliente: a Btech passa a consultar o controle de km na aba Controle de km, sem os dados internos da Transbochnia.",
       "CIOT dos agregados: cadastro de agregados, dados do veículo e do motorista para o CIOT, e tela Programação > CIOT com as cargas de agregado, ficha pronta para o e-Frete (com botão de copiar em cada campo), checagem do piso ANTT e registro do número do CIOT.",
       "Cotação: campo de carga e descarga logo após o frete (entra na base do ICMS e no piso ANTT) e cotação por tonelada com a lotação mínima na tela e no PDF.",

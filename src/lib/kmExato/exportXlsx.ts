@@ -15,9 +15,9 @@ export async function buildReportXlsx(E: KmEngine, D: ReportData): Promise<Blob>
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   wb.creator = "Transbochnia Transportes";
-  wb.title = "KM Exato · Btech × Transbochnia";
+  wb.title = "KM Btech · Btech × Transbochnia";
   const lb = filterLabel(D.f);
-  const sub = `KM Exato · Btech × Transbochnia · ${lb.per} · ${lb.pl} · ${lb.st}${lb.q ? " · " + lb.q : ""}`;
+  const sub = `KM Btech · Btech × Transbochnia · ${lb.per} · ${lb.pl} · ${lb.st}${lb.q ? " · " + lb.q : ""}`;
 
   function table(name: string, title: string, head: [string, Kind][], rows: (string | number | Date | null)[][], widths: number[]) {
     const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 4, showGridLines: false }], pageSetup: { orientation: "landscape", paperSize: 9, fitToWidth: 1, fitToHeight: 0 } });
@@ -55,7 +55,7 @@ export async function buildReportXlsx(E: KmEngine, D: ReportData): Promise<Blob>
   res.getColumn(3).width = 60;
   res.getCell("A1").value = "Controle de quilometragem";
   res.getCell("A1").font = { bold: true, size: 14 };
-  res.getCell("A2").value = "KM Exato · Btech × Transbochnia · contrato, cl. 6.4";
+  res.getCell("A2").value = "KM Btech · Btech × Transbochnia · contrato, cl. 6.4";
   res.getCell("A2").font = { size: 9, color: { argb: "FF5B6B8C" } };
   const K = D.K;
   const c = D.cps;

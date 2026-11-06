@@ -57,7 +57,7 @@ export const NAV: NavEntry[] = [
     // Controle de km do contrato dedicado Btech (antigo app avulso "KM Exato").
     // Item único: as abas (Painel, Viagens, Entregas...) ficam dentro da tela.
     key: "kmexato",
-    label: "KM Exato",
+    label: "KM Btech",
     href: "/km-exato",
     icon: "M3 17a9 9 0 0118 0M12 17l4-6M5 17h2M17 17h2M12 8V6",
     scheduleOnly: true,
