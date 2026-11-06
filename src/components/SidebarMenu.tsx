@@ -25,6 +25,8 @@ interface NavEntry {
   items?: NavLeaf[];
   /** Só para admin e o perfil Abastecimento. */
   fuelOnly?: boolean;
+  /** Só para admin e logística (quem edita a programação). */
+  scheduleOnly?: boolean;
 }
 
 export const NAV: NavEntry[] = [
@@ -53,16 +55,12 @@ export const NAV: NavEntry[] = [
   },
   {
     // Controle de km do contrato dedicado Btech (antigo app avulso "KM Exato").
+    // Item único: as abas (Painel, Viagens, Entregas...) ficam dentro da tela.
     key: "kmexato",
     label: "KM Exato",
+    href: "/km-exato",
     icon: "M3 17a9 9 0 0118 0M12 17l4-6M5 17h2M17 17h2M12 8V6",
-    items: [
-      { href: "/km-exato", label: "Painel", scheduleOnly: true },
-      { href: "/km-exato/viagens", label: "Viagens", scheduleOnly: true },
-      { href: "/km-exato/entregas", label: "Entregas", scheduleOnly: true },
-      { href: "/km-exato/relatorios", label: "Relatórios", scheduleOnly: true },
-      { href: "/km-exato/ajustes", label: "Ajustes", adminOnly: true },
-    ],
+    scheduleOnly: true,
   },
   {
     key: "manutencao",
@@ -237,7 +235,11 @@ export function SidebarMenu({
               ? NAV.filter((e) => e.key === "inicio" || e.key === "manutencao")
               : role === "abastecimento"
                 ? NAV.filter((e) => ["inicio", "programacao", "abastecimento"].includes(e.key))
-                : NAV.filter((e) => !e.fuelOnly || role === "admin")
+                : NAV.filter(
+                    (e) =>
+                      (!e.fuelOnly || role === "admin") &&
+                      (!e.scheduleOnly || role === "admin" || role === "logistica")
+                  )
             ).map((entry) => {
               if (entry.href) {
                 return (

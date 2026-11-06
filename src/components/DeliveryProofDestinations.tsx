@@ -112,21 +112,32 @@ export function DeliveryProofDestinations({
   );
 }
 
-function ProofModal({
+/**
+ * Janela do comprovante de um destino da carga: dados, fotos, baixar, enviar
+ * por e-mail (Gmail do CotaFlow) e, para quem edita a programação, apagar o
+ * comprovante ou uma foto a mais. Usada na Programação, em Comprovantes e no
+ * KM Exato.
+ */
+export function ProofModal({
   scheduleId,
   destination,
   canDelete,
   onClose,
   onChanged,
+  onEmailed,
 }: {
   scheduleId: string;
   destination: string;
   canDelete: boolean;
   onClose: () => void;
   onChanged: () => void;
+  /** Chamado depois de um envio por e-mail bem-sucedido. */
+  onEmailed?: () => void;
 }) {
   const [proof, setProof] = useState<ProofDetail | null | undefined>(undefined);
-  const [photos, setPhotos] = useState<string[]>([]);
+  // Foto (caminho no armazenamento) + link de 1 h para mostrar na tela.
+  const [photos, setPhotos] = useState<{ path: string; url: string }[]>([]);
+  const [removingPhoto, setRemovingPhoto] = useState<string | null>(null);
   // Links de 7 dias para o e-mail (os de 1 h acima são só para a tela).
   const [mailLinks, setMailLinks] = useState<string[]>([]);
   const [mailNote, setMailNote] = useState<string | null>(null);
@@ -157,7 +168,7 @@ function ProofModal({
       setProof(p);
       if (p) {
         const urls = await Promise.all(p.photos.map((x) => photoUrl(x)));
-        if (!cancelled) setPhotos(urls.filter((u): u is string => Boolean(u)));
+        if (!cancelled) setPhotos(p.photos.map((path, i) => ({ path, url: urls[i] ?? "" })).filter((x) => x.url));
         const long = await Promise.all(p.photos.map((x) => photoUrl(x, 7 * 24 * 3600)));
         if (!cancelled) setMailLinks(long.filter((u): u is string => Boolean(u)));
       }
@@ -203,6 +214,31 @@ function ProofModal({
     }
     onChanged();
     onClose();
+  }
+
+  // Apaga uma foto a mais (o comprovante nunca fica sem foto).
+  async function removePhoto(path: string) {
+    if (!proof) return;
+    if (!(await askConfirm("Apagar esta foto do comprovante? As outras fotos continuam.", { confirmLabel: "Apagar foto" }))) return;
+    setRemovingPhoto(path);
+    const r = await fetch(`/api/comprovantes/${proof.id}/fotos`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const res = await r.json().catch(() => ({}));
+    setRemovingPhoto(null);
+    if (!r.ok) {
+      setError(res.error ?? `Erro ${r.status}`);
+      return;
+    }
+    const left = (res.photos as string[]) ?? proof.photos.filter((x) => x !== path);
+    setProof({ ...proof, photos: left });
+    setPhotos((cur) => cur.filter((x) => x.path !== path));
+    setMailLinks([]);
+    const long = await Promise.all(left.map((x) => photoUrl(x, 7 * 24 * 3600)));
+    setMailLinks(long.filter((u): u is string => Boolean(u)));
+    onChanged();
   }
 
   // Baixa as fotos do canhoto/ticket (uma por vez, com nome de arquivo identificável).
@@ -277,6 +313,7 @@ function ProofModal({
     }
     setCompose(null);
     setLastSent({ sent_at: res.sent_at, to_addresses: res.to, sent_by_name: null });
+    onEmailed?.();
     setMailNote(`E-mail enviado para ${res.to.join(", ")} (cópia: ${res.cc.join(", ") || "—"}), com ${res.attachments} ${res.attachments === 1 ? "foto anexada" : "fotos anexadas"}.`);
   }
 
@@ -349,15 +386,27 @@ function ProofModal({
               Fotos (canhoto e ticket)
             </span>
             <div className="mt-1.5 grid grid-cols-2 gap-2">
-              {photos.map((url) => (
-                <a key={url} href={url} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt="Foto do comprovante"
-                    className="h-44 w-full rounded-lg border border-navy-200 object-cover"
-                  />
-                </a>
+              {photos.map(({ path, url }, i) => (
+                <div key={path} className="flex flex-col gap-1">
+                  <a href={url} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={`Foto ${i + 1} do comprovante`}
+                      className="h-44 w-full rounded-lg border border-navy-200 object-cover"
+                    />
+                  </a>
+                  {canDelete && photos.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(path)}
+                      disabled={removingPhoto !== null}
+                      className={buttonClasses("danger", "sm")}
+                    >
+                      {removingPhoto === path ? "Apagando..." : "Apagar foto"}
+                    </button>
+                  )}
+                </div>
               ))}
               {photos.length === 0 && (
                 <p className="col-span-2 text-sm text-navy-500">Carregando fotos...</p>

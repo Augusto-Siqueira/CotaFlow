@@ -110,3 +110,19 @@ export function buildProofEmail(proof: ProofMailData, photoLinks: string[], to: 
     (to.length > 0 ? `&to=${encodeURIComponent(to.join(","))}` : "");
   return { subject, html, text, composeUrl };
 }
+
+/**
+ * Pasta da empresa no armazenamento das cópias do portal do cliente
+ * (client-proofs): "BTECH - S J DOS PINHAIS" -> "btech-s-j-dos-pinhais".
+ * As cópias ficam em <pasta>/<id do comprovante>/<n>.jpg (n = posição da foto).
+ */
+export function clientProofFolder(clientName: string): string {
+  return (
+    clientName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "cliente"
+  );
+}

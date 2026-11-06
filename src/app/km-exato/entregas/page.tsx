@@ -11,6 +11,7 @@ import { useFeedback } from "@/components/Feedback";
 import { DataTable, type Column } from "@/components/DataTable";
 import { KmPage, Panel, Pill, Plate } from "@/components/km/KmUi";
 import { TripDialogs, type TripDialog } from "@/components/km/KmTripModals";
+import { ProofModal } from "@/components/DeliveryProofDestinations";
 
 // KM Exato · Entregas: data de cada entrega e envio do comprovante (prazo em Ajustes).
 
@@ -31,6 +32,7 @@ export default function KmEntregasPage() {
   const [dates, setDates] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<TripDialog>(null);
+  const [proofOpen, setProofOpen] = useState<{ scheduleId: string; destination: string } | null>(null);
 
   const C = useMemo(() => (E ? E.comps() : []), [E]);
   const d60 = addDays(todayISO(), -60);
@@ -94,7 +96,7 @@ export default function KmEntregasPage() {
       mobile: "field",
       cell: (c) => {
         if (!c.e.entregue) return <Pill tone="mute">em trânsito</Pill>;
-        if (c.e.comp?.env) return <span className="inline-flex flex-wrap items-center gap-1.5"><Pill tone="ok">enviado</Pill>{!c.e.comp.antes && c.e.comp.em && <span className="text-xs text-navy-500">{dBR(c.e.comp.em)}</span>}</span>;
+        if (c.e.comp?.env) return <span className="inline-flex flex-wrap items-center gap-1.5"><Pill tone="ok">{c.e.comp.auto ? "enviado por e-mail" : "enviado"}</Pill>{!c.e.comp.antes && c.e.comp.em && <span className="text-xs text-navy-500">{dBR(c.e.comp.em)}</span>}</span>;
         const late = daysBetween(addDays(c.e.entregue, prazo), todayISO());
         return c.st === "atrasado" ? <Pill tone="risk">{late} dia{late > 1 ? "s" : ""} de atraso</Pill> : <Pill tone="ok">no prazo</Pill>;
       },
@@ -105,6 +107,32 @@ export default function KmEntregasPage() {
       mobile: "actions",
       cell: (c) => {
         const key = c.e.id;
+        const proofBtn = c.e.proof ? (
+          <button
+            type="button"
+            className={buttonClasses(c.e.comp?.env ? "soft" : "primary", "sm")}
+            onClick={() => setProofOpen({ scheduleId: c.e.proof!.scheduleId, destination: c.e.proof!.destination })}
+            title="Comprovante lançado pelo motorista no app (NF/CT-e iguais aos desta entrega)"
+          >
+            {c.e.comp?.env ? "Ver comprovante" : "Ver e enviar"}
+          </button>
+        ) : null;
+        if (proofBtn && (c.e.comp?.env || c.e.comp?.auto)) return proofBtn;
+        if (proofBtn && c.e.entregue)
+          return (
+            <span className="inline-flex items-center gap-2">
+              {proofBtn}
+              <button
+                type="button"
+                disabled={busy === key}
+                className={buttonClasses("secondary", "sm")}
+                title="Marca como enviado sem usar o e-mail do CotaFlow"
+                onClick={() => run(key, () => updateDelivery(key, c.vid, { proof_sent: true, proof_sent_at: new Date().toISOString() }, `Comprovante enviado: ${c.e.cliente}`, km$.userName), "Comprovante marcado como enviado.")}
+              >
+                Enviado
+              </button>
+            </span>
+          );
         if (!c.e.entregue)
           return (
             <span className="inline-flex items-center gap-2">
@@ -134,7 +162,7 @@ export default function KmEntregasPage() {
             </span>
           );
         if (c.e.comp?.env)
-          return km$.isAdmin && !c.e.comp.antes ? (
+          return km$.isAdmin && !c.e.comp.antes && !c.e.comp.auto ? (
             <button
               type="button"
               disabled={busy === key}
@@ -166,7 +194,7 @@ export default function KmEntregasPage() {
   return (
     <KmPage
       title="Entregas"
-      subtitle={`Data de cada entrega e envio do comprovante. Prazo de ${prazo} dia${prazo > 1 ? "s" : ""} após a entrega.`}
+      subtitle={`Data de cada entrega e envio do comprovante (prazo de ${prazo} dia${prazo > 1 ? "s" : ""}). Comprovantes do app do motorista com a mesma NF ou CT-e entram sozinhos.`}
       active="/km-exato/entregas"
       isAdmin={km$.isAdmin}
       canView={km$.canView}
@@ -187,6 +215,16 @@ export default function KmEntregasPage() {
         {cf === "enviado" && <p className="mt-3 text-xs text-navy-500">Concluídas dos últimos 60 dias.</p>}
       </Panel>
       {common && <TripDialogs {...common} dialog={dialog} setDialog={setDialog} />}
+      {proofOpen && (
+        <ProofModal
+          scheduleId={proofOpen.scheduleId}
+          destination={proofOpen.destination}
+          canDelete
+          onClose={() => setProofOpen(null)}
+          onChanged={km$.reload}
+          onEmailed={km$.reload}
+        />
+      )}
     </KmPage>
   );
 }

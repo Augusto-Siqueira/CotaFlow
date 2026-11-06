@@ -33,7 +33,11 @@ export interface KmDelivery {
   peso: number | null;
   freteCte: number | null;
   entregue: string | null;
-  comp: { env: boolean; em?: string | null; por?: string | null; antes?: boolean; arq?: string | null };
+  comp: { env: boolean; em?: string | null; por?: string | null; antes?: boolean; arq?: string | null; auto?: boolean };
+  /** Comprovante do app do motorista ligado por NF/CT-e (ver proofs.ts). */
+  proof?: { id: string; scheduleId: string; destination: string; at: string; photos: number; emailedAt: string | null };
+  /** Entregue preenchido pela data do comprovante (não lançado à mão). */
+  entregueAuto?: boolean;
 }
 export interface KmTripDoc {
   placa: string;

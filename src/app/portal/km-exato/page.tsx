@@ -19,6 +19,20 @@ import { KmReport } from "@/components/km/KmReport";
 
 type View = "painel" | "viagens" | "entregas" | "relatorios";
 
+/** Links das fotos do comprovante do motorista (rota do portal confere a empresa). */
+function ProofLinks({ e }: { e: KmTrip["entregas"][number] }) {
+  if (!e.proof || !e.proof.photos) return <span className="text-xs text-navy-400">—</span>;
+  return (
+    <span className="inline-flex flex-wrap gap-2">
+      {Array.from({ length: e.proof.photos }, (_, i) => (
+        <a key={i} href={`/api/portal/foto?proof=${e.proof!.id}&n=${i}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand-700 hover:underline">
+          {e.proof!.photos > 1 ? `Foto ${i + 1}` : "Ver foto"}
+        </a>
+      ))}
+    </span>
+  );
+}
+
 function TripModal({ t, E, onClose }: { t: KmTrip; E: KmEngine; onClose: () => void }) {
   const es = t.entregas || [];
   const pes = es.reduce((a, e) => a + (+(e.peso ?? 0) || 0), 0);
@@ -85,7 +99,7 @@ function TripModal({ t, E, onClose }: { t: KmTrip; E: KmEngine; onClose: () => v
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs text-navy-500">
-                    <tr><th className="py-1 pr-3 font-medium">Cliente / destino</th><th className="py-1 pr-3 font-medium">NF</th><th className="py-1 pr-3 font-medium">CT-e</th><th className="py-1 pr-3 text-right font-medium">Peso</th><th className="py-1 font-medium">Situação</th></tr>
+                    <tr><th className="py-1 pr-3 font-medium">Cliente / destino</th><th className="py-1 pr-3 font-medium">NF</th><th className="py-1 pr-3 font-medium">CT-e</th><th className="py-1 pr-3 text-right font-medium">Peso</th><th className="py-1 pr-3 font-medium">Situação</th><th className="py-1 font-medium">Comprovante</th></tr>
                   </thead>
                   <tbody className="divide-y divide-navy-100">
                     {es.map((e) => (
@@ -94,7 +108,8 @@ function TripModal({ t, E, onClose }: { t: KmTrip; E: KmEngine; onClose: () => v
                         <td className="py-1.5 pr-3 font-mono">{e.nf || "—"}</td>
                         <td className="py-1.5 pr-3 font-mono">{e.cte || "—"}</td>
                         <td className="py-1.5 pr-3 text-right">{ton(+(e.peso ?? 0) || 0)}</td>
-                        <td className="py-1.5">{e.entregue ? <Pill tone="ok">entregue {dBR(e.entregue)}</Pill> : <Pill tone="mute">em trânsito</Pill>}</td>
+                        <td className="py-1.5 pr-3">{e.entregue ? <Pill tone="ok">entregue {dBR(e.entregue)}</Pill> : <Pill tone="mute">em trânsito</Pill>}</td>
+                        <td className="py-1.5"><ProofLinks e={e} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -187,6 +202,7 @@ export default function PortalKmPage() {
     { key: "ct", header: "CT-e", mobile: "field", cell: (c) => <span className="font-mono">{c.e.cte || "—"}</span> },
     { key: "w", header: "Peso", mobile: "field", className: "text-right", cell: (c) => ton(+(c.e.peso ?? 0) || 0) },
     { key: "s", header: "Situação", mobile: "field", cell: (c) => (c.e.entregue ? <Pill tone="ok">entregue</Pill> : <Pill tone="mute">em trânsito</Pill>) },
+    { key: "f", header: "Comprovante", mobile: "field", cell: (c) => <ProofLinks e={c.e} /> },
   ];
 
   const seg = (on: boolean) => `px-3 py-2 text-sm font-medium ${on ? "bg-brand-700 text-white" : "bg-white text-navy-600 hover:bg-navy-50"}`;

@@ -1,21 +1,11 @@
 import { requireRole, supabaseAdmin } from "@/lib/supabaseAdmin";
+import { clientProofFolder as folderOf } from "@/lib/deliveryProof";
 
 export const runtime = "nodejs";
 
 const SOURCE_BUCKET = "driver-photos";
 const CLIENT_BUCKET = "client-proofs";
 
-/** Pasta da empresa no armazenamento dos clientes: "BTECH - S J DOS PINHAIS" -> "btech-s-j-dos-pinhais". */
-function folderOf(clientName: string): string {
-  return (
-    clientName
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "cliente"
-  );
-}
 
 // Foto de um comprovante para o portal do cliente.
 //   /api/portal/foto?proof=<id>&n=<0..>          -> abre

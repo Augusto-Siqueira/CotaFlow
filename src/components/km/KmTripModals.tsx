@@ -9,6 +9,7 @@ import { MOTIVOS, brl, dBR, km, nf, parseNum, pct, sbrl, skm, ton } from "@/lib/
 import { createTrip, tripLog, updateTrip, type DeliveryInput } from "@/lib/kmExato/actions";
 import { parseXml } from "@/lib/kmExato/xml";
 import { Pill, Plate, Signed } from "./KmUi";
+import { ProofModal } from "@/components/DeliveryProofDestinations";
 
 // Janelas de viagem do KM Exato: detalhes, nova/editar, fechar na volta e
 // motivo do desvio. Mesmas regras e textos do app original.
@@ -73,6 +74,7 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
   const { toastError, confirm: askConfirm } = useFeedback();
   const t = E.trips().find((x) => x.id === id) ?? null;
   const [log, setLog] = useState<{ at: string; by_name: string | null; action: string }[]>([]);
+  const [proofOpen, setProofOpen] = useState<{ scheduleId: string; destination: string } | null>(null);
   useEffect(() => {
     if (!t || t.hist) return;
     tripLog(id).then(setLog).catch(() => setLog([]));
@@ -223,6 +225,7 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
                         <th className="py-1 pr-3 font-medium">CT-e</th>
                         <th className="py-1 pr-3 text-right font-medium">Peso</th>
                         <th className="py-1 font-medium">Situação</th>
+                        <th className="py-1 font-medium">Comprovante</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-navy-100">
@@ -238,11 +241,21 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
                               {!e.entregue ? (
                                 <Pill tone="mute">em trânsito</Pill>
                               ) : st === "enviado" ? (
-                                <Pill tone="ok">{e.comp.antes ? "controle anterior" : "comprovante enviado " + dBR(e.comp.em ?? null)}</Pill>
+                                <Pill tone="ok">{e.comp.antes ? "controle anterior" : (e.comp.auto ? "enviado por e-mail " : "comprovante enviado ") + dBR(e.comp.em ?? null)}</Pill>
                               ) : st === "atrasado" ? (
                                 <Pill tone="risk">comprovante atrasado</Pill>
                               ) : (
                                 <Pill tone="ok">comprovante no prazo</Pill>
+                              )}
+                              {e.entregueAuto && <span className="mt-0.5 block text-[11px] text-navy-500">entregue {dBR(e.entregue)} pelo comprovante</span>}
+                            </td>
+                            <td className="py-1.5">
+                              {e.proof ? (
+                                <button type="button" className={buttonClasses("soft", "sm")} onClick={() => setProofOpen({ scheduleId: e.proof!.scheduleId, destination: e.proof!.destination })}>
+                                  Ver comprovante
+                                </button>
+                              ) : (
+                                <span className="text-xs text-navy-400">—</span>
                               )}
                             </td>
                           </tr>
@@ -288,6 +301,16 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
           <button type="button" className={buttonClasses("secondary", "md")} onClick={onClose}>Voltar</button>
         </div>
       </div>
+      {proofOpen && (
+        <ProofModal
+          scheduleId={proofOpen.scheduleId}
+          destination={proofOpen.destination}
+          canDelete
+          onClose={() => setProofOpen(null)}
+          onChanged={c.onChanged}
+          onEmailed={c.onChanged}
+        />
+      )}
     </Modal>
   );
 }

@@ -2,6 +2,7 @@ import { requireRole, supabaseAdmin } from "@/lib/supabaseAdmin";
 import { KmEngine } from "@/lib/kmExato/engine";
 import { loadKmState } from "@/lib/kmExato/load";
 import { isBtechClient, sanitizeForPortal } from "@/lib/kmExato/portal";
+import { attachProofs, loadKmProofs } from "@/lib/kmExato/proofs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
 
   try {
     const { state } = await loadKmState(admin);
+    attachProofs(state, await loadKmProofs(admin).catch(() => []));
     const payload = sanitizeForPortal(new KmEngine(state));
     return Response.json(payload, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
