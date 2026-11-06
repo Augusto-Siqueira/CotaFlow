@@ -215,7 +215,7 @@ export function KmReport({ E, isAdmin, userName, reload, open }: { E: KmEngine; 
   }
 
   const segBtn = (on: boolean) => `px-3 py-1.5 text-sm font-medium ${on ? "bg-brand-700 text-white" : "bg-white text-navy-600 hover:bg-navy-50"}`;
-  const chip = (on: boolean) => `rounded-full border px-3 py-1 font-mono text-xs font-semibold ${on ? "border-navy-900 bg-navy-900 text-white" : "border-navy-300 bg-white text-navy-700 hover:bg-navy-50"}`;
+  const chip = (on: boolean) => `rounded-full border px-3 py-1 font-mono text-xs font-semibold ${on ? "border-brand-600 bg-brand-50 text-brand-800" : "border-navy-300 bg-white text-navy-700 hover:bg-navy-50"}`;
 
   return (
     <div className="flex flex-col gap-6">

@@ -667,12 +667,12 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
           <h3 className="text-sm font-semibold text-navy-900">4 · Quilometragem</h3>
           {modo !== "spot" && (
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => pickRoute(null)} className={`max-w-64 rounded-lg border px-3 py-1.5 text-left ${modo === "dedicado" ? "border-navy-900 bg-navy-900 text-white" : "border-navy-300 hover:bg-navy-50"}`}>
+              <button type="button" onClick={() => pickRoute(null)} className={`max-w-64 rounded-lg border px-3 py-1.5 text-left ${modo === "dedicado" ? "border-brand-600 bg-brand-50 text-brand-800" : "border-navy-300 hover:bg-navy-50"}`}>
                 <b className="block text-sm">Rota livre</b>
                 <small className="text-xs opacity-75">km estimado, com controle de saldo</small>
               </button>
               {E.S.cfg.rotas.map((r, i) => (
-                <button key={i} type="button" onClick={() => pickRoute(i)} className={`max-w-64 rounded-lg border px-3 py-1.5 text-left ${modo === "rota" && rotaNome === r.nome ? "border-navy-900 bg-navy-900 text-white" : "border-navy-300 hover:bg-navy-50"}`}>
+                <button key={i} type="button" onClick={() => pickRoute(i)} className={`max-w-64 rounded-lg border px-3 py-1.5 text-left ${modo === "rota" && rotaNome === r.nome ? "border-brand-600 bg-brand-50 text-brand-800" : "border-navy-300 hover:bg-navy-50"}`}>
                   <b className="block text-sm">{km(r.km)} km</b>
                   <small className="text-xs opacity-75">{r.nome}</small>
                 </button>
