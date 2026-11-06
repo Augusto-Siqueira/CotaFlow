@@ -64,7 +64,7 @@ export function sanitizeForPortal(E: KmEngine): PortalPayload {
         peso: e.peso,
         freteCte: null,
         entregue: e.entregue,
-        comp: { env: Boolean(e.comp?.env) },
+        comp: { env: Boolean(e.comp?.env), em: e.comp?.env ? e.comp?.em ?? null : null },
         // Só o necessário para abrir as fotos pela rota /api/portal/foto.
         ...(e.proof ? { proof: { id: e.proof.id, scheduleId: "", destination: "", at: e.proof.at, photos: e.proof.photos, emailedAt: null } } : {}),
       })),

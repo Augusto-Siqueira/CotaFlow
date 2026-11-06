@@ -44,7 +44,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const to = await clientProofEmails(admin, clientName);
   const { data: last } = await admin
     .from("delivery_proof_emails")
-    .select("sent_at, to_addresses")
+    .select("sent_at, to_addresses, manual")
     .eq("proof_id", id)
     .order("sent_at", { ascending: false })
     .limit(1)
@@ -64,6 +64,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await requireRole([...STAFF, "cliente"], "Seu perfil não envia comprovantes.");
   if (!auth.ok) return auth.response;
   const isPortal = auth.user.app_metadata?.role === "cliente";
+  const { id } = await params;
+  const body = (await request.json().catch(() => null)) as { to?: unknown; subject?: unknown; text?: unknown; manual?: unknown } | null;
+
+  // Equipe: registrar que o comprovante já foi enviado por fora do CotaFlow
+  // (Outlook etc.), para aparecer como enviado no portal e no KM Btech.
+  if (body?.manual === true) {
+    if (isPortal) return Response.json({ error: "Seu perfil não pode fazer isso." }, { status: 403 });
+    const admin = supabaseAdmin();
+    const { data: proof } = await admin.from("delivery_proofs").select("id, schedule_id").eq("id", id).maybeSingle();
+    if (!proof) return Response.json({ error: "Comprovante não encontrado." }, { status: 404 });
+    const { data: already } = await admin.from("delivery_proof_emails").select("id").eq("proof_id", id).limit(1);
+    if (already?.length) return Response.json({ error: "Este comprovante já consta como enviado." }, { status: 409 });
+    const who = (auth.user.user_metadata?.name as string | undefined) ?? auth.user.email ?? null;
+    const { data: row, error } = await admin
+      .from("delivery_proof_emails")
+      .insert({ proof_id: id, schedule_id: proof.schedule_id, sent_by: auth.user.id, sent_by_name: who, to_addresses: [], cc_addresses: [], subject: "Enviado por fora do CotaFlow (marcado pela equipe)", attachments: 0, manual: true })
+      .select("sent_at")
+      .single();
+    if (error) return Response.json({ error: "Não foi possível marcar." }, { status: 500 });
+    return Response.json({ ok: true, manual: true, sent_at: row.sent_at });
+  }
 
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
@@ -73,9 +94,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 503 }
     );
   }
-
-  const { id } = await params;
-  const body = (await request.json().catch(() => null)) as { to?: unknown; subject?: unknown; text?: unknown } | null;
 
   const admin = supabaseAdmin();
   const { data: proof } = await admin
@@ -172,4 +190,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .single();
 
   return Response.json({ ok: true, sent_at: row?.sent_at ?? new Date().toISOString(), to, cc, attachments: attachments.length });
+}
+
+/** Equipe (admin e logística): desfaz a marcação manual de "enviado por fora". */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireRole(["admin", "logistica"], "Seu perfil não pode fazer isso.");
+  if (!auth.ok) return auth.response;
+  const { id } = await params;
+  const { error } = await supabaseAdmin().from("delivery_proof_emails").delete().eq("proof_id", id).eq("manual", true);
+  if (error) return Response.json({ error: "Não foi possível desfazer." }, { status: 500 });
+  return Response.json({ ok: true });
 }

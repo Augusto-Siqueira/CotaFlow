@@ -147,7 +147,9 @@ export function ProofModal({
   const [compose, setCompose] = useState<{ to: string; subject: string; text: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [composeError, setComposeError] = useState<{ text: string; notConfigured?: boolean } | null>(null);
-  const [lastSent, setLastSent] = useState<{ sent_at: string; to_addresses: string[]; sent_by_name: string | null } | null>(null);
+  // undefined = ainda carregando; null = sem envio registrado.
+  const [lastSent, setLastSent] = useState<{ sent_at: string; to_addresses: string[]; sent_by_name: string | null; manual?: boolean } | null | undefined>(undefined);
+  const [marking, setMarking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -271,7 +273,7 @@ export function ProofModal({
     let cancelled = false;
     supabase
       .from("delivery_proof_emails")
-      .select("sent_at, to_addresses, sent_by_name")
+      .select("sent_at, to_addresses, sent_by_name, manual")
       .eq("proof_id", proof.id)
       .order("sent_at", { ascending: false })
       .limit(1)
@@ -315,6 +317,35 @@ export function ProofModal({
     setLastSent({ sent_at: res.sent_at, to_addresses: res.to, sent_by_name: null });
     onEmailed?.();
     setMailNote(`E-mail enviado para ${res.to.join(", ")} (cópia: ${res.cc.join(", ") || "—"}), com ${res.attachments} ${res.attachments === 1 ? "foto anexada" : "fotos anexadas"}.`);
+  }
+
+  // Registro de envio feito por fora do CotaFlow (Outlook etc.), e o desfazer.
+  async function markSent(undo = false) {
+    if (!proof) return;
+    if (
+      !(await askConfirm(
+        undo
+          ? "Desfazer a marcação de enviado? O comprovante volta a aparecer como não enviado."
+          : "Marcar este comprovante como já enviado por e-mail (fora do CotaFlow)? Ele passa a aparecer como enviado para o cliente.",
+        { confirmLabel: undo ? "Desfazer" : "Marcar como enviado", title: undo ? "Desfazer marcação" : "Marcar como enviado" }
+      ))
+    )
+      return;
+    setMarking(true);
+    const r = await fetch(`/api/comprovantes/${proof.id}/email`, {
+      method: undo ? "DELETE" : "POST",
+      headers: { "content-type": "application/json" },
+      body: undo ? undefined : JSON.stringify({ manual: true }),
+    });
+    const res = await r.json().catch(() => ({}));
+    setMarking(false);
+    if (!r.ok) {
+      setError(res.error ?? `Erro ${r.status}`);
+      return;
+    }
+    setLastSent(undo ? null : { sent_at: res.sent_at, to_addresses: [], sent_by_name: null, manual: true });
+    onEmailed?.();
+    onChanged();
   }
 
   async function sendByEmail() {
@@ -416,9 +447,31 @@ export function ProofModal({
         </>
       )}
       {lastSent && !compose && (
-        <p className="mt-3 text-xs text-navy-500">
-          ✉ Último envio pelo CotaFlow: {new Date(lastSent.sent_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-          {lastSent.sent_by_name ? ` por ${lastSent.sent_by_name}` : ""} para {lastSent.to_addresses.join(", ")}.
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-navy-500">
+          {lastSent.manual ? (
+            <span>
+              ✉ Marcado como enviado por fora do CotaFlow em {new Date(lastSent.sent_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              {lastSent.sent_by_name ? ` por ${lastSent.sent_by_name}` : ""}.
+            </span>
+          ) : (
+            <span>
+              ✉ Último envio pelo CotaFlow: {new Date(lastSent.sent_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              {lastSent.sent_by_name ? ` por ${lastSent.sent_by_name}` : ""} para {lastSent.to_addresses.join(", ")}.
+            </span>
+          )}
+          {lastSent.manual && canDelete && (
+            <button type="button" onClick={() => markSent(true)} disabled={marking} className={buttonClasses("secondary", "sm")}>
+              Desfazer marcação
+            </button>
+          )}
+        </p>
+      )}
+      {proof && lastSent === null && !compose && (
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-navy-500">
+          Ainda não consta envio por e-mail.
+          <button type="button" onClick={() => markSent(false)} disabled={marking} className={buttonClasses("secondary", "sm")} title="Use quando o comprovante já foi enviado por fora do CotaFlow (Outlook)">
+            {marking ? "Marcando..." : "Marcar como enviado"}
+          </button>
         </p>
       )}
       {compose && (

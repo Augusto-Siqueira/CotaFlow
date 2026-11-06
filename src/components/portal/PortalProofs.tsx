@@ -27,6 +27,8 @@ interface PortalProof {
   notes: string | null;
   created_at: string;
   photo_count: number;
+  /** Primeiro envio por e-mail (pelo CotaFlow ou marcado pela equipe). */
+  emailed_at?: string | null;
 }
 
 interface PortalLoad {
@@ -155,7 +157,7 @@ export function PortalProofs({ embedded = false }: { embedded?: boolean }) {
       {!embedded && <h1 className="text-2xl font-semibold tracking-tight text-navy-900">Comprovantes de entrega</h1>}
       <p className="mt-1 text-sm text-navy-500">
         Cargas em viagem e entregues{companies.length > 0 ? ` de ${companies.join(", ")}` : ""}. Clique na entrega para ver o
-        comprovante e baixar as fotos.
+        comprovante e baixar as fotos. ✉ = comprovante já enviado por e-mail.
       </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -284,6 +286,11 @@ export function PortalProofs({ embedded = false }: { embedded?: boolean }) {
                             <span key={p.id} className="block whitespace-nowrap">
                               NF {p.invoice_number}
                               {p.cte_number ? ` · CTE ${p.cte_number}` : ""}
+                              {p.emailed_at ? (
+                                <span className="ml-1 font-medium text-teal-700">· ✉ enviado {fmtDate(p.emailed_at.slice(0, 10))}</span>
+                              ) : (
+                                <span className="ml-1 text-navy-400">· não enviado</span>
+                              )}
                             </span>
                           ))
                         )}
@@ -292,12 +299,13 @@ export function PortalProofs({ embedded = false }: { embedded?: boolean }) {
                         <div className="flex flex-wrap gap-1.5">
                           {r.dests.map((d) => {
                             const has = r.sent.includes(d);
+                            const mailed = Boolean(r.proofs.find((p) => p.destination === d)?.emailed_at);
                             return (
                               <button
                                 key={d}
                                 type="button"
                                 onClick={() => setOpen({ load: r, destination: d })}
-                                title={has ? "Ver comprovante" : "Comprovante ainda não enviado"}
+                                title={has ? (mailed ? "Ver comprovante (já enviado por e-mail)" : "Ver comprovante") : "Comprovante ainda não enviado"}
                                 className={`rounded-md border px-2 py-0.5 text-xs font-medium ${
                                   has
                                     ? "border-transparent bg-teal-200 text-teal-900 hover:brightness-110"
@@ -306,6 +314,7 @@ export function PortalProofs({ embedded = false }: { embedded?: boolean }) {
                               >
                                 {has ? "✓ " : ""}
                                 {d || "Entrega"}
+                                {mailed ? " ✉" : ""}
                               </button>
                             );
                           })}
@@ -347,6 +356,11 @@ function ProofDetail({ load, destination, onClose }: { load: PortalLoad; destina
       <h2 id="portal-proof-title" className="text-base font-medium">
         Comprovante de entrega · {destination || "Entrega"}
       </h2>
+      {proof?.emailed_at && (
+        <p className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-sm font-medium text-teal-900">
+          ✉ Já enviado por e-mail em {new Date(proof.emailed_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.
+        </p>
+      )}
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         <Field label="Empresa" value={load.client_name} />
         <Field label="Data da carga" value={fmtDate(load.schedule_date)} />

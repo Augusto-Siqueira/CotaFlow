@@ -20,6 +20,17 @@ import { KmReport } from "@/components/km/KmReport";
 
 type View = "painel" | "viagens" | "entregas" | "comprovantes" | "relatorios";
 
+/** Situação da entrega para o cliente, com o aviso de comprovante já enviado por e-mail. */
+function EntregaSituacao({ e }: { e: KmTrip["entregas"][number] }) {
+  if (!e.entregue) return <Pill tone="mute">em trânsito</Pill>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <Pill tone="ok">entregue {dBR(e.entregue)}</Pill>
+      {e.comp?.env && <Pill tone="info">✉ enviado{e.comp.em ? " " + dBR(e.comp.em) : ""}</Pill>}
+    </span>
+  );
+}
+
 /** Links das fotos do comprovante do motorista (rota do portal confere a empresa). */
 function ProofLinks({ e }: { e: KmTrip["entregas"][number] }) {
   if (!e.proof || !e.proof.photos) return <span className="text-xs text-navy-400">—</span>;
@@ -110,7 +121,7 @@ function TripModal({ t, E, onClose }: { t: KmTrip; E: KmEngine; onClose: () => v
                         <td className="py-1.5 pr-3 font-mono">{e.nf || "—"}</td>
                         <td className="py-1.5 pr-3 font-mono">{e.cte || "—"}</td>
                         <td className="py-1.5 pr-3 text-right">{ton(+(e.peso ?? 0) || 0)}</td>
-                        <td className="py-1.5 pr-3">{e.entregue ? <Pill tone="ok">entregue {dBR(e.entregue)}</Pill> : <Pill tone="mute">em trânsito</Pill>}</td>
+                        <td className="py-1.5 pr-3"><EntregaSituacao e={e} /></td>
                         <td className="py-1.5"><ProofLinks e={e} /></td>
                       </tr>
                     ))}
@@ -203,7 +214,7 @@ export default function PortalKmPage() {
     { key: "nf", header: "NF", mobile: "field", cell: (c) => <span className="font-mono">{c.e.nf || "—"}</span> },
     { key: "ct", header: "CT-e", mobile: "field", cell: (c) => <span className="font-mono">{c.e.cte || "—"}</span> },
     { key: "w", header: "Peso", mobile: "field", className: "text-right", cell: (c) => ton(+(c.e.peso ?? 0) || 0) },
-    { key: "s", header: "Situação", mobile: "field", cell: (c) => (c.e.entregue ? <Pill tone="ok">entregue</Pill> : <Pill tone="mute">em trânsito</Pill>) },
+    { key: "s", header: "Situação", mobile: "field", cell: (c) => <EntregaSituacao e={c.e} /> },
     { key: "f", header: "Comprovante", mobile: "field", cell: (c) => <ProofLinks e={c.e} /> },
   ];
 
