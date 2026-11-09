@@ -8,6 +8,7 @@ import { FLEET_CERT_COLUMNS, certAlerts, certText, normalizePlate, type FleetCer
 import { FleetCertAlert } from "@/components/FleetCertAlert";
 import { LoadingOrderModal } from "@/components/LoadingOrderModal";
 import { hasLoadingOrder, type OrderLine } from "@/lib/loadingOrder";
+import { isDriverReport } from "@/lib/maintenance";
 import { SearchSelect } from "@/components/SearchSelect";
 import {
   LOADING_STATUSES,
@@ -78,7 +79,32 @@ interface DefectInfo {
   severity: number;
   status: string;
   scheduled_for: string | null;
+  source: string;
+  description: string;
 }
+
+/** Texto curto do relato (o aviso da carga não pode virar um parágrafo). */
+const DRIVER_TAG = " Relato do motorista: ";
+
+/** Aviso da carga; o trecho do relato do motorista ganha o selo roxo (como na Manutenção). */
+function AlertLine({ text }: { text: string }) {
+  const i = text.indexOf(DRIVER_TAG);
+  if (i < 0) return <p>⚠ {text}</p>;
+  return (
+    <p>
+      ⚠ {text.slice(0, i)}{" "}
+      <span className="mx-0.5 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+        <span aria-hidden="true">🚚</span> Relato do motorista
+      </span>{" "}
+      {text.slice(i + DRIVER_TAG.length)}
+    </p>
+  );
+}
+
+const shortText = (t: string, max = 90) => {
+  const v = t.replace(/^\[Check-list\]\s*/i, "").replace(/\s+/g, " ").trim();
+  return v.length > max ? v.slice(0, max - 1).trimEnd() + "…" : v;
+};
 
 const SEVERITY_NAME: Record<number, string> = { 1: "pode rodar", 2: "atenção", 3: "parado" };
 
@@ -272,7 +298,7 @@ export default function ProgramacaoPage() {
 
     const { data: reps } = await supabase
       .from("maintenance_reports")
-      .select("plate, category, severity, status, scheduled_for")
+      .select("plate, category, severity, status, scheduled_for, source, description")
       .in("status", ["triagem", "agendada"]);
     const dmap = new Map<string, DefectInfo[]>();
     for (const r of (reps ?? []) as (DefectInfo & { plate: string })[]) {
@@ -289,9 +315,12 @@ export default function ProgramacaoPage() {
     );
     if (!plate || !list || list.length === 0) return null;
     const cats = Array.from(new Set(list.map((d) => d.category))).join(", ");
+    // Relato do motorista: mostra o que ele escreveu.
+    const driver = list.filter(isDriverReport).map((d) => `"${shortText(d.description)}"`);
+    const fromDriver = driver.length ? `${DRIVER_TAG}${driver.join("; ")}.` : "";
     return blocking
-      ? `Placa ${plate} (${label}) com defeito relatado (${cats}): veículo parado, aguardando a manutenção.`
-      : `Placa ${plate} (${label}) com defeito relatado (${cats}, ${SEVERITY_NAME[Math.min(...list.map((d) => d.severity))]}).`;
+      ? `Placa ${plate} (${label}) com defeito relatado (${cats}): veículo parado, aguardando a manutenção.${fromDriver}`
+      : `Placa ${plate} (${label}) com defeito relatado (${cats}, ${SEVERITY_NAME[Math.min(...list.map((d) => d.severity))]}).${fromDriver}`;
   }
 
   function defectAlerts(cavalo: string | null, carreta: string | null): string[] {
@@ -1136,13 +1165,21 @@ export default function ProgramacaoPage() {
               <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from(defects, ([plate, list]) => {
                   const worst = Math.max(...list.map((d) => d.severity));
+                  const driver = list.filter(isDriverReport);
                   return (
                     <li
                       key={`d-${plate}`}
-                      className={`rounded-lg border bg-white px-3 py-2 text-xs text-navy-700 ${
-                        worst === 3 ? "border-red-300" : "border-amber-300"
-                      }`}
+                      title={driver.length ? "Relatado pelo motorista" : undefined}
+                      className={`rounded-lg border px-3 py-2 text-xs text-navy-700 ${
+                        worst === 3 ? "border-red-300" : driver.length ? "border-violet-200" : "border-amber-300"
+                      } ${driver.length ? "border-l-4 border-l-violet-500 bg-violet-50" : "bg-white"}`}
                     >
+                      {driver.length > 0 && (
+                        <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                          <span aria-hidden="true">🚚</span>
+                          {driver.every((d) => d.source === "checklist") ? "Motorista · check-list diário" : "Relato do motorista"}
+                        </span>
+                      )}
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold tracking-wide text-navy-900">
                           {plate}
@@ -1160,6 +1197,11 @@ export default function ProgramacaoPage() {
                       <div className="mt-0.5 truncate">
                         Defeito: {Array.from(new Set(list.map((d) => d.category))).join(", ")}
                       </div>
+                      {driver.map((d, i) => (
+                        <div key={i} className="mt-0.5 line-clamp-2 text-navy-800">
+                          {d.description.replace(/^\[Check-list\]\s*/i, "")}
+                        </div>
+                      ))}
                       {list.some((d) => d.status === "agendada" && d.scheduled_for) && (
                         <div className="mt-0.5 font-medium text-amber-800">
                           Entrada na oficina agendada para{" "}
@@ -1698,14 +1740,14 @@ export default function ProgramacaoPage() {
                         className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-800"
                       >
                         {alerts.map((a) => (
-                          <p key={a}>⚠ {a}</p>
+                          <AlertLine key={a} text={a} />
                         ))}
                       </div>
                     )}
                     {softAlerts.length > 0 && (
                       <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900">
                         {softAlerts.map((a) => (
-                          <p key={a}>⚠ {a}</p>
+                          <AlertLine key={a} text={a} />
                         ))}
                       </div>
                     )}
