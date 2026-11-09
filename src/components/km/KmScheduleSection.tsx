@@ -80,8 +80,6 @@ export function schedError(f: SchedForm, opts: ScheduleOptions, editing: boolean
   }
   if (f.pendingDest.trim()) return `Destino digitado e não adicionado: "${f.pendingDest.trim()}". Clique em Adicionar entrega.`;
   if (splitDestinations(f.destination).length === 0) return "Informe ao menos um destino.";
-  const bad = splitDestinations(f.destination).find((d) => !cityOf(baseCity(d), opts.cities));
-  if (bad) return `Destino inválido: escolha cidades da lista (Cidade/UF). Corrija: ${bad}.`;
   return hasLoadingOrder(f.unit) ? orderLinesError(orderParsed(f.rows)) : null;
 }
 
@@ -248,9 +246,8 @@ export function KmScheduleSection({
           value={f.destination}
           onChange={setDestination}
           onDraftChange={onDraft}
-          placeholder="Ex: Ponta Grossa/PR"
+          placeholder="Ex: BRF - CONCORDIA"
           cities={opts.cities}
-          strict
         />
       </div>
       {order && (

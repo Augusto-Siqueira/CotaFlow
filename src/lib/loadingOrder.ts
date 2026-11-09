@@ -81,7 +81,12 @@ export function linesFromDestination(destination: string | null): OrderLine[] {
     .slice(0, ORDER_MAX_LINES);
   if (parts.length === 0) return [{ ...EMPTY_LINE }];
   return parts.map((raw) => {
-    const p = raw.replace(/\s*\(\d+\)\s*$/, ""); // tira o número da entrega repetida
+    // Tira o número da entrega repetida e, no destino livre ("BRF - CONCORDIA"), o cliente.
+    const p = raw
+      .replace(/\s*\(\d+\)\s*$/, "")
+      .split(/\s+-\s+/)
+      .pop()!
+      .trim();
     const m = p.match(/^(.*?)[\s]*\/[\s]*([A-Za-z]{2})$/);
     return { ...EMPTY_LINE, city: (m ? m[1] : p).toUpperCase(), uf: m ? m[2].toUpperCase() : "" };
   });

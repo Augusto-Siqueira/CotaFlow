@@ -30,6 +30,14 @@ export function nextDeliveryName(list: string[], city: string): string {
   return same === 0 ? city : `${city} (${same + 1})`;
 }
 
+/**
+ * Cargas da Btech: o destino é lançado livre, com o cliente que recebe e a
+ * cidade ("BRF - CONCORDIA"). As demais só aceitam cidades da lista.
+ */
+export function allowsFreeDestinations(clientName: string | null | undefined): boolean {
+  return /^\s*BTECH\b/i.test(clientName ?? "");
+}
+
 export function joinDestinations(list: string[]): string {
   return list.join(SEP);
 }

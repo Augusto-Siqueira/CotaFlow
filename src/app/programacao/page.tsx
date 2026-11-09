@@ -19,7 +19,7 @@ import { buttonClasses } from "@/components/Button";
 import { AddressField } from "@/components/AddressField";
 import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf, normalizeCityText } from "@/lib/cities";
-import { DestinationsInput, baseCity, splitDestinations } from "@/components/Destinations";
+import { DestinationsInput, allowsFreeDestinations, baseCity, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
 import { DayNotepad } from "@/components/DayNotepad";
 import { SyncIssuesAlert } from "@/components/SyncIssuesAlert";
@@ -711,9 +711,9 @@ export default function ProgramacaoPage() {
       return;
     }
     const badOrigin = form.origin.trim() && resolveCity(form.origin) === null;
-    const badDestinations = splitDestinations(form.destination).filter(
-      (d) => resolveCity(baseCity(d)) === null
-    );
+    const badDestinations = allowsFreeDestinations(form.client_name)
+      ? []
+      : splitDestinations(form.destination).filter((d) => resolveCity(baseCity(d)) === null);
     if (badOrigin) {
       setFormError(`Origem inválida: escolha uma cidade da lista (Cidade/UF). Recebido: "${form.origin.trim()}".`);
       return;
@@ -1375,9 +1375,9 @@ export default function ProgramacaoPage() {
               <DestinationsInput id="prog-destino-opcional"
                 value={form.destination}
                 onChange={(v) => updateForm("destination", v)}
-                placeholder="Ex: Ponta Grossa/PR"
+                placeholder={allowsFreeDestinations(form.client_name) ? "Ex: BRF - CONCORDIA" : "Ex: Ponta Grossa/PR"}
                 cities={cityNames}
-                strict
+                strict={!allowsFreeDestinations(form.client_name)}
                 onDraftChange={setPendingDestination}
               />
             </div>
