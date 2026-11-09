@@ -63,7 +63,7 @@ export default function KmViagensPage() {
     { key: "placa", header: "Placa", mobile: "title", cell: (t) => <span className="whitespace-nowrap"><Plate plate={t.placa} /><ModeTag t={t} /></span> },
     { key: "dst", header: "Destinos", mobile: "subtitle", cell: (t) => <span className="line-clamp-2 max-w-sm text-xs text-navy-600">{t.dst || "—"}</span> },
     { key: "ne", header: "Entregas", mobile: "field", className: "text-right", cell: (t) => t.ne || "—" },
-    { key: "peso", header: "Peso", mobile: "field", className: "text-right", cell: (t) => ton(t.entregas.reduce((a, e) => a + (+(e.peso ?? 0) || 0), 0)) },
+    { key: "peso", header: "Peso", mobile: "field", className: "text-right", cell: (t) => <span className="whitespace-nowrap font-mono">{ton(t.entregas.reduce((a, e) => a + (+(e.peso ?? 0) || 0), 0))}</span> },
     {
       key: "fat",
       header: "Km faturado",

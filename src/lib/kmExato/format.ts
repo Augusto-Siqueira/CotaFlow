@@ -13,7 +13,7 @@ export const skm = (v: number | null | undefined) =>
   v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + nfmt(Math.abs(v), 0);
 export const pct = (v: number | null | undefined, d = 1) =>
   v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + nfmt(Math.abs(v * 100), d) + "%";
-export const ton = (kg: number) => (kg > 0 ? nfmt(kg / 1000, 1) + " t" : "—");
+export const ton = (kg: number) => (kg > 0 ? nfmt(kg / 1000, 1) + " t" : "—");
 
 const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const MESF = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
