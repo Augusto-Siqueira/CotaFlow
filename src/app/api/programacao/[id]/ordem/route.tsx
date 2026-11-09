@@ -1,7 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createSupabaseServer } from "@/lib/supabaseServer";
 import { LoadingOrderDocument } from "@/lib/pdf/LoadingOrderDocument";
-import { formatCpf, isBlankLine, type OrderLine } from "@/lib/loadingOrder";
+import { formatCpf, isBlankLine, orderLoadingPlace, type OrderLine } from "@/lib/loadingOrder";
 
 export const runtime = "nodejs";
 
@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const { data: load } = await supabase
     .from("loading_schedules")
-    .select("id, schedule_date, plate, trailer_plate, driver")
+    .select("id, schedule_date, client_name, plate, trailer_plate, driver")
     .eq("id", id)
     .maybeSingle();
   if (!load) return new Response("Carga não encontrada.", { status: 404 });
@@ -40,6 +40,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
   }
 
+  // Local de carregamento: fixo da unidade ou, sem ele, o cadastro do cliente.
+  let place = orderLoadingPlace(load.client_name);
+  if (!place) {
+    const { data: clients } = await supabase.from("clients").select("name, trade_name, street, number, district, city");
+    const c = (clients ?? []).find(
+      (x) => (x.trade_name?.trim() || x.name).toUpperCase() === (load.client_name ?? "").trim().toUpperCase()
+    );
+    place = {
+      company: c?.name ?? load.client_name ?? "",
+      address: c ? [[c.street, c.number].filter(Boolean).join(", "), c.district, c.city].filter(Boolean).join(" - ") : "",
+    };
+  }
+
   const buffer = await renderToBuffer(
     <LoadingOrderDocument
       order={{
@@ -48,6 +61,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         driverCpf: cpf,
         plate: load.plate ?? "",
         trailerPlate: load.trailer_plate ?? "",
+        company: place.company,
+        address: place.address,
         lines,
       }}
     />

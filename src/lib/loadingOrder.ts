@@ -1,11 +1,26 @@
-// Ordem de embarque da Btech (São José dos Pinhais): tipos, regras e formatação.
-// Usado pela janela de lançamento (Programação), pelo PDF e pelo app do motorista.
+// Ordem de embarque da Btech (São José dos Pinhais e Indaiatuba): tipos, regras
+// e formatação. Usado pela janela de lançamento (Programação), pelo KM Btech,
+// pelo PDF e pelo app do motorista.
 
-/** Como o cliente aparece na Programação (client_name da carga). Só ele tem ordem de embarque. */
-export const ORDER_CLIENT = "BTECH - S J DOS PINHAIS";
+/**
+ * Unidades com ordem de embarque, como aparecem na Programação (client_name da
+ * carga), e o local de carregamento impresso no PDF. Sem local fixo, o PDF usa
+ * o cadastro do cliente (razão social e endereço).
+ */
+export const ORDER_UNITS: Record<string, { company: string; address: string } | null> = {
+  "BTECH - S J DOS PINHAIS": { company: "Momentive Química do Brasil Ltda.", address: "Rua Cyro Correia Pereira, 2525" },
+  "BTECH - INDAIATUBA": null,
+};
+
+const unitKey = (clientName: string | null | undefined) => (clientName ?? "").trim().replace(/\s+/g, " ").toUpperCase();
 
 export function hasLoadingOrder(clientName: string | null | undefined): boolean {
-  return (clientName ?? "").trim().replace(/\s+/g, " ").toUpperCase() === ORDER_CLIENT;
+  return unitKey(clientName) in ORDER_UNITS;
+}
+
+/** Local de carregamento fixo da unidade (null = usar o cadastro do cliente). */
+export function orderLoadingPlace(clientName: string | null | undefined) {
+  return ORDER_UNITS[unitKey(clientName)] ?? null;
 }
 
 export const ORDER_MAX_LINES = 6;

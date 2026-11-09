@@ -215,6 +215,8 @@ export default function ProgramacaoPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Carga em edição foi criada pelo KM Btech (o KM manda nela).
+  const [kmLinked, setKmLinked] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm(today));
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -622,6 +624,13 @@ export default function ProgramacaoPage() {
 
   function openEdit(load: Load) {
     setEditingId(load.id);
+    setKmLinked(false);
+    supabase
+      .from("km_trips")
+      .select("id")
+      .eq("schedule_id", load.id)
+      .limit(1)
+      .then(({ data }) => setKmLinked((data ?? []).length > 0));
     setForm({
       schedule_date: load.schedule_date,
       client_name: load.client_name,
@@ -1211,6 +1220,16 @@ export default function ProgramacaoPage() {
           <h2 className="text-base font-medium text-navy-900">
             {editingId ? "Editar carregamento" : "Novo carregamento"}
           </h2>
+          {editingId && kmLinked && (
+            <p className="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
+              Carga criada pelo KM Btech. Placa, data, destinos e ordem de embarque mudados na viagem do KM Btech vêm para cá.
+            </p>
+          )}
+          {!editingId && /^BTECH/i.test(form.client_name.trim()) && (
+            <p className="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
+              Cargas da Btech são lançadas pela Nova viagem do KM Btech, que já cria a carga aqui com a ordem de embarque.
+            </p>
+          )}
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>

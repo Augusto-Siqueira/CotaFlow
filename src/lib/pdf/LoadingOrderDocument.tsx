@@ -18,11 +18,12 @@ export interface LoadingOrderData {
   driverCpf: string;
   plate: string;
   trailerPlate: string;
+  /** Local de carregamento (empresa e endereço). */
+  company: string;
+  address: string;
   lines: OrderLine[];
 }
 
-const LOADING_COMPANY = "Momentive Química do Brasil Ltda.";
-const LOADING_ADDRESS = "Rua Cyro Correia Pereira, 2525";
 const DEST_COMPANY = "BTECH";
 
 const W = { oc: 62, nature: 112, comp: 66, tons: 58, dest: 45, city: 152, uf: 28 };
@@ -130,7 +131,7 @@ export function LoadingOrderDocument({ order }: { order: LoadingOrderData }) {
 
           {/* Empresa, motorista e placas */}
           {[
-            ["EMPRESA:", LOADING_COMPANY, "ENDEREÇO:", LOADING_ADDRESS],
+            ["EMPRESA:", order.company, "ENDEREÇO:", order.address],
             ["MOTORISTA:", order.driver, "CPF MOTORISTA:", order.driverCpf],
             ["PLACA CAMINHÃO:", order.plate, "PLACA CARRETA:", order.trailerPlate],
           ].map(([l1, v1, l2, v2]) => (

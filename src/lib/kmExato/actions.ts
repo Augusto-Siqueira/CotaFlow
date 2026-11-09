@@ -29,6 +29,8 @@ export interface TripInput {
   km_billed: number | null;
   odo_out: number | null;
   status?: "aberta" | "fechada";
+  /** Carga da Programação criada junto com a viagem. */
+  schedule_id?: string | null;
 }
 
 function fail(label: string, error: { message: string } | null) {

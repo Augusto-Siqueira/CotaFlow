@@ -57,6 +57,8 @@ export interface KmTripDoc {
   motivoObs?: string | null;
   origem?: string | null;
   freteCte?: number | null;
+  /** Carga da Programação ligada (viagens lançadas no KM Btech). */
+  scheduleId?: string | null;
   entregas: KmDelivery[];
 }
 export interface KmSettlement { id: string; data: string; placa: string | null; pagoPara: string | null; valor: number | null; efeito: number | null; obs: string | null }

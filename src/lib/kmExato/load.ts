@@ -30,6 +30,7 @@ export interface KmTripRow {
   plate: string;
   type_id: string | null;
   tractor_plate: string | null;
+  schedule_id?: string | null;
   mode: "dedicado" | "rota" | "spot";
   route_name: string | null;
   loaded_on: string;
@@ -64,7 +65,7 @@ export interface KmDeliveryRow {
 }
 
 export const KM_TRIP_COLUMNS =
-  "id, legacy_id, plate, type_id, tractor_plate, mode, route_name, loaded_on, km_est, km_route, km_comp, km_billed, odo_out, odo_in, status, closed_at, reason, reason_note, origin, freight_cte";
+  "id, legacy_id, plate, type_id, tractor_plate, mode, route_name, loaded_on, km_est, km_route, km_comp, km_billed, odo_out, odo_in, status, closed_at, reason, reason_note, origin, freight_cte, schedule_id";
 export const KM_DELIVERY_COLUMNS =
   "id, trip_id, position, client, nf, cte, weight_kg, freight_cte, delivered_on, proof_sent, proof_sent_at, proof_sent_by, proof_before, proof_file";
 
@@ -86,6 +87,7 @@ export function tripDoc(t: KmTripRow, deliveries: KmDeliveryRow[]): KmTripDoc {
     placa: t.plate,
     tipo: t.type_id,
     cavalo: t.tractor_plate,
+    scheduleId: t.schedule_id ?? null,
     modo: t.mode,
     rotaNome: t.route_name,
     carreg: t.loaded_on,

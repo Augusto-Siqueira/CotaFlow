@@ -102,7 +102,7 @@ export default function KmViagensPage() {
   return (
     <KmPage
       title="Viagens"
-      subtitle="Abra no carregamento, feche na volta com o odômetro."
+      subtitle="Abra antes do carregamento (já cria a carga na Programação) e feche na volta com o odômetro."
       active="/km-exato/viagens"
       isAdmin={km$.isAdmin}
       canView={km$.canView}

@@ -10,6 +10,31 @@ import { createTrip, tripLog, updateTrip, type DeliveryInput } from "@/lib/kmExa
 import { parseXml } from "@/lib/kmExato/xml";
 import { Pill, Plate, Signed } from "./KmUi";
 import { ProofModal } from "@/components/DeliveryProofDestinations";
+import { toOrderRow } from "@/components/LoadingOrderModal";
+import { EMPTY_LINE, hasLoadingOrder, linesFromDestination } from "@/lib/loadingOrder";
+import {
+  createSchedule,
+  deleteSchedule,
+  dropScheduleOnCancel,
+  loadLinkedSchedule,
+  loadScheduleOptions,
+  orderWeight,
+  updateSchedule,
+  type LinkedSchedule,
+  type ScheduleInput,
+  type ScheduleOptions,
+} from "@/lib/kmExato/schedule";
+import {
+  KmScheduleSection,
+  emptySchedForm,
+  officialDestination,
+  orderLinesOf,
+  schedError,
+  toScheduleInput,
+  withPlate,
+  withUnit,
+  type SchedForm,
+} from "./KmScheduleSection";
 
 // Janelas de viagem do KM Exato: detalhes, nova/editar, fechar na volta e
 // motivo do desvio. Mesmas regras e textos do app original.
@@ -71,7 +96,7 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
   onMotivo: (id: string) => void;
 }) {
   const { engine: E, isAdmin } = c;
-  const { toastError, confirm: askConfirm } = useFeedback();
+  const { toastError, toastInfo, confirm: askConfirm } = useFeedback();
   const t = E.trips().find((x) => x.id === id) ?? null;
   const [log, setLog] = useState<{ at: string; by_name: string | null; action: string }[]>([]);
   const [proofOpen, setProofOpen] = useState<{ scheduleId: string; destination: string } | null>(null);
@@ -87,9 +112,18 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
   const w = !t.hist;
 
   async function cancelTrip() {
-    if (!(await askConfirm("Cancelar esta viagem? Ela sai do saldo e da produtividade.", { confirmLabel: "Cancelar viagem" }))) return;
+    const sid = E.S.viag[id]?.scheduleId;
+    const msg = sid
+      ? "Cancelar esta viagem? Ela sai do saldo e da produtividade, e a carga sai da Programação se ainda estiver como Programado."
+      : "Cancelar esta viagem? Ela sai do saldo e da produtividade.";
+    if (!(await askConfirm(msg, { confirmLabel: "Cancelar viagem" }))) return;
     try {
       await updateTrip(id, { status: "cancelada" }, "Viagem cancelada", c.userName);
+      if (sid) {
+        const r = await dropScheduleOnCancel(sid);
+        if (r === "excluida") toastInfo("A carga também saiu da Programação.");
+        if (r === "mantida") toastInfo("A carga continua na Programação porque já começou ou tem comprovante. Ajuste por lá.");
+      }
       c.onChanged();
       onClose();
     } catch (e) {
@@ -338,7 +372,6 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
     return r != null && Math.round(v.kmFat - r) ? String(Math.round(v.kmFat - r)) : "";
   });
   const [odo, setOdo] = useState(v?.odoSaida != null ? String(v.odoSaida) : "");
-  const [odoAuto, setOdoAuto] = useState(false);
   const [ents, setEnts] = useState<Ent[]>(
     (v?.entregas ?? []).map((e) => ({
       id: e.id, cliente: e.cliente, nf: e.nf ?? "", cte: e.cte ?? "", peso: e.peso != null ? String(e.peso) : "", freteCte: e.freteCte,
@@ -349,6 +382,43 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
   const [saving, setSaving] = useState(false);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Programação: a nova viagem cria a carga; a viagem ligada a uma carga edita
+  // os destinos e a ordem de embarque dela.
+  const [opts, setOpts] = useState<ScheduleOptions | null>(null);
+  const [sched, setSched] = useState<SchedForm>(emptySchedForm);
+  const [linked, setLinked] = useState<LinkedSchedule | null>(null);
+  const linkedId = v?.scheduleId ?? null;
+  const showSched = !id || !!linked;
+  useEffect(() => {
+    let alive = true;
+    const pendingLinked = linkedId ? loadLinkedSchedule(linkedId) : Promise.resolve(null);
+    Promise.all([loadScheduleOptions(), pendingLinked])
+      .then(([o, l]) => {
+        if (!alive) return;
+        setOpts(o);
+        if (l) {
+          setLinked(l);
+          setSched((p) => ({
+            ...p,
+            unit: l.client_name,
+            destination: l.destination ?? "",
+            rows: l.lines.length
+              ? l.lines.map(toOrderRow)
+              : hasLoadingOrder(l.client_name)
+                ? linesFromDestination(l.destination).map(toOrderRow)
+                : [toOrderRow(EMPTY_LINE)],
+          }));
+        } else if (!id) {
+          const unit = o.units.find((u) => /PINHAIS/i.test(u)) ?? o.units[0] ?? "";
+          setSched((p) => (unit ? withUnit(p, unit, o) : p));
+        }
+      })
+      .catch((e) => toastError(`Não foi possível carregar os dados da Programação (${(e as Error).message}).`));
+    return () => {
+      alive = false;
+    };
+  }, [id, linkedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const R = E.R();
   const fator = +R.fator || 1;
@@ -361,18 +431,6 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
   const rota = kmEstN != null ? (modo === "dedicado" ? Math.round(kmEstN * fator) : Math.round(kmEstN)) : null;
   const kmFat = rota != null ? rota + comp : null;
   const realPlate = placa === "__spot" ? spotPlaca.replace(/[^A-Z0-9]/gi, "").toUpperCase() : placa;
-
-  // Odômetro de saída puxado da última chegada da placa.
-  useEffect(() => {
-    if (!placa || placa === "__spot") return;
-    const lo = E.lastOdo(placa);
-    if (lo && (!odo || odoAuto)) {
-      queueMicrotask(() => {
-        setOdo(String(lo));
-        setOdoAuto(true);
-      });
-    }
-  }, [placa]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cctx = placa && modo === "dedicado" && placa !== "__spot" ? E.compCtx(placa, carreg, id) : null;
   const cerr = modo === "dedicado" && placa && placa !== "__spot" ? E.compErr(cctx, comp) : null;
@@ -443,13 +501,20 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
           ? "Escolha o equipamento do spot."
           : !carreg
             ? "Informe a data do carregamento."
-            : !(kmEstN != null && kmEstN > 0)
+            : (sp || kmEst.trim()) && !(kmEstN != null && kmEstN > 0)
               ? "Informe o km."
-              : !(kmFat != null && kmFat > 0)
+              : kmEstN != null && !(kmFat != null && kmFat > 0)
                 ? "Confira o km faturado."
-                : (modo === "dedicado" && cerr) || (!ents.some((e) => e.cliente.trim()) ? "Informe ao menos uma entrega." : null);
+                : (modo === "dedicado" && cerr) || (sp && !ents.some((e) => e.cliente.trim()) ? "Informe ao menos uma entrega." : null);
     if (err) {
       toastError(err);
+      return;
+    }
+    // Spot com placa digitada: leva para a Programação se for da frota.
+    const sf = !id && opts && !sched.tractor && !sched.trailer && realPlate ? withPlate(sched, realPlate, opts) : sched;
+    const serr = showSched ? (opts ? schedError(sf, opts, !!id) : "Aguarde carregar os dados da Programação.") : null;
+    if (serr) {
+      toastError(serr);
       return;
     }
     const deliveries: DeliveryInput[] = ents
@@ -489,16 +554,36 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
           if (old[k] !== neu[k]) ch.push(`${k}: ${old[k] ?? "—"} → ${neu[k] ?? "—"}`);
         });
         await updateTrip(id, data, "Viagem editada" + (ch.length ? ": " + ch.join("; ") : ""), c.userName, deliveries);
+        if (linked && opts) {
+          // O KM manda na carga: data, placa (se mudaram aqui), destinos e ordem.
+          const lines = orderLinesOf(sf);
+          const sp2: Partial<ScheduleInput> = { destination: officialDestination(sf, opts) };
+          if (lines.length) sp2.weight = orderWeight(lines);
+          if (data.loaded_on !== v.carreg) sp2.schedule_date = data.loaded_on;
+          if (data.plate !== v.placa) {
+            const pl = withPlate({ ...sf, tractor: linked.plate ?? "", trailer: linked.trailer_plate ?? "" }, data.plate, opts);
+            sp2.plate = pl.tractor || null;
+            sp2.trailer_plate = pl.trailer || null;
+          }
+          await updateSchedule(linked.id, sp2, hasLoadingOrder(linked.client_name) ? lines : undefined);
+        }
         toastSuccess("Viagem atualizada.");
         c.onChanged();
         onSaved(id);
       } else {
         const action =
           (sp ? "Viagem spot lançada: " : modo === "rota" ? "Viagem aberta (rota do contrato): " : "Viagem aberta: ") +
-          data.plate + " · " + km(kmFat) + " km faturados" +
+          data.plate + " · " + (kmFat != null ? km(kmFat) + " km faturados" : "km a lançar") +
           (comp ? ` (${km(rota)} estimados ${comp > 0 ? "+ " : "− "}${km(Math.abs(comp))} de compensação de saldo)` : "");
-        const newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta" }, deliveries, action, c.userName);
-        toastSuccess(sp ? "Viagem spot lançada." : "Viagem aberta.");
+        const scheduleId = await createSchedule(toScheduleInput(sf, opts!, carreg), orderLinesOf(sf));
+        let newId: string;
+        try {
+          newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta", schedule_id: scheduleId }, deliveries, action, c.userName);
+        } catch (e) {
+          await deleteSchedule(scheduleId);
+          throw e;
+        }
+        toastSuccess((sp ? "Viagem spot lançada" : "Viagem aberta") + " e carga criada na Programação.");
         c.onChanged();
         onSaved(newId);
       }
@@ -518,7 +603,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
       <div className="flex flex-col gap-5">
         <div>
           <h2 id="km-form-title" className="text-lg font-semibold text-navy-900">{id ? "Editar viagem" : "Nova viagem"}</h2>
-          <p className="text-sm text-navy-500">{id ? `${v?.placa} · ${dBR(v?.carreg)}` : "Preencha no carregamento. Na volta, só o odômetro."}</p>
+          <p className="text-sm text-navy-500">{id ? `${v?.placa} · ${dBR(v?.carreg)}` : "Lance antes do carregamento. Os XML dos CT-e e o km podem entrar depois, em Editar viagem."}</p>
         </div>
 
         <section className="flex flex-col gap-2">
@@ -555,6 +640,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
                 onClick={() => {
                   setPlaca(f.placa);
                   if (modo === "spot") setModo("dedicado");
+                  if (!id && opts) setSched((p) => withPlate({ ...p, tractor: "", trailer: "" }, f.placa, opts));
                 }}
                 className={`min-w-28 rounded-lg border px-3 py-2 text-left ${placa === f.placa ? "border-brand-600 bg-brand-50 text-brand-800" : "border-navy-300 hover:bg-navy-50"}`}
               >
@@ -599,20 +685,17 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
             </div>
             {modo !== "spot" && (
               <div>
-                <label className={labelCls} htmlFor="km-odo">
-                  Odômetro na saída{" "}
-                  <span className="font-normal text-navy-500">
-                    {!placa || placa === "__spot" ? "· escolha a placa" : E.lastOdo(placa) ? "· puxado da última chegada desta placa" : "· sem chegada anterior registrada"}
-                  </span>
-                </label>
-                <input id="km-odo" inputMode="numeric" className={bigCls} value={odo} onChange={(e) => { setOdo(e.target.value); setOdoAuto(false); }} />
+                <label className={labelCls} htmlFor="km-odo">Odômetro na saída</label>
+                <input id="km-odo" inputMode="numeric" className={bigCls} value={odo} onChange={(e) => setOdo(e.target.value)} />
               </div>
             )}
           </div>
         </section>
 
+        {showSched && <KmScheduleSection n={3} form={sched} onChange={setSched} opts={opts} editing={!!id} />}
+
         <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-navy-900">3 · Entregas</h3>
+          <h3 className="text-sm font-semibold text-navy-900">{showSched ? 4 : 3} · Entregas</h3>
           {ents.length === 0 ? (
             <p className={noteCls}>Solte os XML acima ou use “Adicionar entrega”.</p>
           ) : (
@@ -664,7 +747,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
         </section>
 
         <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-navy-900">4 · Quilometragem</h3>
+          <h3 className="text-sm font-semibold text-navy-900">{showSched ? 5 : 4} · Quilometragem</h3>
           {modo !== "spot" && (
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => pickRoute(null)} className={`max-w-64 rounded-lg border px-3 py-1.5 text-left ${modo === "dedicado" ? "border-brand-600 bg-brand-50 text-brand-800" : "border-navy-300 hover:bg-navy-50"}`}>

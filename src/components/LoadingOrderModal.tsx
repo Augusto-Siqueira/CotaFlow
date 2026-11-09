@@ -17,7 +17,8 @@ import {
   type OrderLine,
 } from "@/lib/loadingOrder";
 
-interface Row {
+/** Linha da ordem como digitada (peso em texto). */
+export interface OrderRow {
   oc: string;
   nature: string;
   compartments: string;
@@ -25,41 +26,18 @@ interface Row {
   city: string;
   uf: string;
 }
+type Row = OrderRow;
 
 const inputCls =
   "w-full rounded-lg border border-navy-300 bg-white px-2.5 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
-function toRow(l: OrderLine): Row {
+export function toOrderRow(l: OrderLine): Row {
   return { ...l, tons: l.tons === null ? "" : String(l.tons).replace(".", ",") };
 }
+const toRow = toOrderRow;
 
-/**
- * Janela da Ordem de embarque de uma carga: lança as linhas (OC, produto,
- * compartimentos, peso e destino) e abre o PDF. Só a equipe que edita a
- * programação usa; quem só lê baixa o PDF direto da carga.
- */
-export function LoadingOrderModal({
-  load,
-  existing,
-  onClose,
-  onSaved,
-}: {
-  load: { id: string; cargo: string; client_name: string; destination: string | null; plate: string | null };
-  existing: OrderLine[] | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { toastError } = useFeedback();
-  const [rows, setRows] = useState<Row[]>(() =>
-    (existing && existing.length > 0 ? existing : linesFromDestination(load.destination)).map(toRow)
-  );
-  const [saving, setSaving] = useState(false);
-
-  function update(i: number, patch: Partial<Row>) {
-    setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  }
-
-  const parsed: OrderLine[] = rows.map((r) => ({
+export function parseOrderRows(rows: Row[]): OrderLine[] {
+  return rows.map((r) => ({
     oc: r.oc.trim(),
     nature: r.nature.trim().toUpperCase(),
     compartments: r.compartments.trim().toUpperCase(),
@@ -67,47 +45,26 @@ export function LoadingOrderModal({
     city: r.city.trim().toUpperCase(),
     uf: r.uf.trim().toUpperCase(),
   }));
+}
+
+/** Erro da primeira linha incompleta (produto, peso e cidade são obrigatórios), ou null. */
+export function orderLinesError(parsed: OrderLine[]): string | null {
   const filled = parsed.filter((l) => !isBlankLine(l));
-  const total = filled.reduce((sum, l) => sum + (l.tons ?? 0), 0);
+  const bad = filled.findIndex((l) => !l.nature || !l.city || l.tons === null);
+  return bad >= 0 ? `Linha ${parsed.indexOf(filled[bad]) + 1} da ordem: informe produto, peso e a cidade de destino.` : null;
+}
 
-  async function save(openPdf: boolean) {
-    if (filled.length === 0) {
-      toastError("Preencha pelo menos uma linha da ordem.");
-      return;
-    }
-    const bad = filled.findIndex((l) => !l.nature || !l.city || l.tons === null);
-    if (bad >= 0) {
-      toastError(`Linha ${parsed.indexOf(filled[bad]) + 1}: informe produto, peso e a cidade de destino.`);
-      return;
-    }
-    setSaving(true);
-    const { error } = await supabase
-      .from("loading_orders")
-      .upsert({ schedule_id: load.id, lines: filled, updated_at: new Date().toISOString() }, { onConflict: "schedule_id" });
-    setSaving(false);
-    if (error) {
-      toastError(`Não foi possível salvar a ordem (${error.message}).`);
-      return;
-    }
-    if (openPdf) window.open(`/api/programacao/${load.id}/ordem`, "_blank", "noopener");
-    onSaved();
-    onClose();
+/** Linhas da ordem (OC, produto, compartimentos, peso, cidade, UF) com adicionar/remover e total. */
+export function OrderLinesEditor({ rows, onChange, idPrefix = "ord" }: { rows: Row[]; onChange: (rows: Row[]) => void; idPrefix?: string }) {
+  function update(i: number, patch: Partial<Row>) {
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
-
+  const total = parseOrderRows(rows)
+    .filter((l) => !isBlankLine(l))
+    .reduce((sum, l) => sum + (l.tons ?? 0), 0);
   return (
-    <Modal onClose={onClose} labelledBy="order-modal-title" className="max-w-3xl">
-      <h2 id="order-modal-title" className="text-base font-medium text-navy-900">
-        Ordem de embarque
-      </h2>
-      <p className="mt-1 text-sm text-navy-500">
-        {load.cargo} · {load.client_name}
-        {load.plate ? ` · ${load.plate}` : ""}
-      </p>
-      <p className="mt-1 text-xs text-navy-500">
-        Linhas seguidas com o mesmo nº da OC saem juntas na ordem. Beta Bacter sai em amarelo e Beta Bacter 33 em azul.
-      </p>
-
-      <div className="mt-4 space-y-2">
+    <>
+      <div className="space-y-2">
         <div className="hidden grid-cols-[6rem_1fr_6rem_5.5rem_1.4fr_3.5rem_2rem] gap-2 px-1 text-[11px] font-medium uppercase text-navy-500 sm:grid">
           <span>Nº da OC</span>
           <span>Produto</span>
@@ -127,7 +84,7 @@ export function LoadingOrderModal({
               placeholder="OC"
             />
             <SearchSelect
-              id={`ord-prod-${i}`}
+              id={`${idPrefix}-prod-${i}`}
               value={r.nature}
               onChange={(v) => update(i, { nature: v.toUpperCase() })}
               options={ORDER_NATURES.map((n) => ({ value: n.value }))}
@@ -166,7 +123,7 @@ export function LoadingOrderModal({
             />
             <button
               type="button"
-              onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : [{ ...toRow(EMPTY_LINE) }]))}
+              onClick={() => onChange(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ ...toRow(EMPTY_LINE) }])}
               aria-label={`Remover a linha ${i + 1}`}
               className="flex items-center justify-center rounded-lg text-navy-500 hover:bg-red-50 hover:text-red-700"
             >
@@ -180,7 +137,7 @@ export function LoadingOrderModal({
         <button
           type="button"
           disabled={rows.length >= ORDER_MAX_LINES}
-          onClick={() => setRows((prev) => [...prev, toRow(EMPTY_LINE)])}
+          onClick={() => onChange([...rows, toRow(EMPTY_LINE)])}
           className={`${buttonClasses("secondary", "sm")} disabled:cursor-not-allowed`}
         >
           Adicionar linha
@@ -189,6 +146,75 @@ export function LoadingOrderModal({
           Total: <strong className="tabular-nums">{formatTons(total)} t</strong>
           {rows.length >= ORDER_MAX_LINES && <span className="ml-2 text-xs text-navy-500">(máximo de {ORDER_MAX_LINES} linhas)</span>}
         </span>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Janela da Ordem de embarque de uma carga: lança as linhas (OC, produto,
+ * compartimentos, peso e destino) e abre o PDF. Só a equipe que edita a
+ * programação usa; quem só lê baixa o PDF direto da carga.
+ */
+export function LoadingOrderModal({
+  load,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  load: { id: string; cargo: string; client_name: string; destination: string | null; plate: string | null };
+  existing: OrderLine[] | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toastError } = useFeedback();
+  const [rows, setRows] = useState<Row[]>(() =>
+    (existing && existing.length > 0 ? existing : linesFromDestination(load.destination)).map(toRow)
+  );
+  const [saving, setSaving] = useState(false);
+
+  const parsed = parseOrderRows(rows);
+  const filled = parsed.filter((l) => !isBlankLine(l));
+
+  async function save(openPdf: boolean) {
+    if (filled.length === 0) {
+      toastError("Preencha pelo menos uma linha da ordem.");
+      return;
+    }
+    const bad = orderLinesError(parsed);
+    if (bad) {
+      toastError(bad);
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("loading_orders")
+      .upsert({ schedule_id: load.id, lines: filled, updated_at: new Date().toISOString() }, { onConflict: "schedule_id" });
+    setSaving(false);
+    if (error) {
+      toastError(`Não foi possível salvar a ordem (${error.message}).`);
+      return;
+    }
+    if (openPdf) window.open(`/api/programacao/${load.id}/ordem`, "_blank", "noopener");
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal onClose={onClose} labelledBy="order-modal-title" className="max-w-3xl">
+      <h2 id="order-modal-title" className="text-base font-medium text-navy-900">
+        Ordem de embarque
+      </h2>
+      <p className="mt-1 text-sm text-navy-500">
+        {load.cargo} · {load.client_name}
+        {load.plate ? ` · ${load.plate}` : ""}
+      </p>
+      <p className="mt-1 text-xs text-navy-500">
+        Linhas seguidas com o mesmo nº da OC saem juntas na ordem. Beta Bacter sai em amarelo e Beta Bacter 33 em azul.
+      </p>
+
+      <div className="mt-4">
+        <OrderLinesEditor rows={rows} onChange={setRows} />
       </div>
 
       <div className="mt-5 flex flex-wrap justify-end gap-2">
