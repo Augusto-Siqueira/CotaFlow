@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/Button";
 import { useAuth } from "@/lib/auth";
 import { REPORT_CATEGORIES, SEVERITIES } from "@/lib/maintenance";
+import { PhotoPicker } from "@/components/PhotoPicker";
 import { compressImage } from "@/lib/photos";
 import { SearchSelect, type SearchOption } from "@/components/SearchSelect";
 import { loadPlateOptions } from "@/lib/offline/plates";
@@ -266,19 +267,7 @@ export default function RelatarDefeitoPage() {
             </ul>
           )}
           {files.length < MAX_PHOTOS && (
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-navy-300 px-3 py-3 text-sm font-medium text-navy-700 hover:border-brand-500">
-              📷 Tirar foto
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                onChange={(e) => {
-                  addFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+            <PhotoPicker cameraLabel={"Tirar foto"} onFiles={addFiles} />
           )}
         </div>
       </div>

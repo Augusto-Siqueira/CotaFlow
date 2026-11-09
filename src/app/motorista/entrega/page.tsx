@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ButtonLink } from "@/components/Button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -21,9 +21,29 @@ import {
   type OutboxPhoto,
 } from "@/lib/offline/outbox";
 import { useOffline } from "@/lib/offline/OfflineProvider";
+import { clearDraft, draftKey, listDrafts, saveDraft, type Draft } from "@/lib/offline/drafts";
+import { PhotoPicker } from "@/components/PhotoPicker";
 
 const MAX_PHOTOS = 4;
 const SEND_WAIT_MS = 12000;
+
+interface ProofFields {
+  clientName: string;
+  invoice: string;
+  cte: string;
+  notes: string;
+  invoiceKg: string;
+  unloadedKg: string;
+}
+
+const proofDraftKey = (userId: string, scheduleId: string, destination: string) =>
+  draftKey("proof", userId, scheduleId, destination);
+
+/** "<carga>|<destino>" a partir da chave do rascunho. */
+function draftOpenKey(key: string): string {
+  const [, , scheduleId, destination] = key.slice("draft:".length).split("|");
+  return `${scheduleId}|${destination ?? ""}`;
+}
 
 interface Load {
   id: string;
@@ -80,6 +100,9 @@ export default function ComprovanteEntregaPage() {
   const [openKey, setOpenKey] = useState<string | null>(null);
   // Corrigindo um comprovante recusado da fila.
   const [redo, setRedo] = useState<OutboxItem | null>(null);
+  // Comprovantes começados e não enviados, guardados no celular ("<carga>|<destino>").
+  const [drafts, setDrafts] = useState<Record<string, Draft<ProofFields>>>({});
+  const [restored, setRestored] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -140,6 +163,22 @@ export default function ComprovanteEntregaPage() {
     });
   }, [user, isDriver, load, loadQueue]);
 
+  // Rascunhos: se o Android fechou o navegador com o formulário aberto (câmera em
+  // celular com pouca memória), reabre o formulário com o que já foi preenchido.
+  useEffect(() => {
+    if (!user || !isDriver) return;
+    if (new URLSearchParams(window.location.search).get("refazer")) return;
+    listDrafts<ProofFields>("proof", user.id).then((list) => {
+      if (list.length === 0) return;
+      const map: Record<string, Draft<ProofFields>> = {};
+      for (const d of list) map[draftOpenKey(d.key)] = d;
+      setDrafts(map);
+      const last = list.reduce((a, b) => (b.at > a.at ? b : a));
+      setOpenKey((cur) => cur ?? draftOpenKey(last.key));
+      setRestored(true);
+    });
+  }, [user, isDriver]);
+
   // Abriu pelo botão "Corrigir e lançar de novo" da fila de envio.
   useEffect(() => {
     if (!user) return;
@@ -151,6 +190,15 @@ export default function ComprovanteEntregaPage() {
       setOpenKey(`${item.payload.schedule_id}|${item.payload.destination}`);
     });
   }, [user]);
+
+  const onDraft = useCallback((d: Draft<ProofFields> | null, key: string) => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      if (d) next[key] = d;
+      else delete next[key];
+      return next;
+    });
+  }, []);
 
   if (authLoading || !isDriver) return null;
 
@@ -179,6 +227,12 @@ export default function ComprovanteEntregaPage() {
           className={`mt-3 rounded-lg px-3 py-2 text-sm ${notice.saved ? "bg-amber-50 text-amber-900" : "bg-teal-50 text-teal-800"}`}
         >
           {notice.saved ? "💾" : "✓"} {notice.text}
+        </div>
+      )}
+      {restored && !notice && (
+        <div role="status" className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          Recuperamos o comprovante que você estava preenchendo. Se a foto não aparecer, toque em{" "}
+          <strong>Galeria</strong> e escolha a foto tirada pela câmera do celular.
         </div>
       )}
       {redo && (
@@ -242,7 +296,14 @@ export default function ComprovanteEntregaPage() {
                     return (
                       <li key={key} className="rounded-lg border border-navy-200 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-navy-900">{label}</span>
+                          <span className="text-sm font-medium text-navy-900">
+                            {label}
+                            {!proof && !waiting && drafts[key] && openKey !== key && (
+                              <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
+                                rascunho
+                              </span>
+                            )}
+                          </span>
                           {proof ? (
                             <span className="shrink-0 rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800">
                               ✓ enviado
@@ -275,7 +336,10 @@ export default function ComprovanteEntregaPage() {
                             scheduleId={l.id}
                             destination={dest}
                             redo={redo && `${redo.payload.schedule_id}|${redo.payload.destination}` === key ? redo : null}
+                            draft={drafts[key] ?? null}
+                            onDraft={onDraft}
                             onSaved={(text, saved) => {
+                              setRestored(false);
                               setOpenKey(null);
                               setRedo(null);
                               setNotice({ text, saved });
@@ -303,25 +367,73 @@ function ProofForm({
   scheduleId,
   destination,
   redo,
+  draft,
+  onDraft,
   onSaved,
 }: {
   userId: string;
   scheduleId: string;
   destination: string;
   redo: OutboxItem | null;
+  draft: Draft<ProofFields> | null;
+  onDraft: (d: Draft<ProofFields> | null, key: string) => void;
   onSaved: (text: string, saved: boolean) => void;
 }) {
   const rp = (redo?.payload ?? {}) as Record<string, unknown>;
   const kgText = (v: unknown) => (v === undefined || v === null ? "" : String(v).replace(".", ","));
-  const [clientName, setClientName] = useState(String(rp.client_name ?? ""));
-  const [invoice, setInvoice] = useState(String(rp.invoice_number ?? ""));
-  const [cte, setCte] = useState(String(rp.cte_number ?? ""));
-  const [notes, setNotes] = useState(String(rp.notes ?? ""));
-  const [invoiceKg, setInvoiceKg] = useState(kgText(rp.invoice_weight_kg));
-  const [unloadedKg, setUnloadedKg] = useState(kgText(rp.unloaded_weight_kg));
-  const [files, setFiles] = useState<OutboxPhoto[]>(redo?.photos ?? []);
+  const df = redo ? null : draft?.fields;
+  const [clientName, setClientName] = useState(df?.clientName ?? String(rp.client_name ?? ""));
+  const [invoice, setInvoice] = useState(df?.invoice ?? String(rp.invoice_number ?? ""));
+  const [cte, setCte] = useState(df?.cte ?? String(rp.cte_number ?? ""));
+  const [notes, setNotes] = useState(df?.notes ?? String(rp.notes ?? ""));
+  const [invoiceKg, setInvoiceKg] = useState(df?.invoiceKg ?? kgText(rp.invoice_weight_kg));
+  const [unloadedKg, setUnloadedKg] = useState(df?.unloadedKg ?? kgText(rp.unloaded_weight_kg));
+  const [files, setFiles] = useState<OutboxPhoto[]>(redo?.photos ?? (redo ? [] : draft?.photos ?? []));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Rascunho no celular, gravado a cada alteração. Não vale para a correção de um
+  // item recusado, que já está guardado na fila.
+  const dKey = proofDraftKey(userId, scheduleId, destination);
+  const openKey = `${scheduleId}|${destination}`;
+  const fields: ProofFields = { clientName, invoice, cte, notes, invoiceKg, unloadedKg };
+  const latest = useRef({ fields, files });
+  useEffect(() => {
+    latest.current = { fields, files };
+  });
+  const touched = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushDraft = useCallback(() => {
+    if (redo || !touched.current) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const { fields: f, files: p } = latest.current;
+    const empty = p.length === 0 && !Object.values(f).some((v) => v.trim());
+    if (empty) {
+      clearDraft(dKey);
+      onDraft(null, openKey);
+      return;
+    }
+    saveDraft(dKey, f, p)
+      .then(() => onDraft({ key: dKey, at: Date.now(), fields: f, photos: p }, openKey))
+      .catch(() => undefined);
+  }, [redo, dKey, openKey, onDraft]);
+  useEffect(() => {
+    if (redo || !touched.current) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flushDraft, 400);
+  }, [clientName, invoice, cte, notes, invoiceKg, unloadedKg, files, redo, flushDraft]);
+  // Fechou o formulário com digitação ainda não gravada: grava antes de sair.
+  useEffect(
+    () => () => {
+      if (timer.current) flushDraft();
+    },
+    [flushDraft]
+  );
+  function edit(set: (v: string) => void, v: string) {
+    touched.current = true;
+    set(v);
+  }
 
   // Reduz a foto agora (a câmera gera vários MB) e já define o nome com que ela vai subir.
   async function addFiles(list: FileList | null) {
@@ -329,7 +441,9 @@ function ProofForm({
     const picked = Array.from(list);
     try {
       const added: OutboxPhoto[] = [];
-      for (const f of picked) added.push({ path: newPhotoPath(userId), blob: await compressImage(f) });
+      // Uma de cada vez: em celular com pouca memória, processar várias juntas pesa.
+      for (const f of picked.slice(0, MAX_PHOTOS)) added.push({ path: newPhotoPath(userId), blob: await compressImage(f) });
+      touched.current = true;
       setFiles((prev) => [...prev, ...added].slice(0, MAX_PHOTOS));
     } catch {
       setError("Não foi possível usar essa foto. Tire outra.");
@@ -374,6 +488,11 @@ function ProofForm({
         setSaving(false);
         return;
       }
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      touched.current = false;
+      await clearDraft(dKey);
+      onDraft(null, openKey);
       onSaved(
         left ? `${summary} salvo no celular. Será enviado quando houver sinal.` : `${summary} enviado.`,
         Boolean(left)
@@ -396,7 +515,7 @@ function ProofForm({
           id={`${id}-cli`}
           type="text"
           value={clientName}
-          onChange={(e) => setClientName(e.target.value)}
+          onChange={(e) => edit(setClientName, e.target.value)}
           className={fieldCls}
           autoComplete="off"
         />
@@ -410,7 +529,7 @@ function ProofForm({
           type="text"
           inputMode="numeric"
           value={invoice}
-          onChange={(e) => setInvoice(e.target.value)}
+          onChange={(e) => edit(setInvoice, e.target.value)}
           className={fieldCls}
           autoComplete="off"
         />
@@ -424,7 +543,7 @@ function ProofForm({
           type="text"
           inputMode="numeric"
           value={cte}
-          onChange={(e) => setCte(e.target.value)}
+          onChange={(e) => edit(setCte, e.target.value)}
           className={fieldCls}
           autoComplete="off"
         />
@@ -439,7 +558,7 @@ function ProofForm({
             type="text"
             inputMode="decimal"
             value={invoiceKg}
-            onChange={(e) => setInvoiceKg(e.target.value)}
+            onChange={(e) => edit(setInvoiceKg, e.target.value)}
             className={fieldCls}
             placeholder="32560"
           />
@@ -453,7 +572,7 @@ function ProofForm({
             type="text"
             inputMode="decimal"
             value={unloadedKg}
-            onChange={(e) => setUnloadedKg(e.target.value)}
+            onChange={(e) => edit(setUnloadedKg, e.target.value)}
             className={fieldCls}
             placeholder="32480"
           />
@@ -475,7 +594,10 @@ function ProofForm({
                 📷 Foto {i + 1}
                 <button
                   type="button"
-                  onClick={() => setFiles((prev) => prev.filter((x) => x.path !== f.path))}
+                  onClick={() => {
+                    touched.current = true;
+                    setFiles((prev) => prev.filter((x) => x.path !== f.path));
+                  }}
                   aria-label={`Remover foto ${i + 1}`}
                   className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-200"
                 >
@@ -486,22 +608,18 @@ function ProofForm({
           </ul>
         )}
         {files.length < MAX_PHOTOS && (
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-navy-300 px-3 py-3 text-sm font-medium text-navy-700 hover:border-brand-500">
-            📷 {files.length === 0 ? "Tirar foto" : "Tirar outra foto"}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              onChange={(e) => {
-                addFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          <PhotoPicker
+            cameraLabel={files.length === 0 ? "Tirar foto" : "Tirar outra foto"}
+            onFiles={addFiles}
+            onBeforeOpen={() => {
+              touched.current = true;
+              flushDraft();
+            }}
+          />
         )}
         <p className="mt-1 text-xs text-navy-500">
-          Pode ser uma foto só mostrando os dois, ou uma de cada (até {MAX_PHOTOS}).
+          Pode ser uma foto só mostrando os dois, ou uma de cada (até {MAX_PHOTOS}). O que você
+          preencher fica guardado no celular até enviar.
         </p>
       </div>
 
@@ -513,7 +631,7 @@ function ProofForm({
           id={`${id}-obs`}
           rows={3}
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => edit(setNotes, e.target.value)}
           className={fieldCls}
           placeholder="Ex.: cliente pediu para reentregar a sobra amanhã"
         />
