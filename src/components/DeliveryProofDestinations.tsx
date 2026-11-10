@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { photoDownloadUrl, photoUrl } from "@/lib/photos";
-import { PROOF_EMAIL_CC, buildProofEmail, formatKg, parseEmailList, proofEmailDraft } from "@/lib/deliveryProof";
+import { PROOF_EMAIL_CC, buildProofEmail, formatKg, parseEmailList, parseKg, proofEmailDraft } from "@/lib/deliveryProof";
 import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
@@ -19,7 +19,23 @@ interface ProofDetail {
   photos: string[];
   created_at: string;
   notes: string | null;
+  corrected_at: string | null;
+  corrected_by_name: string | null;
 }
+
+/** Campos que a equipe pode corrigir (como digitados). */
+interface FixForm {
+  client_name: string;
+  invoice_number: string;
+  cte_number: string;
+  invoice_kg: string;
+  unloaded_kg: string;
+}
+
+const kgInput = (kg: number) => formatKg(kg);
+const fieldCls =
+  "w-full rounded-lg border border-navy-300 px-3 py-2 text-sm text-navy-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+const fmtWhen = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
 /**
  * Destinos de uma carga na programação. Cada destino é clicável e abre o
@@ -153,14 +169,18 @@ export function ProofModal({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const { confirm: askConfirm } = useFeedback();
+  // Correção dos dados que o motorista digitou (equipe que edita a programação).
+  const [fix, setFix] = useState<FixForm | null>(null);
+  const [fixError, setFixError] = useState<string | null>(null);
+  const [fixing, setFixing] = useState(false);
+  const { confirm: askConfirm, toastSuccess } = useFeedback();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data, error: err } = await supabase
         .from("delivery_proofs")
-        .select("id, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes")
+        .select("id, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes, corrected_at, corrected_by_name")
         .eq("schedule_id", scheduleId)
         .eq("destination", destination)
         .maybeSingle();
@@ -216,6 +236,59 @@ export function ProofModal({
     }
     onChanged();
     onClose();
+  }
+
+  function openFix() {
+    if (!proof) return;
+    setFixError(null);
+    setFix({
+      client_name: proof.client_name,
+      invoice_number: proof.invoice_number,
+      cte_number: proof.cte_number ?? "",
+      invoice_kg: kgInput(proof.invoice_weight_kg),
+      unloaded_kg: kgInput(proof.unloaded_weight_kg),
+    });
+  }
+
+  async function saveFix() {
+    if (!proof || !fix) return;
+    const inv = parseKg(fix.invoice_kg);
+    const unl = parseKg(fix.unloaded_kg);
+    const err = !fix.client_name.trim()
+      ? "Informe o cliente."
+      : !fix.invoice_number.trim()
+        ? "Informe a nota fiscal."
+        : inv === null
+          ? "Informe o peso da NF, em quilos."
+          : unl === null
+            ? "Informe o peso descarregado, em quilos."
+            : null;
+    if (err) {
+      setFixError(err);
+      return;
+    }
+    setFixing(true);
+    const { data, error: upErr } = await supabase
+      .from("delivery_proofs")
+      .update({
+        client_name: fix.client_name.trim(),
+        invoice_number: fix.invoice_number.trim(),
+        cte_number: fix.cte_number.trim() || null,
+        invoice_weight_kg: inv,
+        unloaded_weight_kg: unl,
+      })
+      .eq("id", proof.id)
+      .select("client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, corrected_at, corrected_by_name")
+      .maybeSingle();
+    setFixing(false);
+    if (upErr || !data) {
+      setFixError(upErr?.message ?? "Não foi possível salvar: seu perfil não corrige comprovantes.");
+      return;
+    }
+    setProof({ ...proof, ...(data as Partial<ProofDetail>) });
+    setFix(null);
+    toastSuccess(lastSent ? "Comprovante corrigido. Ele já tinha sido enviado por e-mail: envie de novo se o cliente precisar da versão certa." : "Comprovante corrigido.");
+    onChanged();
   }
 
   // Apaga uma foto a mais (o comprovante nunca fica sem foto).
@@ -385,8 +458,53 @@ export function ProofModal({
         <p className="mt-3 text-sm text-navy-500">
           O motorista ainda não lançou o comprovante deste destino.
         </p>
+      ) : fix ? (
+        <div className="mt-4 space-y-3 text-sm">
+          <p className="text-xs text-navy-500">Corrija o que o motorista lançou errado. As fotos continuam as mesmas.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label htmlFor="pf-client" className="mb-1 block text-xs font-medium text-navy-600">Cliente</label>
+              <input id="pf-client" className={fieldCls} value={fix.client_name} onChange={(e) => setFix({ ...fix, client_name: e.target.value })} />
+            </div>
+            <div>
+              <label htmlFor="pf-nf" className="mb-1 block text-xs font-medium text-navy-600">Nota fiscal</label>
+              <input id="pf-nf" className={fieldCls} value={fix.invoice_number} onChange={(e) => setFix({ ...fix, invoice_number: e.target.value })} />
+            </div>
+            <div>
+              <label htmlFor="pf-cte" className="mb-1 block text-xs font-medium text-navy-600">CTE</label>
+              <input id="pf-cte" className={fieldCls} value={fix.cte_number} onChange={(e) => setFix({ ...fix, cte_number: e.target.value })} />
+            </div>
+            <div>
+              <label htmlFor="pf-inv" className="mb-1 block text-xs font-medium text-navy-600">Peso da NF (kg)</label>
+              <input id="pf-inv" inputMode="decimal" className={fieldCls} value={fix.invoice_kg} onChange={(e) => setFix({ ...fix, invoice_kg: e.target.value })} />
+            </div>
+            <div>
+              <label htmlFor="pf-unl" className="mb-1 block text-xs font-medium text-navy-600">Peso descarregado (kg)</label>
+              <input id="pf-unl" inputMode="decimal" className={fieldCls} value={fix.unloaded_kg} onChange={(e) => setFix({ ...fix, unloaded_kg: e.target.value })} />
+            </div>
+          </div>
+          {fixError && (
+            <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {fixError}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setFix(null)} disabled={fixing} className={buttonClasses("secondary", "sm")}>
+              Cancelar
+            </button>
+            <button type="button" onClick={saveFix} disabled={fixing} className={`${buttonClasses("primary", "sm")} disabled:cursor-not-allowed`}>
+              {fixing ? "Salvando..." : "Salvar correção"}
+            </button>
+          </div>
+        </div>
       ) : (
         <>
+          {proof.corrected_at && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              ✎ Corrigido pela equipe em {fmtWhen(proof.corrected_at)}
+              {proof.corrected_by_name ? ` por ${proof.corrected_by_name}` : ""}.
+            </p>
+          )}
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <Field label="Cliente" value={proof.client_name} />
             <Field label="Nota fiscal" value={proof.invoice_number} />
@@ -545,14 +663,25 @@ export function ProofModal({
       )}
       <div className="mt-5 flex flex-wrap justify-between gap-2">
         {canDelete && proof ? (
-          <button
-            type="button"
-            onClick={remove}
-            disabled={deleting}
-            className={buttonClasses("danger")}
-          >
-            {deleting ? "Apagando..." : "Apagar comprovante"}
-          </button>
+          <span className="flex gap-2">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={deleting}
+              className={buttonClasses("danger")}
+            >
+              {deleting ? "Apagando..." : "Apagar comprovante"}
+            </button>
+            <button
+              type="button"
+              onClick={openFix}
+              disabled={Boolean(fix)}
+              title="Corrigir peso, nota fiscal, CT-e ou cliente lançados errado pelo motorista"
+              className={`${buttonClasses("secondary")} disabled:cursor-not-allowed`}
+            >
+              Corrigir
+            </button>
+          </span>
         ) : (
           <span />
         )}
