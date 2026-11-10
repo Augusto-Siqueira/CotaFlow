@@ -16,15 +16,18 @@ import {
   createSchedule,
   deleteSchedule,
   dropScheduleOnCancel,
+  findExistingSchedules,
   loadLinkedSchedule,
   loadScheduleOptions,
   orderWeight,
   updateSchedule,
+  type ExistingSchedule,
   type LinkedSchedule,
   type ScheduleInput,
   type ScheduleOptions,
 } from "@/lib/kmExato/schedule";
 import {
+  ExistingScheduleChoice,
   KmScheduleSection,
   emptySchedForm,
   officialDestination,
@@ -420,6 +423,34 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
     };
   }, [id, linkedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Nova viagem: carga desta placa já lançada na Programação (sem viagem do KM)?
+  // Por padrão a viagem se liga à mais próxima em vez de criar outra.
+  const [existing, setExisting] = useState<ExistingSchedule[]>([]);
+  const [linkTo, setLinkTo] = useState("");
+  const lookPlate = placa === "__spot" ? spotPlaca.replace(/[^A-Z0-9]/gi, "").toUpperCase() : placa;
+  useEffect(() => {
+    if (id || !lookPlate || !carreg) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      findExistingSchedules(lookPlate, carreg)
+        .then((list) => {
+          if (!alive) return;
+          setExisting(list);
+          setLinkTo(list[0]?.id ?? "");
+        })
+        .catch(() => {
+          if (alive) setExisting([]);
+        });
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [id, lookPlate, carreg]);
+  // Sem placa/data (ou na edição) não há o que oferecer.
+  const offered = !id && lookPlate && carreg ? existing : [];
+  const linking = offered.some((x) => x.id === linkTo);
+
   const R = E.R();
   const fator = +R.fator || 1;
   const kmEstN = parseNum(kmEst);
@@ -512,7 +543,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
     }
     // Spot com placa digitada: leva para a Programação se for da frota.
     const sf = !id && opts && !sched.tractor && !sched.trailer && realPlate ? withPlate(sched, realPlate, opts) : sched;
-    const serr = showSched ? (opts ? schedError(sf, opts, !!id) : "Aguarde carregar os dados da Programação.") : null;
+    const serr = showSched && !linking ? (opts ? schedError(sf, opts, !!id) : "Aguarde carregar os dados da Programação.") : null;
     if (serr) {
       toastError(serr);
       return;
@@ -575,15 +606,23 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
           (sp ? "Viagem spot lançada: " : modo === "rota" ? "Viagem aberta (rota do contrato): " : "Viagem aberta: ") +
           data.plate + " · " + (kmFat != null ? km(kmFat) + " km faturados" : "km a lançar") +
           (comp ? ` (${km(rota)} estimados ${comp > 0 ? "+ " : "− "}${km(Math.abs(comp))} de compensação de saldo)` : "");
-        const scheduleId = await createSchedule(toScheduleInput(sf, opts!, carreg), orderLinesOf(sf));
         let newId: string;
-        try {
-          newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta", schedule_id: scheduleId }, deliveries, action, c.userName);
-        } catch (e) {
-          await deleteSchedule(scheduleId);
-          throw e;
+        if (linking) {
+          // Carga já lançada na Programação: só liga a viagem a ela.
+          const ex = offered.find((x) => x.id === linkTo);
+          newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta", schedule_id: linkTo }, deliveries,
+            action + ` · ligada à carga da Programação de ${dBR(ex?.schedule_date)}`, c.userName);
+          toastSuccess((sp ? "Viagem spot lançada" : "Viagem aberta") + " e ligada à carga que já estava na Programação.");
+        } else {
+          const scheduleId = await createSchedule(toScheduleInput(sf, opts!, carreg), orderLinesOf(sf));
+          try {
+            newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta", schedule_id: scheduleId }, deliveries, action, c.userName);
+          } catch (e) {
+            await deleteSchedule(scheduleId);
+            throw e;
+          }
+          toastSuccess((sp ? "Viagem spot lançada" : "Viagem aberta") + " e carga criada na Programação.");
         }
-        toastSuccess((sp ? "Viagem spot lançada" : "Viagem aberta") + " e carga criada na Programação.");
         c.onChanged();
         onSaved(newId);
       }
@@ -692,7 +731,13 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
           </div>
         </section>
 
-        {showSched && <KmScheduleSection n={3} form={sched} onChange={setSched} opts={opts} editing={!!id} />}
+        {offered.length > 0 && (
+          <section className="flex flex-col gap-2">
+            {linking && <h3 className="text-sm font-semibold text-navy-900">3 · Programação</h3>}
+            <ExistingScheduleChoice list={offered} value={linkTo} onChange={setLinkTo} />
+          </section>
+        )}
+        {showSched && !linking && <KmScheduleSection n={3} form={sched} onChange={setSched} opts={opts} editing={!!id} />}
 
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-navy-900">{showSched ? 4 : 3} · Entregas</h3>

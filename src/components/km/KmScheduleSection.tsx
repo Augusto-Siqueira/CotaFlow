@@ -5,7 +5,7 @@ import { SearchSelect } from "@/components/SearchSelect";
 import { DestinationsInput, baseCity, splitDestinations } from "@/components/Destinations";
 import { OrderLinesEditor, orderLinesError, parseOrderRows, toOrderRow, type OrderRow } from "@/components/LoadingOrderModal";
 import { EMPTY_LINE, ORDER_NATURES, hasLoadingOrder, isBlankLine, linesFromDestination, type OrderLine } from "@/lib/loadingOrder";
-import { cityOf, orderWeight, pick, type ScheduleInput, type ScheduleOptions } from "@/lib/kmExato/schedule";
+import { cityOf, orderWeight, pick, type ExistingSchedule, type ScheduleInput, type ScheduleOptions } from "@/lib/kmExato/schedule";
 
 // Parte "Programação" da nova viagem do KM Btech: a carga que a viagem cria na
 // Programação (unidade, produto, origem, placas, motorista, horário), os
@@ -109,6 +109,52 @@ export function toScheduleInput(f: SchedForm, opts: ScheduleOptions, date: strin
     driver: pick(f.driver, opts.drivers.map((d) => d.value)) || null,
     loading_time: f.time || null,
   };
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  programado: "Programado",
+  carregando: "Carregando",
+  em_viagem: "Em viagem",
+  entregue: "Entrega concluída",
+};
+
+const dmy = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(2, 4);
+
+/**
+ * Já existe carga desta placa na Programação: ligar a viagem a ela (padrão) ou
+ * criar outra. `value` = id da carga escolhida, "" = criar uma carga nova.
+ */
+export function ExistingScheduleChoice({
+  list,
+  value,
+  onChange,
+}: {
+  list: ExistingSchedule[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+      <p className="font-medium">
+        {list.length === 1 ? "Já existe uma carga desta placa na Programação." : `Já existem ${list.length} cargas desta placa na Programação.`}
+      </p>
+      <div className="mt-2 flex flex-col gap-2">
+        {list.map((s) => (
+          <label key={s.id} className="flex items-start gap-2">
+            <input type="radio" name="km-existing" className="mt-1" checked={value === s.id} onChange={() => onChange(s.id)} />
+            <span>
+              <b>Ligar a esta carga:</b> {dmy(s.schedule_date)} · {s.client_name} · {s.destination || "sem destino"}
+              {s.driver ? ` · ${s.driver}` : ""} · {STATUS_LABEL[s.status] ?? s.status}
+            </span>
+          </label>
+        ))}
+        <label className="flex items-start gap-2">
+          <input type="radio" name="km-existing" className="mt-1" checked={value === ""} onChange={() => onChange("")} />
+          <span>Criar uma carga nova na Programação</span>
+        </label>
+      </div>
+    </div>
+  );
 }
 
 const inputCls =

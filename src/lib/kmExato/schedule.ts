@@ -131,6 +131,48 @@ export async function updateSchedule(id: string, patch: Partial<ScheduleInput>, 
   if (lines) await saveOrderLines(id, lines);
 }
 
+/** Carga da Btech já lançada na Programação, ainda sem viagem do KM ligada. */
+export interface ExistingSchedule {
+  id: string;
+  schedule_date: string;
+  client_name: string;
+  destination: string | null;
+  driver: string | null;
+  plate: string | null;
+  trailer_plate: string | null;
+  status: string;
+}
+
+const isoPlus = (iso: string, days: number) => {
+  const d = new Date(iso + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Cargas da Btech com a placa (cavalo ou semi-reboque) carregando até 3 dias
+ * antes ou depois da data, que ainda não têm viagem do KM. Evita criar a carga
+ * de novo quando a equipe já lançou na Programação. A mais próxima vem primeiro.
+ */
+export async function findExistingSchedules(plate: string, date: string): Promise<ExistingSchedule[]> {
+  const p = plate.trim().toUpperCase();
+  if (!/^[A-Z0-9]{7}$/.test(p) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+  const { data, error } = await supabase
+    .from("loading_schedules")
+    .select("id, schedule_date, client_name, destination, driver, plate, trailer_plate, status")
+    .ilike("client_name", "BTECH%")
+    .or(`plate.eq.${p},trailer_plate.eq.${p}`)
+    .gte("schedule_date", isoPlus(date, -3))
+    .lte("schedule_date", isoPlus(date, 3));
+  fail("Programação", error);
+  const list = (data ?? []) as ExistingSchedule[];
+  if (!list.length) return [];
+  const { data: used } = await supabase.from("km_trips").select("schedule_id").in("schedule_id", list.map((s) => s.id));
+  const taken = new Set((used ?? []).map((u) => u.schedule_id as string));
+  const dist = (s: ExistingSchedule) => Math.abs(new Date(s.schedule_date).getTime() - new Date(date).getTime());
+  return list.filter((s) => !taken.has(s.id)).sort((a, b) => dist(a) - dist(b));
+}
+
 export interface LinkedSchedule {
   id: string;
   client_name: string;
