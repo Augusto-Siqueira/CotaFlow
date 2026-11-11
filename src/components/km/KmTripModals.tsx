@@ -344,7 +344,7 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
               <button type="button" className={buttonClasses("primary", "md")} onClick={() => onCloseTrip(id)}>Fechar viagem</button>
             </>
           )}
-          {w && t.status === "fechada" && isAdmin && (
+          {w && t.status === "fechada" && (
             <button type="button" className={buttonClasses("secondary", "md")} onClick={reopen}>Reabrir para correção</button>
           )}
           <button type="button" className={buttonClasses("secondary", "md")} onClick={onClose}>Voltar</button>
