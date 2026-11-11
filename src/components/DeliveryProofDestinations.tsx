@@ -556,7 +556,7 @@ export function ProofModal({
           </dl>
           {proof.notes?.trim() && (
             <div className="mt-4">
-              <span className="text-[11px] uppercase text-navy-500">Observação do motorista</span>
+              <span className="text-[11px] uppercase text-navy-500">{proof.posted_by_name ? "Observação da equipe" : "Observação do motorista"}</span>
               <p className="mt-0.5 whitespace-pre-line text-sm text-navy-900">{proof.notes}</p>
             </div>
           )}
