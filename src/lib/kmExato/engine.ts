@@ -266,8 +266,15 @@ export class KmEngine {
         o.opRS = null;
         if (o.modo === "spot") {
           o.previsto = null;
-          o.vkm = null;
           o.cc = 0;
+          // Spot fechado com odômetro: diferença faturado × rodado (km e R$ pelo
+          // valor do km do equipamento) só para consulta. difRS fica null, então
+          // não entra no saldo da frota dedicada.
+          o.vkm = t ? t.km : null;
+          if (o.status === "fechada" && v.kmFat != null && o.kmReal != null) {
+            o.difKm = v.kmFat - o.kmReal;
+            o.difKmRS = t ? r2(o.difKm * t.km) : null;
+          }
         }
       }
       out.push(o);

@@ -41,8 +41,9 @@ export function sanitizeForPortal(E: KmEngine): PortalPayload {
       previsto: null,
       fCte: null,
       difFat: 0,
-      difKm: t.difKm,
-      difKmRS: t.difKmRS,
+      // Diferença do spot é controle interno (não é saldo do contrato).
+      difKm: t.modo === "spot" ? null : t.difKm,
+      difKmRS: t.modo === "spot" ? null : t.difKmRS,
       difRS: t.difRS,
       opKm: t.opKm,
       // Divergência para quem consulta: inclui o ajuste do CT-e (como o app).

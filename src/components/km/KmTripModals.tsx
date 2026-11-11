@@ -206,9 +206,21 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
         ) : (
           <>
             <Kv items={[["Operação", t.modo === "spot" ? "Spot" : "Rota do contrato"], ["Km faturado", km(t.kmFat)], ["Entregas", String(es.length)], ["Peso", ton(pes)]]} />
+            {t.modo === "spot" && (
+              <Kv
+                items={[
+                  ["Odômetro saída", km(t.odoSaida)],
+                  ["Odômetro chegada", km(t.odoChegada)],
+                  ["Km rodado", km(t.kmReal)],
+                  ["Diferença", t.difKm != null ? <span className="whitespace-nowrap">{skm(t.difKm)} km{t.difKmRS != null ? <> · <Signed v={t.difKmRS} /></> : null}</span> : t.status === "aberta" ? "na volta" : "—"],
+                ]}
+              />
+            )}
             <p className={noteCls}>
               {t.modo === "spot" ? (
-                "Veículo spot: km faturado pela estimativa, sem controle de saldo."
+                t.status === "aberta"
+                  ? "Veículo spot: na volta, feche a viagem com os odômetros para ver o km rodado e a diferença para o faturado. A diferença não entra no saldo da frota dedicada."
+                  : "Veículo spot: diferença entre o km faturado e o rodado" + (t.vkm ? ` (R$ ${nf(t.vkm, 4)} por km do equipamento)` : "") + ", só para controle. Não entra no saldo da frota dedicada."
               ) : (
                 <>
                   <b>{t.rotaNome || "Rota do contrato"}</b>: km pré-estabelecido no contrato, sem controle de saldo. O km soma na produtividade mínima do veículo.
@@ -573,7 +585,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
       km_route: rota,
       km_comp: modo === "dedicado" ? comp : 0,
       km_billed: kmFat,
-      odo_out: sp ? null : parseNum(odo),
+      odo_out: parseNum(odo),
     };
     setSaving(true);
     try {
@@ -610,13 +622,13 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
         if (linking) {
           // Carga já lançada na Programação: só liga a viagem a ela.
           const ex = offered.find((x) => x.id === linkTo);
-          newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta", schedule_id: linkTo }, deliveries,
+          newId = await createTrip({ ...data, status: "aberta", schedule_id: linkTo }, deliveries,
             action + ` · ligada à carga da Programação de ${dBR(ex?.schedule_date)}`, c.userName);
           toastSuccess((sp ? "Viagem spot lançada" : "Viagem aberta") + " e ligada à carga que já estava na Programação.");
         } else {
           const scheduleId = await createSchedule(toScheduleInput(sf, opts!, carreg), orderLinesOf(sf));
           try {
-            newId = await createTrip({ ...data, status: sp ? "fechada" : "aberta", schedule_id: scheduleId }, deliveries, action, c.userName);
+            newId = await createTrip({ ...data, status: "aberta", schedule_id: scheduleId }, deliveries, action, c.userName);
           } catch (e) {
             await deleteSchedule(scheduleId);
             throw e;
@@ -722,12 +734,10 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
               <label className={labelCls} htmlFor="km-carreg">Data do carregamento</label>
               <input id="km-carreg" type="date" className={inputCls} value={carreg} onChange={(e) => setCarreg(e.target.value)} />
             </div>
-            {modo !== "spot" && (
-              <div>
-                <label className={labelCls} htmlFor="km-odo">Odômetro na saída</label>
-                <input id="km-odo" inputMode="numeric" className={bigCls} value={odo} onChange={(e) => setOdo(e.target.value)} />
-              </div>
-            )}
+            <div>
+              <label className={labelCls} htmlFor="km-odo">Odômetro na saída</label>
+              <input id="km-odo" inputMode="numeric" className={bigCls} value={odo} onChange={(e) => setOdo(e.target.value)} />
+            </div>
           </div>
         </section>
 
@@ -808,7 +818,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
             </div>
           )}
           {modo === "rota" && <p className={noteCls}>Rota do contrato: km pré-estabelecido, sem controle de saldo. Soma na produtividade mínima do veículo.</p>}
-          {modo === "spot" && <p className={noteCls}>Spot: lance só o km usado no faturamento. Sem odômetro e sem controle de saldo.</p>}
+          {modo === "spot" && <p className={noteCls}>Spot: lance o km usado no faturamento. Na volta, feche a viagem com o odômetro para ver o km rodado e a diferença. Não entra no saldo da frota dedicada.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className={labelCls} htmlFor="km-est">
@@ -898,6 +908,8 @@ export function CloseTripModal({ id, onClose, onDone, ...c }: Common & { id: str
   const t = E.tarFor(tp, v.carreg);
   const rota = E.rotaOf(v);
   const isRota = v.modo === "rota";
+  // Spot: odômetros e km faturado → km rodado e diferença (km e R$), fora do saldo.
+  const isSpot = v.modo === "spot";
   const [sai, setSai] = useState(v.odoSaida != null ? String(v.odoSaida) : "");
   const [che, setChe] = useState(v.odoChegada != null ? String(v.odoChegada) : "");
   const [fat, setFat] = useState(v.kmFat != null ? String(v.kmFat) : rota != null ? String(rota) : "");
@@ -908,15 +920,15 @@ export function CloseTripModal({ id, onClose, onDone, ...c }: Common & { id: str
   const s = parseNum(sai);
   const ch = parseNum(che);
   const f = parseNum(fat);
-  const ok = !isRota && s != null && ch != null && f != null && f > 0 && ch > s && !!t;
+  const ok = !isRota && s != null && ch != null && f != null && f > 0 && ch > s && (isSpot || !!t);
   const fc = E.ctes(v);
-  const adj = ok && t!.metodo === "piso" && fc != null ? r2(fc - (f! * t!.km + t!.cc)) : 0;
+  const adj = ok && !isSpot && t!.metodo === "piso" && fc != null ? r2(fc - (f! * t!.km + t!.cc)) : 0;
   const real = ok ? ch! - s! : null;
   const dk = ok ? f! - real! : null;
-  const dv = ok ? r2(dk! * t!.km + adj) : null;
-  const kc = f != null && f > 0 && rota != null ? Math.round(f - rota) : 0;
-  const op = ok && rota ? rota - real! : null;
-  const big = ok && !!rota && op != null && Math.abs(op / rota) > (+E.R().limite || 0.1);
+  const dv = ok && t ? r2(dk! * t.km + adj) : null;
+  const kc = !isSpot && f != null && f > 0 && rota != null ? Math.round(f - rota) : 0;
+  const op = ok && rota && !isSpot ? rota - real! : null;
+  const big = ok && !isSpot && !!rota && op != null && Math.abs(op / rota) > (+E.R().limite || 0.1);
   const ce = kc ? E.compErr(E.compCtx(v.placa, v.carreg, id), kc) : null;
 
   async function save() {
@@ -933,6 +945,15 @@ export function CloseTripModal({ id, onClose, onDone, ...c }: Common & { id: str
         await updateTrip(id, { odo_out: so, odo_in: co, status: "fechada", closed_at: new Date().toISOString() }, "Viagem concluída (rota do contrato)", c.userName);
       } else {
         if (!ok) return;
+        if (isSpot) {
+          await updateTrip(id, { odo_out: s, odo_in: ch, km_billed: f, km_route: f, km_comp: 0, status: "fechada", closed_at: new Date().toISOString() },
+            "Viagem spot fechada: " + km(real) + " km rodados, " + km(f) + " faturados, diferença " + skm(dk) + " km" + (dv != null ? " (" + sbrl(dv) + ", fora do saldo)" : ""),
+            c.userName);
+          toastSuccess("Viagem fechada.");
+          c.onChanged();
+          onDone(id);
+          return;
+        }
         const patch: Record<string, unknown> = {
           odo_out: s, odo_in: ch, km_billed: f, km_route: rota, km_comp: rota != null ? Math.round(f! - rota) : 0,
           status: "fechada", closed_at: new Date().toISOString(),
@@ -963,6 +984,7 @@ export function CloseTripModal({ id, onClose, onDone, ...c }: Common & { id: str
           <p className="text-sm text-navy-500">{v.placa} · carregamento {dBR(v.carreg)}</p>
         </div>
         {isRota && <p className={noteCls}>{v.rotaNome || "Rota do contrato"}: {km(v.kmFat)} km do contrato, sem controle de saldo.</p>}
+        {isSpot && <p className={noteCls}>Veículo spot: a diferença entre o km faturado e o rodado fica só para controle e não entra no saldo da frota dedicada.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls} htmlFor="km-c-sai">Odômetro na saída{isRota && <span className="font-normal text-navy-500"> · opcional</span>}</label>
@@ -978,22 +1000,22 @@ export function CloseTripModal({ id, onClose, onDone, ...c }: Common & { id: str
                 <label className={labelCls} htmlFor="km-c-fat">
                   Km faturado (do CT-e){" "}
                   <span className="font-normal text-navy-500">
-                    {rota == null ? "" : kc ? `· ${km(rota)} estimados ${kc > 0 ? "+ " : "− "}${km(Math.abs(kc))} de compensação` : "· igual ao km estimado"}
+                    {rota == null || isSpot ? "" : kc ? `· ${km(rota)} estimados ${kc > 0 ? "+ " : "− "}${km(Math.abs(kc))} de compensação` : "· igual ao km estimado"}
                   </span>
                 </label>
                 <input id="km-c-fat" inputMode="numeric" className={inputCls} value={fat} onChange={(e) => setFat(e.target.value)} />
               </div>
               <div>
                 <label className={labelCls} htmlFor="km-c-vkm">Valor do km <span className="font-normal text-navy-500">· tabela de {dBR(t?.desde)}</span></label>
-                <input id="km-c-vkm" className={inputCls} disabled value={t ? "R$ " + nf(t.km, 4) + (t.cc ? " + CC " + nf(t.cc, 2) : "") : "sem tarifa"} />
+                <input id="km-c-vkm" className={inputCls} disabled value={t ? "R$ " + nf(t.km, 4) + (t.cc && !isSpot ? " + CC " + nf(t.cc, 2) : "") : "sem tarifa para este equipamento"} />
               </div>
             </>
           )}
         </div>
         {!isRota && (
           <>
-            <Kv items={[["Km rodado", ok ? km(real) : "—"], ["Diferença km", ok ? skm(dk) : "—"], ["Diferença R$", ok ? <Signed v={dv} /> : "—"], ["Compensação", kc ? skm(kc) + " km" : "—"]]} />
-            {ok && (
+            <Kv items={[["Km rodado", ok ? km(real) : "—"], ["Diferença km", ok ? skm(dk) : "—"], ["Diferença R$", ok && dv != null ? <Signed v={dv} /> : "—"], [isSpot ? "Saldo da frota" : "Compensação", isSpot ? "não entra" : kc ? skm(kc) + " km" : "—"]]} />
+            {ok && !isSpot && (
               <p className="text-sm text-navy-600">
                 {op! < 0 ? `Rodou ${km(-op!)} km a mais que o estimado.` : op! > 0 ? `Rodou ${km(op!)} km a menos que o estimado.` : "Km rodado igual ao estimado."}
                 {kc ? ` Compensação de ${skm(kc)} km (${sbrl(r2(kc * t!.km))}).` : ""}

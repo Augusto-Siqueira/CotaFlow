@@ -76,13 +76,26 @@ export default function KmViagensPage() {
         </span>
       ),
     },
-    { key: "real", header: "Km rodado", mobile: "field", className: "text-right", cell: (t) => (t.ctl ? <span className="font-mono">{km(t.kmReal)}</span> : <span className="text-navy-400">—</span>) },
+    { key: "real", header: "Km rodado", mobile: "field", className: "text-right", cell: (t) => (t.ctl || t.kmReal != null ? <span className="font-mono">{km(t.kmReal)}</span> : <span className="text-navy-400">—</span>) },
     {
       key: "saldo",
       header: "Saldo da viagem",
       mobile: "highlight",
       className: "text-right",
-      cell: (t) => (t.ctl ? t.difRS != null ? <Signed v={t.difRS} /> : <span className="text-navy-400">na volta</span> : <span className="text-navy-400">sem saldo</span>),
+      cell: (t) =>
+        t.ctl ? (
+          t.difRS != null ? <Signed v={t.difRS} /> : <span className="text-navy-400">na volta</span>
+        ) : t.modo === "spot" && t.difKm != null ? (
+          // Spot: diferença só para controle, fora do saldo da frota.
+          <span className="inline-flex flex-col items-end text-navy-500" title="Spot: não entra no saldo da frota dedicada">
+            {t.difKmRS != null ? <Signed v={t.difKmRS} /> : <span className="font-mono">{skm(t.difKm)} km</span>}
+            <span className="text-[10px] uppercase">spot · fora do saldo</span>
+          </span>
+        ) : t.modo === "spot" && t.status === "aberta" ? (
+          <span className="text-navy-400">na volta</span>
+        ) : (
+          <span className="text-navy-400">sem saldo</span>
+        ),
     },
     { key: "sit", header: "Situação", mobile: "field", cell: (t) => <Situation t={t} /> },
     {
