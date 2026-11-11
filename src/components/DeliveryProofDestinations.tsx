@@ -8,6 +8,7 @@ import { splitDestinations } from "@/components/Destinations";
 import { Modal } from "@/components/Modal";
 import { buttonClasses } from "@/components/Button";
 import { useFeedback } from "@/components/Feedback";
+import { AttachProofForm } from "@/components/AttachProofForm";
 
 interface ProofDetail {
   id: string;
@@ -21,6 +22,7 @@ interface ProofDetail {
   notes: string | null;
   corrected_at: string | null;
   corrected_by_name: string | null;
+  posted_by_name: string | null;
 }
 
 /** Campos que a equipe pode corrigir (como digitados). */
@@ -173,6 +175,9 @@ export function ProofModal({
   const [fix, setFix] = useState<FixForm | null>(null);
   const [fixError, setFixError] = useState<string | null>(null);
   const [fixing, setFixing] = useState(false);
+  // Equipe anexando o comprovante que o motorista não lançou.
+  const [attaching, setAttaching] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const { confirm: askConfirm, toastSuccess } = useFeedback();
 
   useEffect(() => {
@@ -180,7 +185,7 @@ export function ProofModal({
     (async () => {
       const { data, error: err } = await supabase
         .from("delivery_proofs")
-        .select("id, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes, corrected_at, corrected_by_name")
+        .select("id, client_name, invoice_number, cte_number, invoice_weight_kg, unloaded_weight_kg, photos, created_at, notes, corrected_at, corrected_by_name, posted_by_name")
         .eq("schedule_id", scheduleId)
         .eq("destination", destination)
         .maybeSingle();
@@ -198,7 +203,7 @@ export function ProofModal({
     return () => {
       cancelled = true;
     };
-  }, [scheduleId, destination]);
+  }, [scheduleId, destination, reloadKey]);
 
   // Cliente da carga -> e-mail para comprovantes do cadastro (nome fantasia ou razão social).
   useEffect(() => {
@@ -455,9 +460,29 @@ export function ProofModal({
       {proof === undefined ? (
         <p className="mt-3 text-sm text-navy-500">Carregando...</p>
       ) : proof === null ? (
-        <p className="mt-3 text-sm text-navy-500">
-          O motorista ainda não lançou o comprovante deste destino.
-        </p>
+        attaching ? (
+          <AttachProofForm
+            scheduleId={scheduleId}
+            destination={destination}
+            onCancel={() => setAttaching(false)}
+            onSaved={() => {
+              setAttaching(false);
+              setProof(undefined);
+              setReloadKey((k) => k + 1);
+              toastSuccess("Comprovante anexado.");
+              onChanged();
+            }}
+          />
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-navy-500">O motorista ainda não lançou o comprovante deste destino.</p>
+            {canDelete && (
+              <button type="button" onClick={() => setAttaching(true)} className={buttonClasses("primary", "sm")}>
+                Anexar comprovante
+              </button>
+            )}
+          </div>
+        )
       ) : fix ? (
         <div className="mt-4 space-y-3 text-sm">
           <p className="text-xs text-navy-500">Corrija o que o motorista lançou errado. As fotos continuam as mesmas.</p>
@@ -499,6 +524,11 @@ export function ProofModal({
         </div>
       ) : (
         <>
+          {proof.posted_by_name && (
+            <p className="mt-3 rounded-lg bg-navy-50 px-3 py-2 text-xs text-navy-700">
+              📎 Anexado pela equipe por {proof.posted_by_name} em {fmtWhen(proof.created_at)}.
+            </p>
+          )}
           {proof.corrected_at && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               ✎ Corrigido pela equipe em {fmtWhen(proof.corrected_at)}
