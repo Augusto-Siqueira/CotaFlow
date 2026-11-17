@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ButtonLink } from "@/components/Button";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +9,9 @@ import { compressImage } from "@/lib/photos";
 import { agoLabel, cached, must } from "@/lib/offline/refdata";
 import { enqueue, getOutboxItem, newPhotoPath, syncNow, type OutboxPhoto } from "@/lib/offline/outbox";
 import { useOffline } from "@/lib/offline/OfflineProvider";
+import { clearDraft, draftKey, loadDraft, saveDraft } from "@/lib/offline/drafts";
+import { PhotoPicker } from "@/components/PhotoPicker";
+import { useFeedback } from "@/components/Feedback";
 
 const SEND_WAIT_MS = 12000;
 
@@ -21,6 +24,25 @@ interface Item {
 }
 
 type Answer = "ok" | "prob" | "na";
+
+// Rascunho do check-list em andamento (IndexedDB). Em celular com pouca memória
+// o Android fecha o navegador enquanto a câmera está aberta; ao voltar, a página
+// recarrega e o motorista cairia de novo na tela da placa, perdendo as respostas.
+interface ChecklistDraft {
+  cavalo: string;
+  carreta: string;
+  startedAt: string;
+  pos: { lat: number; lon: number } | null;
+  photoItems: string[];
+  answers: Record<string, Answer>;
+  notes: Record<string, string>;
+  /** Item -> caminhos das fotos (as fotos vão na lista do rascunho). */
+  photoOf: Record<string, string[]>;
+}
+// Check-list começado há mais tempo que isso não é retomado: vale um novo.
+const DRAFT_MAX_MS = 12 * 60 * 60 * 1000;
+// Foto da galeria só vale se foi tirada perto do início do check-list.
+const PHOTO_MARGIN_MS = 30 * 60 * 1000;
 
 function localDate(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -57,6 +79,104 @@ export default function ChecklistPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ ncs: number; minutes: number; saved: boolean } | null>(null);
+  const [draftChecked, setDraftChecked] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [photoErr, setPhotoErr] = useState<{ id: string; msg: string } | null>(null);
+  const { confirm: askConfirm } = useFeedback();
+
+  // Ao abrir: retoma o check-list que ficou pela metade (página recarregada).
+  // Uma vez só por motorista: a renovação do login troca o objeto "user".
+  const uid = user?.id ?? null;
+  const restoredFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!uid || !isDriver || restoredFor.current === uid) return;
+    restoredFor.current = uid;
+    loadDraft<ChecklistDraft>(draftKey("checklist", uid))
+      .then((d) => {
+        if (!d) return;
+        const f = d.fields;
+        if (!f?.startedAt || Date.now() - new Date(f.startedAt).getTime() > DRAFT_MAX_MS) {
+          clearDraft(d.key);
+          return;
+        }
+        const byPath = new Map(d.photos.map((ph) => [ph.path, ph]));
+        const fl: Record<string, OutboxPhoto[]> = {};
+        for (const [id, paths] of Object.entries(f.photoOf ?? {})) {
+          const list = paths.map((x) => byPath.get(x)).filter((x): x is OutboxPhoto => Boolean(x));
+          if (list.length) fl[id] = list;
+        }
+        setCavalo(f.cavalo);
+        setCarreta(f.carreta);
+        setStartedAt(new Date(f.startedAt));
+        setPos(f.pos);
+        setPhotoItems(new Set(f.photoItems));
+        setAnswers(f.answers ?? {});
+        setNotes(f.notes ?? {});
+        setFiles(fl);
+        setResumed(true);
+        setStep("items");
+      })
+      .finally(() => setDraftChecked(true));
+  }, [uid, isDriver]);
+
+  // Grava o rascunho a cada resposta e antes de abrir a câmera.
+  const dKey = user ? draftKey("checklist", user.id) : null;
+  const latest = useRef<{ fields: ChecklistDraft; photos: OutboxPhoto[] } | null>(null);
+  useEffect(() => {
+    latest.current =
+      step === "items" && startedAt
+        ? {
+            fields: {
+              cavalo,
+              carreta,
+              startedAt: startedAt.toISOString(),
+              pos,
+              photoItems: [...photoItems],
+              answers,
+              notes,
+              photoOf: Object.fromEntries(Object.entries(files).map(([id, l]) => [id, l.map((x) => x.path)])),
+            },
+            photos: Object.values(files).flat(),
+          }
+        : null;
+  });
+  const submitted = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushDraft = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const l = latest.current;
+    if (!l || !dKey || submitted.current) return;
+    saveDraft(dKey, l.fields, l.photos).catch(() => undefined);
+  }, [dKey]);
+  useEffect(() => {
+    if (step !== "items") return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flushDraft, 400);
+  }, [step, answers, notes, files, photoItems, pos, flushDraft]);
+  useEffect(
+    () => () => {
+      if (timer.current) flushDraft();
+    },
+    [flushDraft]
+  );
+
+  async function restart() {
+    if (!(await askConfirm("Apagar as respostas e começar o check-list de novo?", { confirmLabel: "Começar de novo" }))) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (dKey) await clearDraft(dKey);
+    setAnswers({});
+    setNotes({});
+    setFiles({});
+    setPhotoItems(new Set());
+    setStartedAt(null);
+    setPos(null);
+    setResumed(false);
+    setPhotoErr(null);
+    setError(null);
+    setStep("start");
+  }
 
   useEffect(() => {
     if (!user || !isDriver) return;
@@ -103,6 +223,7 @@ export default function ChecklistPage() {
     }
     setCavalo(c);
     setError(null);
+    submitted.current = false;
     setStartedAt(new Date());
     setPhotoItems(pickRandom((items ?? []).map((i) => i.id), 2));
     if (navigator.geolocation) {
@@ -117,8 +238,15 @@ export default function ChecklistPage() {
 
   // Reduz a foto agora (a câmera gera vários MB) e já define o nome com que ela vai subir.
   async function addFile(id: string, list: FileList | null) {
-    if (!list || !user) return;
-    const picked = Array.from(list);
+    if (!list || !user || !startedAt) return;
+    // A foto comprova a inspeção: da galeria, só serve a tirada durante o check-list.
+    const oldest = startedAt.getTime() - PHOTO_MARGIN_MS;
+    const all = Array.from(list);
+    const picked = all.filter((f) => !f.lastModified || f.lastModified >= oldest);
+    setPhotoErr(
+      picked.length < all.length ? { id, msg: "Essa foto é antiga. Use uma foto tirada agora, olhando o item." } : null
+    );
+    if (picked.length === 0) return;
     try {
       const added: OutboxPhoto[] = [];
       for (const f of picked) added.push({ path: newPhotoPath(user.id), blob: await compressImage(f) });
@@ -178,6 +306,11 @@ export default function ChecklistPage() {
       };
       const summary = `Check-list · ${cavalo}${problems.length ? ` · ${problems.length} problema(s)` : ""}`;
       await enqueue({ id, userId: user.id, kind: "checklist", createdAt: Date.now(), summary, driverName: null, payload, photos: blobs });
+      // Já está na fila do celular: o rascunho não é mais necessário.
+      submitted.current = true;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      if (dKey) await clearDraft(dKey);
       await Promise.race([syncNow(user.id, true), new Promise((r) => setTimeout(r, SEND_WAIT_MS))]);
       const left = await getOutboxItem(id);
       if (left?.status === "rejected") {
@@ -199,7 +332,7 @@ export default function ChecklistPage() {
     setSaving(false);
   }
 
-  if (authLoading || !isDriver) return null;
+  if (authLoading || !isDriver || !draftChecked) return null;
 
   if (step === "done" && result) {
     return (
@@ -320,6 +453,16 @@ export default function ChecklistPage() {
         </div>
       </div>
 
+      {resumed && (
+        <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Check-list retomado de onde você parou. Confira as fotos: a que estava sendo tirada
+          pode não ter sido salva.{" "}
+          <button type="button" onClick={restart} className="font-semibold underline">
+            Começar de novo
+          </button>
+        </div>
+      )}
+
       {(items ?? []).map((it, index, all) => {
         const a = answers[it.id];
         const stageHeader = index === 0 || all[index - 1].stage !== it.stage;
@@ -384,29 +527,25 @@ export default function ChecklistPage() {
                 />
               )}
               {a && a !== "na" && (photoItems.has(it.id) || a === "prob") && (
-                <label
-                  className={`mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm font-medium ${
-                    (files[it.id]?.length ?? 0) > 0
-                      ? "border-brand-500 text-brand-700"
-                      : "border-navy-300 text-navy-700"
-                  }`}
-                >
-                  {(files[it.id]?.length ?? 0) > 0
-                    ? `📷 ${files[it.id].length} foto(s) ✓ — adicionar outra`
-                    : photoItems.has(it.id)
-                      ? "📷 Tirar foto do item (obrigatório)"
-                      : "📷 Tirar foto do problema"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="sr-only"
-                    onChange={(e) => {
-                      addFile(it.id, e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                <div className="mt-2">
+                  {(files[it.id]?.length ?? 0) > 0 && (
+                    <p className="mb-1.5 text-xs font-medium text-brand-700">📷 {files[it.id].length} foto(s) ✓</p>
+                  )}
+                  {(files[it.id]?.length ?? 0) < 3 && (
+                    <PhotoPicker
+                      cameraLabel={
+                        (files[it.id]?.length ?? 0) > 0
+                          ? "Adicionar outra"
+                          : photoItems.has(it.id)
+                            ? "Tirar foto do item (obrigatório)"
+                            : "Tirar foto do problema"
+                      }
+                      onFiles={(l) => addFile(it.id, l)}
+                      onBeforeOpen={flushDraft}
+                    />
+                  )}
+                  {photoErr?.id === it.id && <p className="mt-1 text-xs text-red-700">{photoErr.msg}</p>}
+                </div>
               )}
             </div>
           </div>
