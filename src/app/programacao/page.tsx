@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -22,6 +22,7 @@ import { normalizeWeight, sanitizeWeightInput } from "@/lib/weight";
 import { fetchAllCityNames, isCityWithUf, normalizeCityText } from "@/lib/cities";
 import { DestinationsInput, allowsFreeDestinations, baseCity, splitDestinations } from "@/components/Destinations";
 import { DeliveryProofDestinations } from "@/components/DeliveryProofDestinations";
+import { PlateBadge } from "@/components/PlateBadge";
 import { DayNotepad } from "@/components/DayNotepad";
 import { SyncIssuesAlert } from "@/components/SyncIssuesAlert";
 import { Modal } from "@/components/Modal";
@@ -151,6 +152,34 @@ interface FormState {
   quote_id: string;
 }
 
+// Visualização da programação: quadro (uma coluna por cliente, um cartão por
+// carga, como o quadro da manutenção) ou lista (linhas). Fica guardada no
+// navegador de cada pessoa.
+type ScheduleView = "quadro" | "lista";
+const VIEW_KEY = "cotaflow:programacao-view";
+const viewListeners = new Set<() => void>();
+function readView(): ScheduleView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "lista" ? "lista" : "quadro";
+  } catch {
+    return "quadro";
+  }
+}
+function writeView(v: ScheduleView) {
+  try {
+    localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    /* sem armazenamento: vale só nesta tela */
+  }
+  viewListeners.forEach((l) => l());
+}
+function subscribeView(cb: () => void) {
+  viewListeners.add(cb);
+  return () => {
+    viewListeners.delete(cb);
+  };
+}
+
 function toIsoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -202,6 +231,8 @@ export default function ProgramacaoPage() {
   }, []);
   // Status escolhido nos contadores do topo ("" = todos).
   const [statusFilter, setStatusFilter] = useState("");
+  const view = useSyncExternalStore(subscribeView, readView, () => "quadro" as ScheduleView);
+  const [collapsedClients, setCollapsedClients] = useState<Set<string>>(new Set());
   const [data, setData] = useState<{
     date: string;
     rows: Load[];
@@ -994,6 +1025,191 @@ export default function ProgramacaoPage() {
     count: rows.filter((r) => r.status === s.value).length,
   }));
 
+  // Pedaços do item de carga usados na lista e no cartão do quadro.
+  function renderStatus(l: Load) {
+    return (
+      <>
+      {canEditSchedule ? (
+        <select
+          value={l.status}
+          onChange={(e) => changeStatus(l, e.target.value)}
+          className={`w-full min-w-0 max-w-[10.5rem] cursor-pointer truncate rounded-full border-0 py-1 pl-2.5 pr-1 text-[11px] print:appearance-none font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(
+            l.status
+          )}`}
+        >
+          {LOADING_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span
+          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${loadingStatusBadge(
+            l.status
+          )}`}
+        >
+          {loadingStatusLabel(l.status)}
+        </span>
+      )}
+      </>
+    );
+  }
+
+  function renderAlerts(alerts: string[], softAlerts: string[]) {
+    return (
+      <>
+      {alerts.length > 0 && (
+        <div
+          role="alert"
+          className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-800"
+        >
+          {alerts.map((a) => (
+            <AlertLine key={a} text={a} />
+          ))}
+        </div>
+      )}
+      {softAlerts.length > 0 && (
+        <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900">
+          {softAlerts.map((a) => (
+            <AlertLine key={a} text={a} />
+          ))}
+        </div>
+      )}
+      </>
+    );
+  }
+
+  function renderActions(l: Load) {
+    return (
+      <>
+      {(l.quote_id || canEditSchedule || (noteMap.get(l.id)?.length ?? 0) > 0 || (orderMap.get(l.id)?.length ?? 0) > 0) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          {l.quote_id && (
+            <Link
+              href={`/quotes/${l.quote_id}?from=programacao&date=${date}`}
+              className={buttonClasses("soft", "sm")}
+            >
+              {l.quotes?.client_quote_number?.trim()
+                ? `Cotação ${l.quotes.client_quote_number.trim()}`
+                : "Ver cotação"}
+            </Link>
+          )}
+          {(orderMap.get(l.id)?.length ?? 0) > 0 && (
+            <a
+              href={`/api/programacao/${l.id}/ordem`}
+              target="_blank"
+              rel="noopener"
+              className={`${buttonClasses("soft", "sm")} print:hidden`}
+            >
+              Baixar ordem (PDF)
+            </a>
+          )}
+          {!canEditSchedule && (noteMap.get(l.id)?.length ?? 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => openNotes(l)}
+              title={`${noteMap.get(l.id)?.length ?? 0} observação(ões)`}
+              className={`${notesButtonClass(noteMap.get(l.id)?.length ?? 0)} print:hidden`}
+            >
+              Observações
+            </button>
+          )}
+          {canEditSchedule && (
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
+              <button
+                type="button"
+                onClick={() => openEdit(l)}
+                className={buttonClasses("soft", "sm")}
+              >
+                Editar
+              </button>
+              {hasLoadingOrder(l.client_name) && (
+                <button
+                  type="button"
+                  onClick={() => setOrderFor(l)}
+                  className={buttonClasses("soft", "sm")}
+                >
+                  {(orderMap.get(l.id)?.length ?? 0) > 0 ? "Editar ordem" : "Ordem de embarque"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openNotes(l)}
+                title={
+                  (noteMap.get(l.id)?.length ?? 0) > 0
+                    ? `${noteMap.get(l.id)!.length} observação(ões)`
+                    : "Sem observações"
+                }
+                className={notesButtonClass(noteMap.get(l.id)?.length ?? 0)}
+              >
+                Observações
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(l)}
+                className={buttonClasses("danger", "sm")}
+              >
+                Excluir
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+      </>
+    );
+  }
+
+  // Cartão de uma carga no quadro: uma informação por linha.
+  function renderCard(l: Load) {
+    const alerts = l.status === "entregue" ? [] : maintenanceWarnings(l.plate, l.trailer_plate);
+    const softAlerts = l.status === "entregue" ? [] : defectAlerts(l.plate, l.trailer_plate);
+    const line = (label: string, value: React.ReactNode) => (
+      <div className="flex gap-2">
+        <dt className="w-[4.5rem] shrink-0 text-navy-500">{label}</dt>
+        <dd className="min-w-0 break-words text-navy-900">{value}</dd>
+      </div>
+    );
+    return (
+      <li
+        key={l.id}
+        className={`rounded-lg border p-3 ${
+          alerts.length > 0
+            ? "border-red-300 border-l-4 border-l-red-500 bg-red-50"
+            : softAlerts.length > 0
+              ? "border-amber-300 border-l-4 border-l-amber-500 bg-amber-50"
+              : "border-navy-200 bg-white"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="min-w-0 text-sm font-semibold text-navy-900">{l.cargo}</span>
+          <span className="shrink-0">{renderStatus(l)}</span>
+        </div>
+        <dl className="mt-2 space-y-1 text-xs">
+          {line("Cavalo", <PlateBadge plate={l.plate} />)}
+          {l.trailer_plate?.trim() && line("Carreta", <PlateBadge plate={l.trailer_plate} />)}
+          {line("Motorista", l.driver || "—")}
+          {line("Horário", l.loading_time ? l.loading_time.slice(0, 5) : "—")}
+          {line("Peso", normalizeWeight(l.weight) || "—")}
+          {l.origin?.trim() && line("Origem", l.origin)}
+          {l.destination?.trim() &&
+            line(
+              "Entregas",
+              <DeliveryProofDestinations
+                scheduleId={l.id}
+                destination={l.destination}
+                proofDestinations={proofMap.get(l.id) ?? []}
+                canDelete={canEditSchedule}
+                onChanged={reloadRows}
+              />
+            )}
+        </dl>
+        {renderAlerts(alerts, softAlerts)}
+        {renderActions(l)}
+      </li>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1067,7 +1283,27 @@ export default function ProgramacaoPage() {
           </button>
         </div>
 
-        <div className="ml-auto flex flex-wrap gap-2 print:ml-0">
+        <div className="ml-auto flex flex-wrap items-center gap-2 print:ml-0">
+          <span role="group" aria-label="Visualização" className="inline-flex overflow-hidden rounded-lg border border-navy-200 text-xs print:hidden">
+            {(
+              [
+                ["quadro", "Quadro"],
+                ["lista", "Lista"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => writeView(value)}
+                aria-pressed={view === value}
+                className={`px-2.5 py-1 font-medium transition-colors ${
+                  view === value ? "bg-navy-800 text-white" : "bg-white text-navy-600 hover:bg-navy-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
           {counts.map((c) => {
             const active = statusFilter === c.value;
             return (
@@ -1524,6 +1760,83 @@ export default function ProgramacaoPage() {
               ? "Nenhum carregamento com este status neste dia."
               : "Nenhum carregamento programado para este dia."}
           </div>
+        ) : view === "quadro" ? (
+          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {groups.map(([client, loads]) => {
+              const collapsed = collapsedClients.has(client);
+              const canDrag = canEditSchedule && groups.length > 1;
+              return (
+                <section
+                  key={client}
+                  aria-label={client}
+                  onDragOver={(e) => {
+                    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (dropTarget !== client) setDropTarget(client);
+                  }}
+                  onDrop={(e) => {
+                    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+                    e.preventDefault();
+                    dropClient(client, e.dataTransfer.getData(DRAG_TYPE));
+                  }}
+                  className={`rounded-xl border bg-white p-3 transition-shadow ${dragClient === client ? "opacity-50" : ""} ${
+                    dropTarget === client && dragClient && dragClient !== client
+                      ? "border-brand-500 ring-2 ring-brand-500"
+                      : "border-navy-200"
+                  }`}
+                >
+                  <header
+                    draggable={canDrag}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData(DRAG_TYPE, client);
+                      e.dataTransfer.setData("text/plain", client);
+                      setTimeout(() => setDragClient(client), 0);
+                    }}
+                    onDragEnd={() => {
+                      setDragClient(null);
+                      setDropTarget(null);
+                    }}
+                    title={canDrag ? "Arraste para mudar a ordem dos clientes" : undefined}
+                    className={`mb-2 flex items-center gap-2 ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
+                  >
+                    {canDrag && (
+                      <span aria-hidden="true" className="select-none text-base leading-none text-navy-400 print:hidden">
+                        ⠿
+                      </span>
+                    )}
+                    <h2 className="min-w-0 truncate text-sm font-semibold text-navy-900" title={client}>
+                      {client}
+                    </h2>
+                    <span className="ml-auto shrink-0 rounded-full bg-navy-100 px-2 py-0.5 text-xs text-navy-600">
+                      {loads.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCollapsedClients((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(client)) next.delete(client);
+                          else next.add(client);
+                          return next;
+                        })
+                      }
+                      aria-expanded={!collapsed}
+                      aria-label={`${collapsed ? "Mostrar" : "Recolher"} ${client}`}
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-navy-500 hover:bg-navy-100 hover:text-navy-800 print:hidden"
+                    >
+                      {collapsed ? "Mostrar" : "Recolher"}
+                    </button>
+                  </header>
+                  {/* Com muitas cargas, a coluna rola por dentro. */}
+                  <ul className={`h-[40rem] space-y-2 overflow-y-auto pr-1 print:h-auto print:overflow-visible ${collapsed ? "hidden" : ""}`}>
+                    {loads.map((l) => renderCard(l))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         ) : (
           groups.map(([client, loads]) => {
             const hasOrigin = loads.some((l) => l.origin?.trim());
@@ -1680,7 +1993,7 @@ export default function ProgramacaoPage() {
                         <span className="block text-[11px] font-normal uppercase text-navy-500 lg:hidden">
                           Cavalo
                         </span>
-                        {l.plate || "—"}
+                        <PlateBadge plate={l.plate} />
                       </div>
                       {hasTrailer && (
                         <div
@@ -1689,7 +2002,7 @@ export default function ProgramacaoPage() {
                           <span className="block text-[11px] font-normal uppercase text-navy-500 lg:hidden">
                             Carreta
                           </span>
-                          {l.trailer_plate || "—"}
+                          <PlateBadge plate={l.trailer_plate} />
                         </div>
                       )}
                       <div
@@ -1708,123 +2021,13 @@ export default function ProgramacaoPage() {
                         {l.loading_time ? l.loading_time.slice(0, 5) : "—"}
                       </div>
                       <div className="col-span-2 lg:col-span-1">
-                        {canEditSchedule ? (
-                          <select
-                            value={l.status}
-                            onChange={(e) => changeStatus(l, e.target.value)}
-                            className={`w-full min-w-0 max-w-[10.5rem] cursor-pointer truncate rounded-full border-0 py-1 pl-2.5 pr-1 text-[11px] print:appearance-none font-medium outline-none focus:ring-2 focus:ring-brand-500 ${loadingStatusBadge(
-                              l.status
-                            )}`}
-                          >
-                            {LOADING_STATUSES.map((s) => (
-                              <option key={s.value} value={s.value}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${loadingStatusBadge(
-                              l.status
-                            )}`}
-                          >
-                            {loadingStatusLabel(l.status)}
-                          </span>
-                        )}
+                        {renderStatus(l)}
                       </div>
                     </div>
 
-                    {alerts.length > 0 && (
-                      <div
-                        role="alert"
-                        className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-800"
-                      >
-                        {alerts.map((a) => (
-                          <AlertLine key={a} text={a} />
-                        ))}
-                      </div>
-                    )}
-                    {softAlerts.length > 0 && (
-                      <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900">
-                        {softAlerts.map((a) => (
-                          <AlertLine key={a} text={a} />
-                        ))}
-                      </div>
-                    )}
+                    {renderAlerts(alerts, softAlerts)}
 
-                    {(l.quote_id || canEditSchedule || (noteMap.get(l.id)?.length ?? 0) > 0 || (orderMap.get(l.id)?.length ?? 0) > 0) && (
-                      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
-                        {l.quote_id && (
-                          <Link
-                            href={`/quotes/${l.quote_id}?from=programacao&date=${date}`}
-                            className={buttonClasses("soft", "sm")}
-                          >
-                            {l.quotes?.client_quote_number?.trim()
-                              ? `Cotação ${l.quotes.client_quote_number.trim()}`
-                              : "Ver cotação"}
-                          </Link>
-                        )}
-                        {(orderMap.get(l.id)?.length ?? 0) > 0 && (
-                          <a
-                            href={`/api/programacao/${l.id}/ordem`}
-                            target="_blank"
-                            rel="noopener"
-                            className={`${buttonClasses("soft", "sm")} print:hidden`}
-                          >
-                            Baixar ordem (PDF)
-                          </a>
-                        )}
-                        {!canEditSchedule && (noteMap.get(l.id)?.length ?? 0) > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => openNotes(l)}
-                            title={`${noteMap.get(l.id)?.length ?? 0} observação(ões)`}
-                            className={`${notesButtonClass(noteMap.get(l.id)?.length ?? 0)} print:hidden`}
-                          >
-                            Observações
-                          </button>
-                        )}
-                        {canEditSchedule && (
-                          <span className="flex items-center gap-4 print:hidden">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(l)}
-                              className={buttonClasses("soft", "sm")}
-                            >
-                              Editar
-                            </button>
-                            {hasLoadingOrder(l.client_name) && (
-                              <button
-                                type="button"
-                                onClick={() => setOrderFor(l)}
-                                className={buttonClasses("soft", "sm")}
-                              >
-                                {(orderMap.get(l.id)?.length ?? 0) > 0 ? "Editar ordem" : "Ordem de embarque"}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => openNotes(l)}
-                              title={
-                                (noteMap.get(l.id)?.length ?? 0) > 0
-                                  ? `${noteMap.get(l.id)!.length} observação(ões)`
-                                  : "Sem observações"
-                              }
-                              className={notesButtonClass(noteMap.get(l.id)?.length ?? 0)}
-                            >
-                              Observações
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(l)}
-                              className={buttonClasses("danger", "sm")}
-                            >
-                              Excluir
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {renderActions(l)}
                   </li>
                   );
                 })}
