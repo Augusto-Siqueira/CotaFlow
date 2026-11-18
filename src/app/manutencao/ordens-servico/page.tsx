@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PlateBadge } from "@/components/PlateBadge";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useFeedback } from "@/components/Feedback";
@@ -171,7 +172,7 @@ export default function ServiceOrdersPage() {
   const columns: Column<ServiceOrder>[] = [
     { key: "number", header: "Nº", mobile: "title", cell: (r) => <span className="font-semibold text-navy-900">{formatOsNumber(r.number)}</span> },
     { key: "date", header: "Data", mobile: "subtitle", cell: (r) => formatOsDate(r.service_date) },
-    { key: "plate", header: "Placa", mobile: "badge", cell: (r) => <span className="font-medium tracking-wide">{r.plate}</span> },
+    { key: "plate", header: "Placa", mobile: "badge", cell: (r) => <PlateBadge plate={r.plate} /> },
     { key: "km", header: "KM", mobile: "field", cell: (r) => (r.km !== null ? r.km.toLocaleString("pt-BR") : "—") },
     {
       key: "services",

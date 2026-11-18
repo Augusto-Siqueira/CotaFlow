@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlateBadge } from "@/components/PlateBadge";
 import type { ReactNode } from "react";
 import { StepperControl } from "@/components/StepperControl";
 import { brl, favor, monLab } from "@/lib/kmExato/format";
@@ -100,11 +101,7 @@ export function KmPage({
 }
 
 export function Plate({ plate }: { plate: string }) {
-  return (
-    <span className="inline-block whitespace-nowrap rounded-md border border-navy-200 bg-navy-50 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-navy-800">
-      {plate}
-    </span>
-  );
+  return <PlateBadge plate={plate} />;
 }
 
 /** Marcador de lado do saldo: cor + rótulo (nunca só a cor). */

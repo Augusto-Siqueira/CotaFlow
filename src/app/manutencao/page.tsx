@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PlateBadge } from "@/components/PlateBadge";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useFeedback } from "@/components/Feedback";
@@ -614,8 +615,7 @@ export default function ManutencaoPage() {
       key: "plate",
       header: "Placa",
       mobile: "title",
-      className: "font-semibold tracking-wide text-navy-900",
-      cell: (o) => o.plate,
+      cell: (o) => <PlateBadge plate={o.plate} />,
     },
     {
       key: "type",
@@ -1127,7 +1127,7 @@ export default function ManutencaoPage() {
                       const body = (
                         <>
                           <span className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-semibold tracking-wide text-navy-900">{o.plate}</span>
+                            <PlateBadge plate={o.plate} />
                             <span className="flex flex-col items-end gap-1">
                               {parked && (
                                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(3)}`}>{severityLabel(3)}</span>
@@ -1200,9 +1200,7 @@ export default function ManutencaoPage() {
                             </span>
                           )}
                           <span className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-semibold tracking-wide text-navy-900">
-                              {r.plate}
-                            </span>
+                            <PlateBadge plate={r.plate} />
                             <span className="flex flex-col items-end gap-1">
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${severityBadge(r.severity)}`}
@@ -1394,7 +1392,9 @@ export default function ManutencaoPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="detail-title" className="text-base font-medium">
-                {detail.plate} · {detail.category}
+                <span className="flex flex-wrap items-center gap-2">
+                  <PlateBadge plate={detail.plate} size="md" /> {detail.category}
+                </span>
               </h2>
               <p className="mt-0.5 text-xs text-navy-500">
                 Relatado em {formatDateTime(detail.reported_at)}

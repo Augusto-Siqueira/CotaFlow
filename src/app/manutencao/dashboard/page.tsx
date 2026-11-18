@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { PlateBadge } from "@/components/PlateBadge";
 import { supabase } from "@/lib/supabase";
 import { buttonClasses } from "@/components/Button";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -319,8 +320,7 @@ export default function ManutencaoDashboardPage() {
       key: "plate",
       header: "Placa",
       mobile: "title",
-      className: "font-semibold tracking-wide text-navy-900",
-      cell: (r) => r.plate,
+      cell: (r) => <PlateBadge plate={r.plate} />,
     },
     {
       key: "type",
