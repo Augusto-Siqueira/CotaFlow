@@ -47,6 +47,7 @@ export const NAV: NavEntry[] = [
     icon: "M8 3v4M16 3v4M4 9h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zM9 14l2 2 4-4",
     items: [
       { href: "/programacao", label: "Programação do dia" },
+      { href: "/programacao/disponibilidade", label: "Disponibilidade" },
       { href: "/programacao/dashboard", label: "Dashboard" },
       { href: "/programacao/capacitacoes", label: "Capacitações" },
       { href: "/programacao/comprovantes", label: "Comprovantes" },
