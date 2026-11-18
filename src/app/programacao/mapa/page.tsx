@@ -9,7 +9,8 @@ import { normalizePlate } from "@/lib/fleet";
 import { loadingStatusBadge, loadingStatusLabel } from "@/lib/loadingStatus";
 import type { FleetMarker } from "@/components/FleetMapClient";
 
-// Mapa da frota: posição atual dos veículos com rastreador Maxtrack (via A52),
+// Mapa da frota: posição atual dos veículos com rastreador (Maxtrack, Positron;
+// via A52),
 // cruzada com a carga da Programação e com a oficina. Atualiza sozinho.
 
 const FleetMapClient = dynamic(() => import("@/components/FleetMapClient"), {
@@ -33,6 +34,7 @@ interface Position {
   speed: number;
   ignition: boolean | null;
   at: string;
+  tracker: string;
 }
 
 interface Load {
@@ -178,7 +180,7 @@ export default function MapaFrotaPage() {
         lon: r.p.lon,
         label: r.p.plate,
         color: STATE[r.state].color,
-        title: `${r.p.plate} · ${r.p.kind}`,
+        title: `${r.p.plate} · ${r.p.kind} · ${r.p.tracker}`,
         lines: [
           `${STATE[r.state].label}${r.state === "movendo" ? ` · ${r.p.speed} km/h` : ""} · posição ${ago(r.p.at, now)}`,
           r.load
@@ -197,7 +199,7 @@ export default function MapaFrotaPage() {
         <div>
           <h1 className="text-xl font-semibold text-navy-900">Mapa da frota</h1>
           <p className="mt-1 text-sm text-navy-500">
-            Posição atual dos veículos com rastreador (Maxtrack). Atualiza sozinho a cada minuto.
+            Posição atual dos veículos com rastreador (Maxtrack e Positron). Atualiza sozinho a cada minuto.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -274,7 +276,9 @@ export default function MapaFrotaPage() {
                     <span className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-2">
                         <PlateBadge plate={r.p.plate} />
-                        <span className="text-[11px] text-navy-500">{r.p.kind}</span>
+                        <span className="text-[11px] text-navy-500">
+                          {r.p.kind} · {r.p.tracker}
+                        </span>
                       </span>
                       <span className="flex items-center gap-1.5 text-[11px] text-navy-600">
                         <span className={`h-2 w-2 rounded-full ${STATE[r.state].dot}`} aria-hidden="true" />

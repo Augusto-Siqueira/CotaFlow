@@ -1,14 +1,16 @@
 import "server-only";
 import https from "node:https";
 
-// Integração com a API da A52, que repassa as posições do rastreador Maxtrack.
+// Integração com a API da A52, que repassa as posições dos rastreadores da
+// frota (Maxtrack, Positron e outros que a A52 receba).
 // Só roda no servidor: usuário e senha ficam nas variáveis A52_API_URL,
 // A52_USERNAME e A52_PASSWORD (.env.local e Railway) e nunca vão ao navegador.
 //
 // A API usa GET com corpo JSON em algumas consultas, o que o fetch não permite;
 // por isso as chamadas usam node:https direto.
 
-const MAXTRACK = 20; // id da tecnologia "Maxtrac" em GET /tecnologias
+// Nome das tecnologias (GET /tecnologias) que aparecem na tela.
+const TECH: Record<number, string> = { 1: "Autotrac", 10: "Sighra", 17: "Positron", 20: "Maxtrack", 61: "A52" };
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 const FLEET_TTL_MS = 10 * 60 * 1000;
 const POSITIONS_TTL_MS = 30 * 1000;
@@ -25,6 +27,8 @@ export interface FleetPosition {
   ignition: boolean | null;
   /** Momento da posição (ISO, UTC). */
   at: string;
+  /** Rastreador que mandou esta posição (Maxtrack, Positron...). */
+  tracker: string;
 }
 
 const KIND: Record<number, string> = { 1: "Cavalo", 2: "Carreta", 3: "Truck", 4: "Toco", 5: "Veículo", 6: "Moto", 7: "Bitruck" };
@@ -99,18 +103,32 @@ interface A52Vehicle {
   equipamentos?: { codigo: string; idTecnologia: number; principal?: boolean; recebe_posicao?: boolean }[];
 }
 
-let fleet: { at: number; list: { plate: string; kind: string; codigo: string }[] } | null = null;
+interface Equipment {
+  plate: string;
+  kind: string;
+  codigo: string;
+  tech: number;
+}
 
-/** Veículos ativos com Maxtrack recebendo posição (código do equipamento). */
+let fleet: { at: number; list: Equipment[] } | null = null;
+
+/**
+ * Equipamentos (rastreadores) recebendo posição dos veículos ativos. Um veículo
+ * pode ter mais de um (ex.: Maxtrack e Positron); vale a posição mais recente.
+ */
 async function trackedFleet() {
   if (fleet && Date.now() - fleet.at < FLEET_TTL_MS) return fleet.list;
   const all = ((await authed("GET", "/veiculos")) ?? []) as A52Vehicle[];
-  const list: { plate: string; kind: string; codigo: string }[] = [];
+  const list: Equipment[] = [];
+  const seen = new Set<string>();
   for (const v of all) {
     if (!v.ativo) continue;
-    const eq = (v.equipamentos ?? []).filter((e) => e.idTecnologia === MAXTRACK && e.recebe_posicao);
-    const main = eq.find((e) => e.principal) ?? eq[0];
-    if (main) list.push({ plate: plateKey(v.placa), kind: KIND[v.tipo] ?? "Veículo", codigo: main.codigo });
+    for (const e of v.equipamentos ?? []) {
+      const key = `${e.idTecnologia}:${e.codigo}`;
+      if (!e.recebe_posicao || seen.has(key)) continue;
+      seen.add(key);
+      list.push({ plate: plateKey(v.placa), kind: KIND[v.tipo] ?? "Veículo", codigo: e.codigo, tech: e.idTecnologia });
+    }
   }
   fleet = { at: Date.now(), list };
   return list;
@@ -132,9 +150,16 @@ export async function fleetPositions(): Promise<FleetPosition[]> {
   inflight = (async () => {
     const units = await trackedFleet();
     const kindBy = new Map(units.map((u) => [u.plate, u.kind]));
-    const out: FleetPosition[] = [];
-    for (let i = 0; i < units.length; i += LOTE_SIZE) {
-      const body = units.slice(i, i + LOTE_SIZE).map((u) => ({ codigo: u.codigo, idTecnologia: MAXTRACK }));
+    // Mais recente por placa (quando a placa tem mais de um rastreador).
+    const best = new Map<string, FleetPosition>();
+    // Um lote por rastreador: a resposta do lote não diz de qual equipamento veio.
+    const batches: { tech: number; chunk: Equipment[] }[] = [];
+    for (const tech of [...new Set(units.map((u) => u.tech))]) {
+      const same = units.filter((u) => u.tech === tech);
+      for (let i = 0; i < same.length; i += LOTE_SIZE) batches.push({ tech, chunk: same.slice(i, i + LOTE_SIZE) });
+    }
+    for (const { tech, chunk } of batches) {
+      const body = chunk.map((u) => ({ codigo: u.codigo, idTecnologia: tech }));
       const rows = ((await authed("GET", "/veiculos/posicao/lote", body)) ?? []) as {
         placa: string;
         data_hora: string;
@@ -146,7 +171,7 @@ export async function fleetPositions(): Promise<FleetPosition[]> {
       for (const r of rows) {
         if (typeof r.latitude !== "number" || typeof r.longitude !== "number") continue;
         const plate = plateKey(r.placa);
-        out.push({
+        const pos: FleetPosition = {
           plate,
           kind: kindBy.get(plate) ?? "Veículo",
           lat: r.latitude,
@@ -154,9 +179,13 @@ export async function fleetPositions(): Promise<FleetPosition[]> {
           speed: Math.round(r.velocidade ?? 0),
           ignition: r.ignicao === 1 ? true : r.ignicao === 2 ? false : null,
           at: utcIso(r.data_hora),
-        });
+          tracker: TECH[tech] ?? `Rastreador ${tech}`,
+        };
+        const cur = best.get(plate);
+        if (!cur || cur.at < pos.at) best.set(plate, pos);
       }
     }
+    const out = [...best.values()];
     positions = { at: Date.now(), list: out };
     return out;
   })();
