@@ -195,3 +195,87 @@ export async function fleetPositions(): Promise<FleetPosition[]> {
     inflight = null;
   }
 }
+
+export interface A52Place {
+  a52AddressId: number;
+  a52ClientId: number;
+  name: string;
+  cnpj: string | null;
+  city: string | null;
+  uf: string | null;
+  /** [[lat, lon], ...] sem repetir o ponto de fechamento; null = cerca em círculo. */
+  polygon: [number, number][] | null;
+  /** Raio em metros (cerca em círculo). */
+  radiusM: number | null;
+  centerLat: number;
+  centerLon: number;
+  active: boolean;
+}
+
+interface A52Client {
+  id: number;
+  nomeFantasia?: string | null;
+  razaoSocial?: string | null;
+  cnpj?: string | null;
+  ativo: boolean;
+  enderecos?: {
+    id: number;
+    ativo: boolean;
+    poligono?: { latitude: number; longitude: number; ordem: number }[] | null;
+    raio?: { latitude: number; longitude: number; raio: number } | null;
+    cidade?: { nome?: string; estado?: string } | null;
+  }[];
+}
+
+/** Cercas (polígono ou círculo) dos clientes/fornecedores cadastrados na A52. */
+// Retângulo que cobre o Brasil: endereço sem cidade com cerca fora dele é ponto
+// padrão esquecido no cadastro da A52 (ex.: Colômbia) e fica de fora.
+const inBrazil = (lat: number, lon: number) => lat <= 5.5 && lat >= -34 && lon >= -74.5 && lon <= -34;
+
+export async function a52Places(): Promise<{ places: A52Place[]; withoutFence: number; invalid: number }> {
+  const clients = ((await authed("GET", "/clientes-fornecedores")) ?? []) as A52Client[];
+  const places: A52Place[] = [];
+  let withoutFence = 0;
+  let invalid = 0;
+  for (const c of clients) {
+    const base = (c.nomeFantasia || c.razaoSocial || `Local ${c.id}`).trim().replace(/\s+/g, " ");
+    const addrs = c.enderecos ?? [];
+    for (const e of addrs) {
+      const pts = [...(e.poligono ?? [])]
+        .sort((a, b) => a.ordem - b.ordem)
+        .map((p) => [p.latitude, p.longitude] as [number, number])
+        .filter(([la, lo]) => Number.isFinite(la) && Number.isFinite(lo));
+      // O último ponto repete o primeiro para fechar a figura.
+      if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
+      const circle =
+        e.raio && Number.isFinite(e.raio.latitude) && Number.isFinite(e.raio.longitude) && e.raio.raio > 0 ? e.raio : null;
+      if (pts.length < 3 && !circle) {
+        withoutFence++;
+        continue;
+      }
+      const isPolygon = pts.length >= 3;
+      const city = e.cidade?.nome?.trim() || null;
+      const uf = e.cidade?.estado?.trim() || null;
+      const [cLat, cLon] = isPolygon ? pts[0] : [circle!.latitude, circle!.longitude];
+      if (!city && !inBrazil(cLat, cLon)) {
+        invalid++;
+        continue;
+      }
+      places.push({
+        a52AddressId: e.id,
+        a52ClientId: c.id,
+        // Cliente com mais de um endereço: o nome leva a cidade para diferenciar.
+        name: addrs.length > 1 && city ? `${base} · ${city}` : base,
+        cnpj: c.cnpj?.replace(/\D/g, "") || null,
+        city,
+        uf,
+        polygon: isPolygon ? pts : null,
+        radiusM: isPolygon ? null : Math.min(2000, Math.max(30, Math.round(circle!.raio))),
+        centerLat: isPolygon ? pts.reduce((s, p) => s + p[0], 0) / pts.length : circle!.latitude,
+        centerLon: isPolygon ? pts.reduce((s, p) => s + p[1], 0) / pts.length : circle!.longitude,
+        active: Boolean(c.ativo && e.ativo),
+      });
+    }
+  }
+  return { places, withoutFence, invalid };
+}

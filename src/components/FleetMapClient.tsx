@@ -136,5 +136,5 @@ export default function FleetMapClient({
     mk.openPopup();
   }, [selectedId]);
 
-  return <div ref={containerRef} className="h-full min-h-[24rem] w-full rounded-xl" />;
+  return <div ref={containerRef} className="relative isolate z-0 h-full min-h-[24rem] w-full rounded-xl" />;
 }
