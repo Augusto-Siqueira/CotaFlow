@@ -27,12 +27,12 @@ export function PlateBadge({ plate, size = "sm" }: { plate: string | null | unde
       aria-label={`Placa ${p}`}
       style={PLATE}
       className={`inline-flex flex-col overflow-hidden rounded-[3px] border align-middle leading-none shadow-sm ${
-        big ? "min-w-[5.75rem]" : "min-w-[4.75rem]"
+        big ? "min-w-[6.75rem]" : "min-w-[5.5rem]"
       }`}
     >
       <span
         aria-hidden="true"
-        style={{ ...BAND, fontSize: big ? 6 : 5, letterSpacing: "0.15em" }}
+        style={{ ...BAND, fontSize: big ? 7 : 6, letterSpacing: "0.15em" }}
         className={`flex items-center justify-between gap-1 px-1 font-bold ${big ? "py-[2px]" : "py-px"}`}
       >
         <span>BRASIL</span>
@@ -41,7 +41,7 @@ export function PlateBadge({ plate, size = "sm" }: { plate: string | null | unde
       <span
         aria-hidden="true"
         style={{ color: "#111111", letterSpacing: "0.12em" }}
-        className={`px-1.5 text-center font-mono font-bold ${big ? "py-[3px] text-sm" : "py-[2px] text-xs"}`}
+        className={`px-1.5 text-center font-mono font-bold ${big ? "py-[3px] text-base" : "py-[2px] text-sm"}`}
       >
         {p}
       </span>

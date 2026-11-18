@@ -86,7 +86,7 @@ export function SaldoCard({ E, T }: { E: KmEngine; T: KmTrip[] }) {
           {rows.map((r) => {
             const w = (Math.abs(r.v) / mx) * 50;
             return (
-              <li key={r.placa} className="grid grid-cols-[84px_1fr_110px] items-center gap-3 text-sm" title={`${r.placa}: ${sbrl(r.v)} (${favTxt(r.v)})`}>
+              <li key={r.placa} className="grid grid-cols-[96px_1fr_110px] items-center gap-3 text-sm" title={`${r.placa}: ${sbrl(r.v)} (${favTxt(r.v)})`}>
                 <Plate plate={r.placa} />
                 <span className="relative h-3.5 rounded bg-navy-50">
                   <span className="absolute inset-y-0 left-1/2 w-px bg-navy-300" />
@@ -154,7 +154,7 @@ export function ProdCard({ E, T, mes, team = true }: { E: KmEngine; T: KmTrip[];
           const s = st(p);
           const f = Math.min(p.km / meta, 1);
           return (
-            <li key={p.placa} className="grid grid-cols-[84px_1fr_120px] items-center gap-3 text-sm" title={`${p.placa}: ${km(p.km)} de ${km(meta)} km`}>
+            <li key={p.placa} className="grid grid-cols-[96px_1fr_120px] items-center gap-3 text-sm" title={`${p.placa}: ${km(p.km)} de ${km(meta)} km`}>
               <Plate plate={p.placa} />
               <span className="relative h-3 rounded bg-navy-100">
                 <span className={`absolute inset-y-0 left-0 rounded ${s === "ok" ? "bg-brand-600" : s === "ab" ? "bg-navy-400" : "bg-amber-500"}`} style={{ width: `${f * 100}%` }} />
