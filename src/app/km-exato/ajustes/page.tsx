@@ -31,6 +31,7 @@ function TariffModal({ E, onClose, onDone, userName }: { E: KmEngine; onClose: (
   const read = () => {
     const v: Record<string, KmTariffValue> = {};
     E.tipos().forEach((tp) => {
+      if (tp.base) return;
       const x = vals[tp.id] ?? { ccd: "", cc: "", km: "" };
       if (metodo === "piso") {
         const ccd = parseNum(x.ccd);
@@ -83,7 +84,7 @@ function TariffModal({ E, onClose, onDone, userName }: { E: KmEngine; onClose: (
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          {E.tipos().map((tp) => {
+          {E.tipos().filter((tp) => !tp.base).map((tp) => {
             const l = last[tp.id] ?? {};
             const x = vals[tp.id] ?? { ccd: "", cc: "", km: "" };
             return (
@@ -118,6 +119,11 @@ function TariffModal({ E, onClose, onDone, userName }: { E: KmEngine; onClose: (
           })}
           <p className="text-xs text-navy-500">
             {metodo === "piso" ? `Valor do km = CCD × (1 + ${nf(rt, 2)}) ÷ 2, calculado sozinho. ` : ""}Deixe em branco o equipamento que não muda.
+            {E.tipos().filter((tp) => tp.base).map((tp) => (
+              <span key={tp.id} className="block">
+                {tp.nome}: usa os valores da {E.tipoNome(tp.base!)} × {nf(+(tp.fator ?? 1), 4)}, sozinho.
+              </span>
+            ))}
           </p>
         </div>
         {affected > 0 && (
@@ -200,7 +206,7 @@ function Rules({ E, userName, reload }: { E: KmEngine; userName: string | null; 
   const r = E.R();
   const [f, setF] = useState({
     meta: nf(+r.metaKm, 0), cmax: nf(E.compMax(), 0), lim: nf(+r.limite * 100, 0), prazo: nf(+r.prazoComp, 0),
-    dias: nf(+r.diasAberta, 0), fator: nf(+r.fator, 3), pol: r.kmMinPolitica,
+    dias: nf(+r.diasAberta, 0), fator: nf(+r.fator, 3), spot: nf(+r.spot * 100, 0), pol: r.kmMinPolitica,
   });
   const fields: [keyof typeof f, string, string][] = [
     ["meta", "Km mínimo por veículo no mês", "Contrato, cl. 5.4"],
@@ -209,14 +215,17 @@ function Rules({ E, userName, reload }: { E: KmEngine; userName: string | null; 
     ["prazo", "Prazo do comprovante (dias)", "Após a entrega"],
     ["dias", "Alerta de viagem em aberto (dias)", ""],
     ["fator", "Fator do km estimado", "km estimado × fator"],
+    ["spot", "Acréscimo do spot (%)", "sobre o piso ANTT"],
   ];
   async function save() {
     const p = {
       min_km_month: parseNum(f.meta), comp_max_km: parseNum(f.cmax), deviation_limit: (parseNum(f.lim) ?? NaN) / 100,
       proof_deadline_days: parseNum(f.prazo), open_alert_days: parseNum(f.dias), estimate_factor: parseNum(f.fator), min_km_policy: f.pol,
+      spot_markup: (parseNum(f.spot) ?? NaN) / 100,
     };
     if (Object.values(p).some((v) => v === null || (typeof v === "number" && !isFinite(v)))) return toastError("Confira os valores.");
-    const cur: Record<string, unknown> = { min_km_month: r.metaKm, comp_max_km: E.compMax(), deviation_limit: r.limite, proof_deadline_days: r.prazoComp, open_alert_days: r.diasAberta, estimate_factor: r.fator, min_km_policy: r.kmMinPolitica };
+    if (p.spot_markup < 0 || p.spot_markup > 1) return toastError("O acréscimo do spot vai de 0 a 100%.");
+    const cur: Record<string, unknown> = { min_km_month: r.metaKm, comp_max_km: E.compMax(), deviation_limit: r.limite, proof_deadline_days: r.prazoComp, open_alert_days: r.diasAberta, estimate_factor: r.fator, min_km_policy: r.kmMinPolitica, spot_markup: r.spot };
     const ch = Object.keys(p).filter((k) => String(cur[k]) !== String((p as Record<string, unknown>)[k])).map((k) => `${k} ${cur[k]} → ${(p as Record<string, unknown>)[k]}`);
     if (!ch.length) return toastInfo("Nada mudou.");
     const { error } = await supabase.from("km_settings").update({ ...p, updated_at: new Date().toISOString() }).eq("id", 1);
@@ -304,7 +313,8 @@ function Settings({ E, userName, reload, open }: { E: KmEngine; userName: string
   const tps = E.tipos();
   const T = E.trips();
   const chg = E.chgDate();
-  const conf = T.filter((x) => !x.hist && chg && x.carreg >= chg && x.fCte != null && x.previsto != null);
+  // Só a frota dedicada: o frete do spot (piso + acréscimo) é conferido na viagem e não entra no saldo.
+  const conf = T.filter((x) => !x.hist && x.modo !== "spot" && chg && x.carreg >= chg && x.fCte != null && x.previsto != null);
   const dif = conf.reduce((a, x) => a + (x.fCte! - x.previsto!), 0);
   const bad = conf.filter((x) => Math.abs(x.fCte! - x.previsto!) > 1);
   const A = E.S.acertos.slice().sort((a, b) => ((a.data || "") < (b.data || "") ? 1 : -1));
@@ -319,7 +329,7 @@ function Settings({ E, userName, reload, open }: { E: KmEngine; userName: string
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel title="Tarifas" sub="Cada tabela vale a partir da vigência; as viagens carregadas desde então são recalculadas." right={<button type="button" className={buttonClasses("primary", "md")} onClick={() => setTar(true)}>Nova tabela</button>}>
+      <Panel title="Tarifas" sub={`Cada tabela vale a partir da vigência; as viagens carregadas desde então são recalculadas. Spot: piso ANTT + ${nf(+E.R().spot * 100, 0)}% (em Regras).`} right={<button type="button" className={buttonClasses("primary", "md")} onClick={() => setTar(true)}>Nova tabela</button>}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-navy-50 text-xs text-navy-500">
@@ -337,8 +347,13 @@ function Settings({ E, userName, reload, open }: { E: KmEngine; userName: string
                   <td className="px-3 py-2 font-mono">{dBR(x.desde)} {x.id === cur ? <Pill tone="ok">em vigor</Pill> : x.desde > today ? <Pill tone="warn">programada</Pill> : null}</td>
                   <td className="px-3 py-2">{x.metodo === "piso" ? "km + CC" : "por km"}</td>
                   {tps.map((tp) => {
-                    const v = x.v?.[tp.id];
-                    return <td key={tp.id} className="px-3 py-2 text-right font-mono">{v ? <>{nf(+v.km, 4)}{x.metodo === "piso" && <span className="block text-[11px] text-navy-500">CC {nf(+(v.cc ?? 0), 2)}</span>}</> : <span className="text-navy-400">—</span>}</td>;
+                    const v = E.tarVal(x, tp.id);
+                    const derived = Boolean(v && !x.v?.[tp.id]);
+                    return (
+                      <td key={tp.id} className={`px-3 py-2 text-right font-mono ${derived ? "text-navy-500" : ""}`} title={derived ? `${E.tipoNome(tp.base!)} × ${nf(+(tp.fator ?? 1), 4)}` : undefined}>
+                        {v ? <>{nf(+v.km, 4)}{x.metodo === "piso" && <span className="block text-[11px] text-navy-500">CC {nf(+(v.cc ?? 0), 2)}</span>}</> : <span className="text-navy-400">—</span>}
+                      </td>
+                    );
                   })}
                   <td className="px-3 py-2 text-xs text-navy-600">{x.ref}</td>
                   <td className="px-3 py-2 text-right">{E.tarRows().length > 1 && <button type="button" className={buttonClasses("danger", "sm")} onClick={() => delTar(x.id, x.desde)}>Excluir</button>}</td>

@@ -232,8 +232,17 @@ export function TripDetailModal({ id, onClose, onEdit, onCloseTrip, onMotivo, ..
 
         {isAdmin && !t.hist && t.previsto != null && (
           <p className={noteCls}>
-            Frete pela metodologia <span className="text-xs text-navy-500">(só admin)</span>: <b>{brl(t.previsto)}</b> = {km(t.kmFat)} km × {nf(t.vkm ?? 0, 4)}
-            {t.cc ? " + CC " + nf(t.cc, 2) : ""}
+            {t.modo === "spot" ? (
+              <>
+                Frete spot · piso ANTT + {nf((t.mk ?? 0) * 100, 0)}% <span className="text-xs text-navy-500">(só admin)</span>: <b>{brl(t.previsto)}</b> = ({km(t.kmFat)} km × {nf(t.vkm ?? 0, 4)}
+                {t.cc ? " + CC " + nf(t.cc, 2) : ""}) × {nf(1 + (t.mk ?? 0), 2)}
+              </>
+            ) : (
+              <>
+                Frete pela metodologia <span className="text-xs text-navy-500">(só admin)</span>: <b>{brl(t.previsto)}</b> = {km(t.kmFat)} km × {nf(t.vkm ?? 0, 4)}
+                {t.cc ? " + CC " + nf(t.cc, 2) : ""}
+              </>
+            )}
             {t.fCte != null && (
               <>
                 {" "}· CT-e <b>{brl(t.fCte)}</b>{" "}
@@ -477,7 +486,10 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
 
   const cctx = placa && modo === "dedicado" && placa !== "__spot" ? E.compCtx(placa, carreg, id) : null;
   const cerr = modo === "dedicado" && placa && placa !== "__spot" ? E.compErr(cctx, comp) : null;
-  const tar = placa && placa !== "__spot" ? E.tarFor(E.tipoOf(placa), carreg || todayISO()) : null;
+  const tar = placa === "__spot" ? (spotTipo ? E.tarFor(spotTipo, carreg || todayISO()) : null) : placa ? E.tarFor(E.tipoOf(placa), carreg || todayISO()) : null;
+  // Spot: piso ANTT + acréscimo (Ajustes → Regras), só nas tabelas do piso.
+  const spotMk = modo === "spot" ? +E.R().spot || 0 : 0;
+  const spotSemPiso = modo === "spot" && tar != null && tar.metodo !== "piso";
 
   // Sugestão de km pela mediana da mesma rota (mesmo conjunto de destinos).
   const routeKey = rkey(ents.map((e) => e.cliente));
@@ -646,7 +658,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
   }
 
   const cteSum = ents.reduce((a, e) => a + (e.freteCte || 0), 0);
-  const prev = tar && kmFat && kmFat > 0 ? r2(kmFat * tar.km + tar.cc) : null;
+  const prev = tar && !spotSemPiso && kmFat && kmFat > 0 ? r2((kmFat * tar.km + tar.cc) * (1 + spotMk)) : null;
   const showObs = modo === "dedicado" && comp && !cerr && rota != null && realPlate;
 
   return (
@@ -868,12 +880,23 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
               {rota == null ? "" : fator !== 1 ? `estimado × ${nf(fator, 3)}` : comp ? `${km(rota)} estimados ${comp > 0 ? "+ " : "− "}${km(Math.abs(comp))} de compensação` : "igual ao km estimado"}
             </small>
           </div>
-          {modo !== "spot" && isAdmin && (
-            !tar || !(kmFat && kmFat > 0) ? (
-              <p className={noteCls}>Escolha a placa e informe o km para ver o frete pela metodologia.</p>
+          {isAdmin && (
+            modo === "spot" && spotTipo && !tar ? (
+              <p className={noteCls}>Sem tarifa para {E.tipoNome(spotTipo)} nesta data: cadastre o equipamento numa tabela de tarifas (Ajustes) para ver o frete spot.</p>
+            ) : spotSemPiso ? (
+              <p className={noteCls}>A tabela de {dBR(tar!.desde)} é por km, sem piso ANTT: o frete spot (piso + {nf(spotMk * 100, 0)}%) só sai com tabela do piso.</p>
+            ) : !tar || !(kmFat && kmFat > 0) ? (
+              <p className={noteCls}>{modo === "spot" ? "Escolha o equipamento e informe o km para ver o frete spot (piso ANTT + " + nf(spotMk * 100, 0) + "%)." : "Escolha a placa e informe o km para ver o frete pela metodologia."}</p>
             ) : (
               <>
-                <Kv items={[["Valor do km", nf(tar.km, 4)], ["CC por viagem", tar.cc ? nf(tar.cc, 2) : "—"], ["Frete previsto", nf(prev!, 2)], ["Tabela", dBR(tar.desde)]]} />
+                <Kv
+                  items={[
+                    ["Valor do km", nf(tar.km, 4)],
+                    ["CC por viagem", tar.cc ? nf(tar.cc, 2) : "—"],
+                    [modo === "spot" ? `Frete spot (piso + ${nf(spotMk * 100, 0)}%)` : "Frete previsto", nf(prev!, 2)],
+                    ["Tabela", dBR(tar.desde)],
+                  ]}
+                />
                 {cteSum > 0 && (
                   <p className={Math.abs(cteSum - prev!) <= 1 ? noteOk : noteRisk}>
                     Frete nos CT-e: <b>{brl(cteSum)}</b> ·{" "}
@@ -1007,7 +1030,7 @@ export function CloseTripModal({ id, onClose, onDone, ...c }: Common & { id: str
               </div>
               <div>
                 <label className={labelCls} htmlFor="km-c-vkm">Valor do km <span className="font-normal text-navy-500">· tabela de {dBR(t?.desde)}</span></label>
-                <input id="km-c-vkm" className={inputCls} disabled value={t ? "R$ " + nf(t.km, 4) + (t.cc && !isSpot ? " + CC " + nf(t.cc, 2) : "") : "sem tarifa para este equipamento"} />
+                <input id="km-c-vkm" className={inputCls} disabled value={t ? "R$ " + nf(t.km, 4) + (t.cc ? " + CC " + nf(t.cc, 2) : "") : "sem tarifa para este equipamento"} />
               </div>
             </>
           )}

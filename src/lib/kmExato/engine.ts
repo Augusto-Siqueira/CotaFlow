@@ -14,8 +14,11 @@ export interface KmRules {
   fator: number;
   kmMinPolitica: "registrar" | "cobrar";
   retorno: number;
+  /** Acréscimo do spot sobre o piso ANTT (fração: 0,10 = piso + 10%). */
+  spot: number;
 }
-export interface KmType { id: string; nome: string; eixos: number | null }
+/** base/fator: usa a tarifa de outro equipamento × fator (ex.: 35 t = 30 t × 9,51/9,06). */
+export interface KmType { id: string; nome: string; eixos: number | null; base?: string | null; fator?: number | null }
 export interface KmFleet { placa: string; tipo: string; abertura: number }
 export interface KmTariffValue { km: number; cc?: number; ccd?: number }
 export interface KmTariff { id: string; desde: string; metodo: "km" | "piso"; ref: string | null; v: Record<string, KmTariffValue> }
@@ -109,6 +112,8 @@ export interface KmTrip {
   odoChegada?: number | null;
   entregas: KmDelivery[];
   tarRef?: TarFor | null;
+  /** Spot: acréscimo aplicado sobre o piso no frete previsto (0,10 = +10%). */
+  mk?: number;
 }
 
 // ---------- helpers (iguais ao app) ----------
@@ -166,11 +171,21 @@ export class KmEngine {
   tarRows() {
     return this.S.cfg.tarifas.slice().sort((a, b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : 0));
   }
+  /** Valores de um equipamento numa tabela; o que tem base usa a do outro × fator. */
+  tarVal(r: KmTariff, tipo: string): KmTariffValue | undefined {
+    const own = r.v?.[tipo];
+    if (own) return own;
+    const tp = this.tipos().find((x) => x.id === tipo);
+    const b = tp?.base ? r.v?.[tp.base] : undefined;
+    const f = +(tp?.fator ?? 0);
+    if (!b || !(f > 0)) return undefined;
+    return { km: Math.round(+b.km * f * 10000) / 10000, cc: r2(+(b.cc || 0) * f), ccd: b.ccd != null ? Math.round(+b.ccd * f * 10000) / 10000 : undefined };
+  }
   tarFor(tipo: string | null, date: string): TarFor | null {
     let out: TarFor | null = null;
     if (!tipo) return null;
     this.tarRows().forEach((r) => {
-      const v = r.v?.[tipo];
+      const v = this.tarVal(r, tipo);
       if (r.desde <= date && v && v.km != null)
         out = { km: +v.km, cc: r.metodo === "piso" ? +(v.cc || 0) : 0, ccd: v.ccd, metodo: r.metodo, desde: r.desde, ref: r.ref, id: r.id };
     });
@@ -265,8 +280,12 @@ export class KmEngine {
         o.opKm = null;
         o.opRS = null;
         if (o.modo === "spot") {
-          o.previsto = null;
-          o.cc = 0;
+          // Frete do spot = piso ANTT (km × valor do km + CC) + acréscimo do spot,
+          // como a calculadora de frete. Só para conferir o CT-e: fora do saldo.
+          const mk = +this.R().spot || 0;
+          o.previsto = t && t.metodo === "piso" && v.kmFat != null ? r2((v.kmFat * t.km + t.cc) * (1 + mk)) : null;
+          o.cc = o.previsto != null && t ? t.cc : 0;
+          o.mk = o.previsto != null ? mk : 0;
           // Spot fechado com odômetro: diferença faturado × rodado (km e R$ pelo
           // valor do km do equipamento) só para consulta. difRS fica null, então
           // não entra no saldo da frota dedicada.

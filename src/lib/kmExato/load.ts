@@ -109,7 +109,7 @@ export function tripDoc(t: KmTripRow, deliveries: KmDeliveryRow[]): KmTripDoc {
 export async function loadKmState(db: SupabaseClient): Promise<{ state: KmState; tripRows: KmTripRow[] }> {
   const [settings, types, fleet, tariffs, routes, hist, trips, deliveries, settlements, waivers] = await Promise.all([
     all<Record<string, unknown>>(() => db.from("km_settings").select("*").eq("id", 1), "km_settings"),
-    all<{ id: string; name: string; axles: number | null }>(() => db.from("km_equipment_types").select("id, name, axles").order("position"), "km_equipment_types"),
+    all<{ id: string; name: string; axles: number | null; tariff_base: string | null; tariff_factor: number | null }>(() => db.from("km_equipment_types").select("id, name, axles, tariff_base, tariff_factor").order("position"), "km_equipment_types"),
     all<{ plate: string; type_id: string; opening_balance: number }>(() => db.from("km_fleet").select("plate, type_id, opening_balance").eq("active", true).order("position"), "km_fleet"),
     all<{ id: string; valid_from: string; method: "km" | "piso"; reference: string | null; values: KmTariff["v"] }>(() => db.from("km_tariffs").select("id, valid_from, method, reference, values").order("valid_from"), "km_tariffs"),
     all<{ id: string; name: string; km: number }>(() => db.from("km_routes").select("id, name, km").order("position"), "km_routes"),
@@ -144,8 +144,9 @@ export async function loadKmState(db: SupabaseClient): Promise<{ state: KmState;
         fator: Number(s.estimate_factor ?? 1),
         kmMinPolitica: s.min_km_policy === "cobrar" ? "cobrar" : "registrar",
         retorno: Number(s.return_factor ?? 0.92),
+        spot: Number(s.spot_markup ?? 0.1),
       },
-      tipos: types.map((t) => ({ id: t.id, nome: t.name, eixos: n(t.axles) })),
+      tipos: types.map((t) => ({ id: t.id, nome: t.name, eixos: n(t.axles), base: t.tariff_base, fator: n(t.tariff_factor) })),
       frota: fleet.map((f) => ({ placa: f.plate, tipo: f.type_id, abertura: Number(f.opening_balance) })),
       tarifas: tariffs.map((t) => ({ id: t.id, desde: t.valid_from, metodo: t.method, ref: t.reference, v: t.values ?? {} })),
       rotas: routes.map((r) => ({ id: r.id, nome: r.name, km: Number(r.km) })),

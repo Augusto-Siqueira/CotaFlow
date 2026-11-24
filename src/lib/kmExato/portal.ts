@@ -73,7 +73,7 @@ export function sanitizeForPortal(E: KmEngine): PortalPayload {
   return {
     state: {
       cfg: {
-        regras: { ...S.cfg.regras, kmMinPolitica: "registrar" },
+        regras: { ...S.cfg.regras, kmMinPolitica: "registrar", spot: 0 },
         tipos: S.cfg.tipos,
         frota: S.cfg.frota,
         tarifas: S.cfg.tarifas.map((t) => ({
