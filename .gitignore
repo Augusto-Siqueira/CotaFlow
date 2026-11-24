@@ -45,3 +45,6 @@ supabase/.temp
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# XML de exemplo (CT-e / MDF-e) com dados de clientes: nunca vai para o GitHub
+infra/exemplos/

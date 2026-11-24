@@ -13,6 +13,7 @@ const TABS = [
   { href: "/km-exato", label: "Painel" },
   { href: "/km-exato/viagens", label: "Viagens" },
   { href: "/km-exato/entregas", label: "Entregas" },
+  { href: "/km-exato/ctes", label: "CT-e" },
   { href: "/km-exato/relatorios", label: "Relatórios" },
   { href: "/km-exato/ajustes", label: "Ajustes", admin: true },
 ];

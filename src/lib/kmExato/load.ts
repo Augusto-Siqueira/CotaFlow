@@ -121,6 +121,9 @@ export async function loadKmState(db: SupabaseClient): Promise<{ state: KmState;
     all<{ month: string; plate: string; reason: string }>(() => db.from("km_waivers").select("month, plate, reason"), "km_waivers"),
   ]);
 
+  // CT-e recebidos sem viagem (aba CT-e). Se a contagem falhar, a tela abre mesmo assim.
+  const pend = await db.from("km_cte_inbox").select("id", { count: "exact", head: true }).eq("status", "sem_viagem");
+
   const s = settings[0] ?? {};
   const histByMonth = new Map<string, KmHistMonth>();
   for (const h of hist) {
@@ -155,6 +158,7 @@ export async function loadKmState(db: SupabaseClient): Promise<{ state: KmState;
     viag,
     acertos: settlements.map((a) => ({ id: a.id, data: a.settled_on, placa: a.plate, pagoPara: a.paid_to, valor: n(a.value), efeito: n(a.effect), obs: a.note })),
     abonos: Object.fromEntries(waivers.map((w) => [`${w.month}_${w.plate}`, { motivo: w.reason }])),
+    ctePend: pend.error ? 0 : pend.count ?? 0,
   };
   return { state, tripRows: trips };
 }

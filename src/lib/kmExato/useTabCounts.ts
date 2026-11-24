@@ -11,6 +11,7 @@ export function useTabCounts(E: KmEngine | null) {
     const C = E.comps();
     const late = C.filter((c) => c.st === "atrasado").length;
     const pend = C.filter((c) => c.st === "pendente").length;
-    return { "/km-exato/viagens": { n: ab }, "/km-exato/entregas": { n: late + pend, hot: late > 0 } };
+    const cp = E.S.ctePend ?? 0;
+    return { "/km-exato/viagens": { n: ab }, "/km-exato/entregas": { n: late + pend, hot: late > 0 }, "/km-exato/ctes": { n: cp, hot: cp > 0 } };
   }, [E]);
 }

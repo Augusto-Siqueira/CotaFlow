@@ -72,6 +72,8 @@ export interface KmState {
   viag: Record<string, KmTripDoc>;
   acertos: KmSettlement[];
   abonos: Record<string, { motivo: string }>;
+  /** CT-e recebidos do ERP que ainda esperam a viagem (aba CT-e). */
+  ctePend?: number;
 }
 
 /** Viagem já calculada (o "o" do trips() original). */
