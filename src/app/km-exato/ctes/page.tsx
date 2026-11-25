@@ -33,6 +33,12 @@ interface InboxRow {
   linked_by: string | null;
   source: "email" | "manual";
 }
+interface MailState {
+  last_run_at: string | null;
+  last_ok_at: string | null;
+  last_error: string | null;
+  last_summary: { emails?: number; xmls?: number; counts?: Record<string, number> } | null;
+}
 interface ImportResult {
   file?: string;
   result: "vinculado" | "sem_viagem" | "ja_recebido" | "outro_cliente" | "cancelado" | "invalido";
@@ -58,6 +64,7 @@ export default function KmCtesPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<TripDialog>(null);
   const [version, setVersion] = useState(0);
+  const [mail, setMail] = useState<MailState | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,6 +84,14 @@ export default function KmCtesPage() {
           setRows((data ?? []) as InboxRow[]);
           setLoadErr(null);
         }
+      });
+    supabase
+      .from("km_cte_mail_state")
+      .select("last_run_at, last_ok_at, last_error, last_summary")
+      .eq("id", 1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setMail((data as MailState | null) ?? null);
       });
     return () => {
       cancelled = true;
@@ -128,6 +143,31 @@ export default function KmCtesPage() {
       ].filter(Boolean);
       (n("vinculado") ? toastSuccess : toastInfo)(`${R.length} XML: ${parts.join(", ")}.`);
       if (n("sem_viagem")) setSeg("sem_viagem");
+      refresh();
+    } catch (e) {
+      toastError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function readMail() {
+    setBusy("mail");
+    try {
+      const res = await fetch("/api/km/ctes/email", { method: "POST" });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; skipped?: string; emails?: number; xmls?: number; counts?: Record<string, number>; more?: boolean };
+      if (!res.ok) throw new Error(j.error || "Falha ao ler o e-mail.");
+      if (j.skipped) toastInfo(j.skipped);
+      else {
+        const c = j.counts ?? {};
+        const v = c.vinculado ?? 0;
+        const sv = c.sem_viagem ?? 0;
+        const msg = j.xmls
+          ? `${j.emails} e-mail${j.emails === 1 ? "" : "s"} com XML: ${v} CT-e vinculado${v === 1 ? "" : "s"}, ${sv} sem viagem, ${c.outro_cliente ?? 0} de outros clientes (ignorados), ${c.ja_recebido ?? 0} já recebido${(c.ja_recebido ?? 0) === 1 ? "" : "s"}${c.cancelado ? `, ${c.cancelado} cancelamento${c.cancelado === 1 ? "" : "s"}` : ""}.`
+          : "Nenhum e-mail novo com XML.";
+        (v ? toastSuccess : toastInfo)(msg + (j.more ? " Ainda há e-mails: clique de novo." : ""));
+        if (sv) setSeg("sem_viagem");
+      }
       refresh();
     } catch (e) {
       toastError((e as Error).message);
@@ -201,8 +241,8 @@ export default function KmCtesPage() {
       cell: (r) =>
         r.status === "vinculado" ? (
           <span className="inline-flex flex-col gap-0.5">
-            <Pill tone="ok">{r.linked_by === "Automático" ? (r.source === "email" ? "do e-mail, sozinho" : "sozinho") : "vinculado"}</Pill>
-            {r.linked_by && r.linked_by !== "Automático" && <span className="text-xs text-navy-500">por {r.linked_by}</span>}
+            <Pill tone="ok">{r.linked_by === "Automático" ? (r.source === "email" ? "do e-mail, sozinho" : "sozinho") : r.linked_by === "já lançado na viagem" ? "já estava na viagem" : "vinculado"}</Pill>
+            {r.linked_by && r.linked_by !== "Automático" && r.linked_by !== "já lançado na viagem" && <span className="text-xs text-navy-500">por {r.linked_by}</span>}
           </span>
         ) : (
           <span className="inline-flex max-w-xs flex-col gap-0.5">
@@ -276,13 +316,28 @@ export default function KmCtesPage() {
         right={
           <>
             <input ref={fileRef} type="file" multiple accept=".xml,text/xml,application/xml" hidden onChange={(e) => { importFiles(e.target.files); e.target.value = ""; }} />
-            <button type="button" disabled={busy === "import"} className={buttonClasses("primary", "md")} onClick={() => fileRef.current?.click()}>
-              {busy === "import" ? "Importando..." : "Importar XML"}
-            </button>
+            <span className="flex flex-wrap gap-2">
+              <button type="button" disabled={busy === "mail"} className={buttonClasses("primary", "md")} onClick={readMail}>
+                {busy === "mail" ? "Lendo e-mails..." : "Ler e-mails agora"}
+              </button>
+              <button type="button" disabled={busy === "import"} className={buttonClasses("secondary", "md")} onClick={() => fileRef.current?.click()}>
+                {busy === "import" ? "Importando..." : "Importar XML"}
+              </button>
+            </span>
           </>
         }
         title="CT-e da Btech"
-        sub="CT-e de outros clientes são ignorados e não ficam guardados."
+        sub={
+          <>
+            O CotaFlow lê sozinho, a cada 15 minutos, os XML que o ERP envia pelo e-mail. CT-e de outros clientes são ignorados e não ficam guardados.
+            {mail?.last_run_at && (
+              <span className={`mt-1 block ${mail.last_error ? "text-red-700" : ""}`}>
+                Última leitura: {new Date(mail.last_run_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                {mail.last_error ? ` · falhou: ${mail.last_error}` : mail.last_summary?.xmls ? ` · ${mail.last_summary.xmls} XML lidos` : " · nada novo"}
+              </span>
+            )}
+          </>
+        }
       >
         <div className="mb-4 flex flex-wrap overflow-hidden rounded-lg border border-navy-300 text-sm sm:w-fit">
           {SEGS.map(([v, l]) => (

@@ -31,6 +31,7 @@ create table if not exists km_cte_inbox (
   reason text,
   trip_id uuid references km_trips(id) on delete set null,
   delivery_id uuid references km_deliveries(id) on delete set null,
+  delivery_created boolean not null default false, -- a entrega foi criada pelo CT-e (não era uma entrega já lançada)
   linked_by text,                               -- 'automático' ou o nome de quem vinculou
   linked_at timestamptz,
   source text not null default 'manual' check (source in ('email', 'manual')),
@@ -54,6 +55,46 @@ create policy zz_deny_portal_client on km_cte_inbox as restrictive for all to au
   using (not public.is_portal_client()) with check (not public.is_portal_client());
 drop policy if exists zz_deny_inspector on km_cte_inbox;
 create policy zz_deny_inspector on km_cte_inbox as restrictive for all to authenticated
+  using (not public.is_inspector()) with check (not public.is_inspector());
+
+-- Leitura do Gmail do ERP (uma linha): até onde já leu e como foi a última vez.
+-- Só o servidor grava (service role); a equipe só lê para ver a situação.
+create table if not exists km_cte_mail_state (
+  id integer primary key default 1 check (id = 1),
+  mailbox text,
+  uid_validity text,
+  last_uid bigint,
+  running_until timestamptz,
+  last_run_at timestamptz,
+  last_ok_at timestamptz,
+  last_error text,
+  last_summary jsonb
+);
+insert into km_cte_mail_state (id) values (1) on conflict (id) do nothing;
+
+-- Trava da leitura (uma por vez): devolve a linha só se conseguiu travar.
+create or replace function public.km_cte_mail_lock(minutes integer default 10)
+returns table (mailbox text, uid_validity text, last_uid bigint)
+language sql
+security definer
+set search_path = public
+as $$
+  update km_cte_mail_state s
+     set running_until = now() + make_interval(mins => minutes)
+   where s.id = 1 and (s.running_until is null or s.running_until < now())
+  returning s.mailbox, s.uid_validity, s.last_uid;
+$$;
+revoke all on function public.km_cte_mail_lock(integer) from public, anon, authenticated;
+grant execute on function public.km_cte_mail_lock(integer) to service_role;
+
+alter table km_cte_mail_state enable row level security;
+drop policy if exists km_cte_mail_state_read on km_cte_mail_state;
+create policy km_cte_mail_state_read on km_cte_mail_state for select to authenticated using (public.can_edit_schedule());
+drop policy if exists zz_deny_portal_client on km_cte_mail_state;
+create policy zz_deny_portal_client on km_cte_mail_state as restrictive for all to authenticated
+  using (not public.is_portal_client()) with check (not public.is_portal_client());
+drop policy if exists zz_deny_inspector on km_cte_mail_state;
+create policy zz_deny_inspector on km_cte_mail_state as restrictive for all to authenticated
   using (not public.is_inspector()) with check (not public.is_inspector());
 
 notify pgrst, 'reload schema';

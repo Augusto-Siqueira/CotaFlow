@@ -254,13 +254,35 @@ export async function linkToTrip(db: Db, row: InboxRow, tripId: string, byName: 
   });
   const { error: e2 } = await db
     .from("km_cte_inbox")
-    .update({ status: "vinculado", reason: null, trip_id: tripId, delivery_id: deliveryId, linked_by: byName, linked_at: new Date().toISOString() })
+    .update({ status: "vinculado", reason: null, trip_id: tripId, delivery_id: deliveryId, delivery_created: !same, linked_by: byName, linked_at: new Date().toISOString() })
     .eq("id", row.id);
   if (e2) throw new Error("CT-e recebido: " + e2.message);
   return deliveryId;
 }
 
+/** CT-e que a equipe já lançou numa viagem (importação manual): só registra, sem mexer na entrega. */
+async function alreadyOnTrip(db: Db, row: InboxRow) {
+  const { data, error } = await db
+    .from("km_deliveries")
+    .select("id, trip_id, km_trips!inner(id, plate, loaded_on, status)")
+    .eq("cte", row.number)
+    .neq("km_trips.status", "cancelada")
+    .limit(2);
+  if (error) throw new Error("entregas: " + error.message);
+  const list = (data ?? []) as unknown as { id: string; trip_id: string; km_trips: { id: string; plate: string; loaded_on: string } }[];
+  return list.length === 1 ? list[0] : null;
+}
+
 async function tryMatch(db: Db, row: InboxRow, how: string): Promise<IngestResult> {
+  const found = await alreadyOnTrip(db, row);
+  if (found) {
+    const { error } = await db
+      .from("km_cte_inbox")
+      .update({ status: "vinculado", reason: null, trip_id: found.trip_id, delivery_id: found.id, delivery_created: false, linked_by: "já lançado na viagem", linked_at: new Date().toISOString() })
+      .eq("id", row.id);
+    if (error) throw new Error("CT-e recebido: " + error.message);
+    return { result: "vinculado", number: row.number, client: row.client, trip: { id: found.trip_id, plate: found.km_trips.plate, loadedOn: found.km_trips.loaded_on }, reason: null };
+  }
   const { trip, reason } = await findTrip(db, row);
   if (!trip) {
     await db.from("km_cte_inbox").update({ status: "sem_viagem", reason }).eq("id", row.id);
@@ -276,11 +298,28 @@ export async function ingestXml(db: Db, xml: string, source: "email" | "manual",
   if (!p) return { result: "invalido", reason: "Não é XML de CT-e." };
 
   if (p.kind === "cancelamento") {
-    const { data } = await db.from("km_cte_inbox").select("id, number, trip_id").eq("access_key", p.accessKey).maybeSingle();
+    const { data } = await db
+      .from("km_cte_inbox")
+      .select("id, number, status, trip_id, delivery_id, delivery_created")
+      .eq("access_key", p.accessKey)
+      .maybeSingle();
     if (!data) return { result: "outro_cliente", reason: "Cancelamento de CT-e que não está no KM." };
-    await db.from("km_cte_inbox").update({ status: "cancelado", reason: "CT-e cancelado na SEFAZ." }).eq("id", data.id);
+    if (data.status === "cancelado") return { result: "ja_recebido", number: data.number as string };
+    let note = "confira a entrega";
+    // Entrega que o próprio CT-e criou, em viagem ainda aberta: sai junto com o CT-e.
+    if (data.delivery_id && data.delivery_created && data.trip_id) {
+      const [{ data: trip }, { data: del }] = await Promise.all([
+        db.from("km_trips").select("status").eq("id", data.trip_id).maybeSingle(),
+        db.from("km_deliveries").select("id, cte, client").eq("id", data.delivery_id).maybeSingle(),
+      ]);
+      if (trip?.status === "aberta" && del && del.cte === data.number) {
+        const { error } = await db.from("km_deliveries").delete().eq("id", del.id);
+        if (!error) note = `entrega ${del.client} removida da viagem`;
+      }
+    }
+    await db.from("km_cte_inbox").update({ status: "cancelado", reason: `CT-e cancelado na SEFAZ (${note}).` }).eq("id", data.id);
     if (data.trip_id) {
-      await db.from("km_trip_log").insert({ trip_id: data.trip_id, action: `CT-e ${data.number} cancelado na SEFAZ: confira a entrega.`, by_name: AUTO });
+      await db.from("km_trip_log").insert({ trip_id: data.trip_id, action: `CT-e ${data.number} cancelado na SEFAZ: ${note}.`, by_name: AUTO });
     }
     return { result: "cancelado", number: data.number as string };
   }
@@ -292,7 +331,11 @@ export async function ingestXml(db: Db, xml: string, source: "email" | "manual",
   if (old) {
     const o = old as InboxRow;
     // Já recebido: se ainda não tinha viagem, tenta de novo (a viagem pode ter sido criada depois).
-    if (o.status === "sem_viagem") return tryMatch(db, o, how);
+    if (o.status === "sem_viagem") {
+      const again = await tryMatch(db, o, how);
+      // O ERP manda o mesmo CT-e em vários e-mails: continua sem viagem = já recebido.
+      return again.result === "vinculado" ? again : { ...again, result: "ja_recebido" };
+    }
     return { result: "ja_recebido", number: o.number, client: o.client };
   }
 
