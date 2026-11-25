@@ -560,7 +560,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
               ? "Informe o km."
               : kmEstN != null && !(kmFat != null && kmFat > 0)
                 ? "Confira o km faturado."
-                : (modo === "dedicado" && cerr) || (sp && !ents.some((e) => e.cliente.trim()) ? "Informe ao menos uma entrega." : null);
+                : (modo === "dedicado" && cerr) || null;
     if (err) {
       toastError(err);
       return;
@@ -764,7 +764,7 @@ export function TripFormModal({ id, onClose, onSaved, ...c }: Common & { id: str
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-navy-900">{showSched ? 4 : 3} · Entregas</h3>
           {ents.length === 0 ? (
-            <p className={noteCls}>Solte os XML acima ou use “Adicionar entrega”.</p>
+            <p className={noteCls}>Solte os XML acima ou use “Adicionar entrega”. Se deixar sem entregas, elas entram sozinhas quando os CT-e da placa chegarem pelo e-mail do ERP.</p>
           ) : (
             ents.map((e, i) => (
               <div key={i}>
