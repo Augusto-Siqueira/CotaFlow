@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { fetchAllCityNames, invalidateCityCache, isCityWithUf, normalizeCityText } from "@/lib/cities";
@@ -17,7 +17,7 @@ import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
-import { TollEstimate } from "@/components/TollEstimate";
+import { TollEstimate, type TollOverlay } from "@/components/TollEstimate";
 
 interface ClientOption {
   id: string;
@@ -309,6 +309,12 @@ function NewQuotePage({
   const [stops, setStops] = useState<StopRow[]>([emptyStop(), emptyStop()]);
 
   const [routeWaypoints, setRouteWaypoints] = useState<RouteMapWaypoint[]>([]);
+  // Depois do "Calcular pedágio": caminho da WikiRota e praças no mapa.
+  const [tollOverlay, setTollOverlay] = useState<TollOverlay | null>(null);
+  const tollRoute = useMemo(
+    () => (tollOverlay ? { coordinates: tollOverlay.route, distanceKm: tollOverlay.distanceKm ?? 0 } : null),
+    [tollOverlay]
+  );
   const [geocodingRoute, setGeocodingRoute] = useState(false);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
 
@@ -1055,6 +1061,7 @@ function NewQuotePage({
                 defaultAxles={selectedVehicle?.axles ?? null}
                 busyRoute={geocodingRoute}
                 onUse={(total) => updateField("toll_cost", total.toFixed(2))}
+                onResult={setTollOverlay}
               />
             </div>
 
@@ -1070,6 +1077,8 @@ function NewQuotePage({
               <RouteMap
                 waypoints={routeWaypoints}
                 onRouteFound={setRouteDistanceKm}
+                overrideRoute={tollRoute}
+                tolls={tollOverlay?.tolls}
               />
             </div>
           </div>

@@ -23,17 +23,29 @@ export interface RouteMapOverride {
   distanceKm: number;
 }
 
+/** Praça de pedágio marcada no mapa (posição da nossa base de praças). */
+export interface RouteMapToll {
+  lat: number;
+  lng: number;
+  name: string;
+  road: string;
+  km: number | null;
+  price: number;
+}
+
 export default function RouteMap({
   waypoints,
   onRouteFound,
   onRouteGeometry,
   overrideRoute,
+  tolls,
   showDistance = false,
 }: {
   waypoints: RouteMapWaypoint[];
   onRouteFound?: (distanceKm: number) => void;
   onRouteGeometry?: (coordinates: { lat: number; lng: number }[]) => void;
   overrideRoute?: RouteMapOverride | null;
+  tolls?: RouteMapToll[] | null;
   showDistance?: boolean;
 }) {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
@@ -56,6 +68,7 @@ export default function RouteMap({
         onRouteFound={handleRouteFound}
         onRouteGeometry={onRouteGeometry}
         overrideRoute={overrideRoute}
+        tolls={tolls}
       />
       {showDistance && distanceKm !== null && (
         <p className="mt-2 text-xs text-navy-500">

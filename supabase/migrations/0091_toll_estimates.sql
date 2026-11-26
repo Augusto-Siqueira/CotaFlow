@@ -13,7 +13,8 @@ create table if not exists toll_estimates (
   points jsonb not null,            -- [{ lat, lng, label }]
   axles integer not null check (axles between 2 and 12),
   total numeric not null,
-  tolls jsonb not null default '[]'::jsonb,
+  tolls jsonb not null default '[]'::jsonb, -- [{ name, road, km, price, lat, lng }] (lat/lng da nossa base de praças)
+  route jsonb,                      -- caminho da WikiRota (rota detalhada, simplificado): [[lat, lng], ...]
   distance_km numeric,
   billed boolean not null default true,
   created_by uuid,

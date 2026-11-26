@@ -5,7 +5,7 @@ import L from "leaflet";
 import "leaflet-routing-machine";
 import "leaflet/dist/leaflet.css";
 import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
-import type { RouteMapWaypoint } from "./RouteMap";
+import type { RouteMapToll, RouteMapWaypoint } from "./RouteMap";
 
 // Corrige os ícones padrão do Leaflet, que quebram sob bundlers (webpack)
 // porque o CSS original resolve os PNGs por caminho relativo ao próprio CSS.
@@ -34,19 +34,22 @@ export default function RouteMapClient({
   onRouteFound,
   onRouteGeometry,
   overrideRoute,
+  tolls,
 }: {
   waypoints: RouteMapWaypoint[];
   onRouteFound?: (distanceKm: number) => void;
   onRouteGeometry?: (coordinates: { lat: number; lng: number }[]) => void;
-  // Quando presente, o mapa desenha exatamente essa geometria (vinda de um
-  // provedor de pedágio automático — hoje nenhum está ativo, ver
-  // src/lib/wikirota.ts) em vez de rotear ao vivo pelo OSRM público. É a
-  // rota que o provedor efetivamente usou pra cobrar o pedágio, que pode
-  // divergir da que o OSRM público escolheria sozinho.
+  // Quando presente, o mapa desenha exatamente essa geometria (a rota
+  // detalhada da WikiRota, depois do "Calcular pedágio") em vez de rotear ao
+  // vivo pelo OSRM público. É a rota que a WikiRota efetivamente usou pra
+  // cobrar o pedágio, que pode divergir da que o OSRM escolheria sozinho.
   overrideRoute?: RouteMapOverride | null;
+  /** Praças de pedágio da rota calculada (marcadores com nome e valor). */
+  tolls?: RouteMapToll[] | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const routingRef = useRef<L.Routing.Control | null>(null);
+  const tollLayerRef = useRef<L.LayerGroup | null>(null);
   const labelsRef = useRef<string[]>([]);
   const onRouteFoundRef = useRef(onRouteFound);
   const onRouteGeometryRef = useRef(onRouteGeometry);
@@ -144,11 +147,52 @@ export default function RouteMapClient({
       }
     );
 
+    tollLayerRef.current = L.layerGroup().addTo(map);
+
     return () => {
       routingRef.current = null;
+      tollLayerRef.current = null;
       map.remove();
     };
   }, []);
+
+  // Praças de pedágio: quadradinho laranja com o valor no balão.
+  useEffect(() => {
+    const layer = tollLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    for (const t of tolls ?? []) {
+      const el = document.createElement("div");
+      el.textContent = "$";
+      el.style.cssText = [
+        "background:#f59e0b",
+        "color:#111827",
+        "font:800 11px/16px system-ui,sans-serif",
+        "width:16px",
+        "height:16px",
+        "text-align:center",
+        "border-radius:4px",
+        "border:2px solid #ffffff",
+        "box-shadow:0 1px 3px rgba(0,0,0,.45)",
+        "transform:translate(-50%,-50%)",
+        "cursor:pointer",
+      ].join(";");
+      const box = document.createElement("div");
+      box.style.cssText = "font:13px/1.35 system-ui,sans-serif;color:#111827;min-width:160px";
+      const title = document.createElement("div");
+      title.style.cssText = "font-weight:700";
+      title.textContent = t.name;
+      const sub = document.createElement("div");
+      sub.textContent = `${t.road}${t.km != null ? ` · km ${t.km}` : ""}`;
+      const price = document.createElement("div");
+      price.style.cssText = "margin-top:2px;font-weight:600";
+      price.textContent = t.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      box.append(title, sub, price);
+      L.marker([t.lat, t.lng], { icon: L.divIcon({ className: "", html: el, iconSize: [0, 0] }), title: t.name, zIndexOffset: 500 })
+        .bindPopup(box)
+        .addTo(layer);
+    }
+  }, [tolls]);
 
   useEffect(() => {
     const routing = routingRef.current;
@@ -187,8 +231,8 @@ export default function RouteMapClient({
         </div>
       )}
       {overrideRoute && (
-        <div className="absolute left-2 top-2 rounded bg-brand-700/90 px-2 py-1 text-[11px] font-medium text-white shadow">
-          Rota oficial
+        <div className="absolute bottom-2 left-2 z-[1000] rounded bg-brand-700/90 px-2 py-1 text-[11px] font-medium text-white shadow">
+          Rota da WikiRota
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { buttonClasses } from "@/components/Button";
 import { formatCurrency } from "@/lib/format";
+import type { RouteMapToll } from "@/components/RouteMap";
 
 // Botão "Calcular pedágio" das cotações: consulta a WikiRota pela rota já
 // localizada no mapa (cidades em ordem) e os eixos do veículo. Cada consulta é
@@ -18,9 +19,17 @@ export interface TollPoint {
   label: string;
 }
 
+/** O que vai para o mapa: o caminho da WikiRota e as praças com posição. */
+export interface TollOverlay {
+  route: { lat: number; lng: number }[];
+  distanceKm: number | null;
+  tolls: RouteMapToll[];
+}
+
 interface Result {
   total: number;
-  tolls: { name: string; road: string; km: number | null; price: number }[];
+  tolls: { name: string; road: string; km: number | null; price: number; lat: number | null; lng: number | null }[];
+  route: [number, number][] | null;
   distanceKm: number | null;
   axles: number;
   cached: boolean;
@@ -32,11 +41,14 @@ export function TollEstimate({
   points,
   defaultAxles,
   onUse,
+  onResult,
   busyRoute = false,
 }: {
   points: TollPoint[];
   defaultAxles: number | null;
   onUse: (total: number) => void;
+  /** Resultado para desenhar no mapa (null = limpar, rota ou eixos mudaram). */
+  onResult?: (overlay: TollOverlay | null) => void;
   /** Cidades ainda sendo localizadas no mapa. */
   busyRoute?: boolean;
 }) {
@@ -49,7 +61,13 @@ export function TollEstimate({
   const axles = axlesSel ? Number(axlesSel) : defaultAxles ?? 0;
   const routeKey = points.map((p) => `${p.lat.toFixed(3)},${p.lng.toFixed(3)}`).join(";");
   // Rota ou eixos mudaram: o resultado mostrado deixa de valer.
-  const stale = result && (result.axles !== axles || routeKeyOf(result) !== routeKey);
+  const stale = Boolean(result && (result.axles !== axles || routeKeyOf(result) !== routeKey));
+  const routeStale = Boolean(result && routeKeyOf(result) !== routeKey);
+
+  // Rota mudou: o caminho e as praças desenhados deixam de valer.
+  useEffect(() => {
+    if (routeStale) onResult?.(null);
+  }, [routeStale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +97,15 @@ export function TollEstimate({
       if (!res.ok) throw new Error(j.error || "Falha ao consultar o pedágio.");
       const r = { ...(j as Result), routeKey } as Result & { routeKey: string };
       setResult(r);
+      onResult?.(
+        r.route && r.route.length >= 2
+          ? {
+              route: r.route.map(([lat, lng]) => ({ lat, lng })),
+              distanceKm: r.distanceKm,
+              tolls: r.tolls.filter((t) => t.lat != null && t.lng != null).map((t) => ({ lat: t.lat!, lng: t.lng!, name: t.name, road: t.road, km: t.km, price: t.price })),
+            }
+          : null
+      );
       setMonthCount(r.monthCount);
     } catch (e) {
       setError((e as Error).message);
@@ -109,7 +136,7 @@ export function TollEstimate({
           </select>
         </div>
         <button type="button" disabled={busy || busyRoute} className={buttonClasses("secondary", "sm")} onClick={() => calc(false)}>
-          {busy ? "Consultando..." : "Calcular pedágio"}
+          {busy ? "Consultando (até 15 s)..." : "Calcular pedágio"}
         </button>
         <span className="text-xs text-navy-500">
           WikiRota · {points.length >= 2 ? `${points.length} cidades da rota` : "preencha a rota"}
@@ -128,6 +155,7 @@ export function TollEstimate({
                   <span className="text-navy-800">
                     {t.name}
                     {t.road ? <span className="text-navy-500"> · {t.road}{t.km != null ? ` km ${t.km}` : ""}</span> : null}
+                    {t.lat == null && <span className="text-navy-400"> · sem posição no mapa</span>}
                   </span>
                   <span className="font-mono text-navy-900">{formatCurrency(t.price)}</span>
                 </li>

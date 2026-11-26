@@ -2,8 +2,8 @@ import "server-only";
 
 // Cliente da API da WikiRota (service.wikirota.com) — pedágio por rota.
 // Retomado em 11/2026 (plano Professional, pós-pago por requisição: até 20
-// pontos por rota; a rota detalhada para o mapa, fullRoute, custa à parte e
-// fica desligada por padrão — o mapa da cotação usa o nosso roteador).
+// pontos por rota; a rota detalhada para o mapa, fullRoute, custa R$ 0,05 a
+// mais e é usada: o mapa da cotação desenha exatamente o caminho cobrado).
 // Chamado só pela rota /api/quotes/pedagio, que guarda cada consulta em
 // toll_estimates (cache de 30 dias + contagem do mês).
 //
@@ -60,7 +60,7 @@ export interface WikiRotaRouteCostFailure {
 }
 
 interface OsrmRouteResponse {
-  routes?: { geometry?: string }[];
+  routes?: { geometry?: string; legs?: { steps?: { geometry?: string }[] }[] }[];
 }
 
 const WIKIROTA_URL = "https://service.wikirota.com/routecost";
@@ -101,6 +101,67 @@ function decodePolyline(encoded: string): WikiRotaLatLng[] {
   return coordinates;
 }
 
+// A geometria "geral" da rota vem resumida (~40 pontos para 400 km, corta
+// curvas); o traçado fino está nos trechos (legs[].steps[].geometry, milhares
+// de pontos). Junta os trechos e simplifica para algumas centenas de pontos.
+function routeLine(osrm: OsrmRouteResponse | undefined): WikiRotaLatLng[] | null {
+  const route = osrm?.routes?.[0];
+  if (!route) return null;
+  const pts: WikiRotaLatLng[] = [];
+  for (const leg of route.legs ?? []) {
+    for (const step of leg.steps ?? []) {
+      if (!step.geometry) continue;
+      for (const p of decodePolyline(step.geometry)) {
+        const last = pts[pts.length - 1];
+        if (!last || last.lat !== p.lat || last.lng !== p.lng) pts.push(p);
+      }
+    }
+  }
+  if (pts.length < 2) return route.geometry ? decodePolyline(route.geometry) : null;
+  let tol = 0.0002; // ~20 m
+  let out = simplify(pts, tol);
+  while (out.length > 1500) {
+    tol *= 2;
+    out = simplify(pts, tol);
+  }
+  return out;
+}
+
+/** Douglas-Peucker (iterativo) em graus; bom o bastante para desenhar no mapa. */
+function simplify(pts: WikiRotaLatLng[], tol: number): WikiRotaLatLng[] {
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack: [number, number][] = [[0, pts.length - 1]];
+  const t2 = tol * tol;
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    const A = pts[a];
+    const B = pts[b];
+    const dx = B.lng - A.lng;
+    const dy = B.lat - A.lat;
+    const len2 = dx * dx + dy * dy;
+    let far = -1;
+    let farD = t2;
+    for (let i = a + 1; i < b; i++) {
+      const P = pts[i];
+      let t = len2 ? ((P.lng - A.lng) * dx + (P.lat - A.lat) * dy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const ex = A.lng + t * dx - P.lng;
+      const ey = A.lat + t * dy - P.lat;
+      const d = ex * ex + ey * ey;
+      if (d > farD) {
+        farD = d;
+        far = i;
+      }
+    }
+    if (far >= 0) {
+      keep[far] = 1;
+      stack.push([a, far], [far, b]);
+    }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
 /**
  * Pede o custo de pedágio de uma rota pra WikiRota. Manda os waypoints
  * (pontos que o usuário já preencheu — origem/coleta/entrega/destino,
@@ -113,7 +174,7 @@ function decodePolyline(encoded: string): WikiRotaLatLng[] {
 export async function fetchWikiRotaRouteCost(
   waypoints: WikiRotaLatLng[],
   axles: number,
-  opts: { fullRoute?: boolean } = {}
+  opts: { fullRoute?: boolean } = { fullRoute: true }
 ): Promise<WikiRotaRouteCostResult | WikiRotaRouteCostFailure> {
   const apiKey = process.env.WIKIROTA_API_KEY;
   if (!apiKey) {
@@ -159,9 +220,5 @@ export async function fetchWikiRotaRouteCost(
 
   if (!data.success) return data;
 
-  const encodedGeometry = data.osrmRoute?.routes?.[0]?.geometry;
-  return {
-    ...data,
-    routeGeometry: encodedGeometry ? decodePolyline(encodedGeometry) : null,
-  };
+  return { ...data, routeGeometry: routeLine(data.osrmRoute) };
 }
