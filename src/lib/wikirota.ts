@@ -1,31 +1,18 @@
-// Cliente da API da WikiRota (service.wikirota.com) — CONGELADO em
-// 2026-09, mesma situação do motor próprio (src/lib/tollMatching.ts):
-// mantido no repositório, sem nenhum caller ativo. O campo Pedágio (R$) das
-// telas de cotação voltou a ser 100% manual enquanto o pedágio automático
-// está pausado (outras frentes da plataforma têm prioridade agora) — ver
-// as páginas em src/app/quotes/new/page.tsx e
-// src/app/quotes/batches/new/page.tsx, que não chamam mais nada daqui.
-// Não havia rota de API dedicada (era src/app/api/quotes/toll-estimate,
-// removida junto por não ter mais chamador) — pra reativar, basta recriar
-// esse bridge chamando fetchWikiRotaRouteCost abaixo.
+import "server-only";
+
+// Cliente da API da WikiRota (service.wikirota.com) — pedágio por rota.
+// Retomado em 11/2026 (plano Professional, pós-pago por requisição: até 20
+// pontos por rota; a rota detalhada para o mapa, fullRoute, custa à parte e
+// fica desligada por padrão — o mapa da cotação usa o nosso roteador).
+// Chamado só pela rota /api/quotes/pedagio, que guarda cada consulta em
+// toll_estimates (cache de 30 dias + contagem do mês).
 //
-// Contexto preservado pra quando isso for retomado:
-// - Chave de teste grátis testada em 18/09/2026: aceita no máximo 5
-//   waypoints por chamada (5 funcionou, 6 deu "waypoints parameter has
-//   exceeded the limit"); a página de preços da WikiRota anuncia 40 pontos
-//   no plano Professional — restrição do trial, não do contrato. Cota de
-//   50 chamadas grátis total, por isso o cálculo era sob demanda (botão),
-//   nunca automático a cada mudança de rota.
-// - Substituiu o motor próprio porque também resolve o frete mínimo ANTT
-//   via totalMinimumFreight — mas esse campo tem um bug confirmado (nunca
-//   aplica o termo CCD x distância, só devolve o coeficiente fixo CC), por
-//   isso o piso ANTT no CotaFlow sempre foi calculado à parte com
-//   `antt_coefficients` + computeAnttFloor, independente deste cliente.
-// - Chegou a ser cotada como alternativa a integração com a API VPO da
-//   Veloe (vale-pedágio obrigatório); descartada porque a Veloe só libera
-//   credencial mediante contrato (sem ambiente de teste) e o produto é
-//   modelado para o CNPJ pagador (embarcador), papel que a Transbochnia
-//   não tem — ela é transportadora.
+// Notas antigas que continuam valendo:
+// - A API responde HTTP 200 até em erro; o que vale é o campo `success`.
+// - totalMinimumFreight (frete mínimo ANTT) tem um bug confirmado (não aplica
+//   CCD x distância): o piso ANTT do CotaFlow é calculado à parte com
+//   `antt_coefficients` + computeAnttFloor.
+// - O motor próprio (src/lib/tollMatching.ts) continua congelado.
 
 export interface WikiRotaLatLng {
   lat: number;
@@ -125,7 +112,8 @@ function decodePolyline(encoded: string): WikiRotaLatLng[] {
  */
 export async function fetchWikiRotaRouteCost(
   waypoints: WikiRotaLatLng[],
-  axles: number
+  axles: number,
+  opts: { fullRoute?: boolean } = {}
 ): Promise<WikiRotaRouteCostResult | WikiRotaRouteCostFailure> {
   const apiKey = process.env.WIKIROTA_API_KEY;
   if (!apiKey) {
@@ -141,25 +129,33 @@ export async function fetchWikiRotaRouteCost(
     };
   }
 
-  const res = await fetch(WIKIROTA_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      waypoints: waypoints.map((w) => `${w.lng},${w.lat}`),
-      vehicleType: "truck",
-      axle: Math.round(axles),
-      apiKey,
-      fullRoute: true,
-    }),
-  });
-
-  // A API da WikiRota sempre responde HTTP 200 (mesmo erro de parâmetro ou
-  // chave inválida) — o único jeito de saber se deu certo é o campo `success`.
-  const data = (await res.json()) as
+  let data:
     | (Omit<WikiRotaRouteCostResult, "routeGeometry"> & {
         osrmRoute?: OsrmRouteResponse;
       })
     | WikiRotaRouteCostFailure;
+  try {
+    const res = await fetch(WIKIROTA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        waypoints: waypoints.map((w) => `${w.lng},${w.lat}`),
+        vehicleType: "truck",
+        axle: Math.round(axles),
+        apiKey,
+        fullRoute: Boolean(opts.fullRoute),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    // A API da WikiRota sempre responde HTTP 200 (mesmo erro de parâmetro ou
+    // chave inválida) — o único jeito de saber se deu certo é o campo `success`.
+    data = await res.json();
+  } catch (e) {
+    return {
+      success: false,
+      errors: [{ message: "Sem resposta da WikiRota: " + (e instanceof Error ? e.message : String(e)), parameter_name: null, type: "network" }],
+    };
+  }
 
   if (!data.success) return data;
 

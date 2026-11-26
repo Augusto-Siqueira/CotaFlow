@@ -17,6 +17,7 @@ import RouteMap, { type RouteMapWaypoint } from "@/components/RouteMap";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { useFeedback } from "@/components/Feedback";
 import { buttonClasses } from "@/components/Button";
+import { TollEstimate } from "@/components/TollEstimate";
 
 interface ClientOption {
   id: string;
@@ -1035,9 +1036,6 @@ function NewQuotePage({
             </div>
 
             <div>
-              {/* Cálculo automático de pedágio (WikiRota) congelado por
-                  enquanto — ver src/lib/wikirota.ts. Preenchimento manual
-                  até definirmos a próxima fonte de pedágio automático. */}
               <label className="mb-1 block text-sm font-medium text-navy-700" htmlFor="cot-pedagio-r">
                 Pedágio (R$)
               </label>
@@ -1052,6 +1050,12 @@ function NewQuotePage({
                   {stepErrors.toll_cost}
                 </p>
               )}
+              <TollEstimate
+                points={routeWaypoints}
+                defaultAxles={selectedVehicle?.axles ?? null}
+                busyRoute={geocodingRoute}
+                onUse={(total) => updateField("toll_cost", total.toFixed(2))}
+              />
             </div>
 
             <div>
