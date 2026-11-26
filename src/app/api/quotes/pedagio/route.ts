@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     price: Number(t.price) || 0,
   }));
   const total = Math.round((Number(r.totalTollPrice) || tolls.reduce((a, t) => a + t.price, 0)) * 100) / 100;
-  // A WikiRota devolve a distância em metros (rota de 400 km ≈ 400000); abaixo de 5000 trata como km.
+  // A WikiRota devolve a distância em km (Curitiba → São Paulo = 403,3); acima de 5000 seria metros.
   const rawDist = Number(r.distance);
   const distanceKm = isFinite(rawDist) && rawDist > 0 ? Math.round(rawDist > 5000 ? rawDist / 1000 : rawDist) : null;
   const u = auth.user;
